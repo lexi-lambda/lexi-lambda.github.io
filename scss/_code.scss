@@ -19,7 +19,11 @@ pre code, table.sourcetable pre {
 
 pre code {
   display: block;
+}
+
+pre code, div[class^='brush: '] {
   width: 100%;
+  overflow: auto;
 }
 
 table.sourcetable {

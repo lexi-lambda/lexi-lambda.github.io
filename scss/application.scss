@@ -28,6 +28,7 @@ html, body {
 
 #page-content > section[role=main] {
   flex: 1;
+  padding: 0 30px;
 
   & > .content {
     margin: 0 auto;
@@ -46,6 +47,13 @@ html, body {
       color: $text-color-link-light;
       text-decoration: none;
     }
+  }
+}
+
+// hide the blog title in the navbar on small screen sizes
+@media (max-width: 550px) {
+  #blog-title-header {
+    display: none;
   }
 }
 
