@@ -44,13 +44,6 @@
       <section role="main">
         <!-- Main column -->
         <div class="content" class="col-md-12">
-          @;{
-          @(when (string=? uri-path "/index.html")
-            @list{
-              <h1>Welcome</h1>
-              <p>Here is some text that only goes on the home page,
-                because <code>@"@"uri-path</code> is
-                <code>/index.html</code>.</p> }) }
           @;{ Index pages for posts have @tag that's not #f }
           @(when tag
             @list{<h1>Posts tagged <em>@|tag|</em></h1>})
@@ -64,6 +57,10 @@
           <h3>
             Built with <a href="https://github.com/greghendershott/frog">Frog</a>, the
             <strong>fr</strong>ozen bl<strong>og</strong> tool.
+          </h3>
+          <h3>
+            Feeds are available via <a href="/feeds/all.atom.xml">Atom</a>
+            or <a href="/feeds/all.rss.xml">RSS</a>.
           </h3>
         </div>
       </footer>
