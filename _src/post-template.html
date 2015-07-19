@@ -1,0 +1,18 @@
+@(local-require srfi/19)
+<article class="main">
+  <header>
+    <h1 class="title">@|title|</h1>
+    <div class='date-and-tags'>
+      <time datetime="@|date-8601|">
+        @(date->string date-struct "~1")
+      </time>
+      <span style="margin: 0 3px">⦿</span>
+      @|tags|
+    </div>
+  </header>
+  @|content|
+  <footer>
+    @disqus-comments["lexi-lambda"]
+    @older/newer-links[older-uri older-title newer-uri newer-title]
+  </footer>
+</article>

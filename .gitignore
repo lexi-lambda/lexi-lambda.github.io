@@ -1,0 +1,9 @@
+# configuration
+/.frog
+
+# managed by package managers
+/node_modules
+/bower_components
+
+# generated files
+/out

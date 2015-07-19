@@ -1,0 +1,14 @@
+@(local-require srfi/19)
+<article class="inline">
+  <header>
+    <h2 class="title"><a href='@|uri-path|'>@|title|</a></h2>
+    <div class='date-and-tags'>
+      <time datetime="@|date-8601|">
+        @(date->string date-struct "~1")
+      </time>
+      <span style="margin: 0 3px">⦿</span>
+      @|tags|
+    </div>
+  </header>
+  @|content|
+</article>

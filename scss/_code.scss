@@ -1,0 +1,47 @@
+
+@import 'colors';
+@import 'fonts';
+
+pre, code {
+  font-family: $font-monospace;
+}
+
+p code {
+  background-color: $color-section-background;
+  border-radius: 3px;
+  padding: 2px 5px;
+}
+
+pre code, table.sourcetable pre {
+  font-size: 0.9em;
+  line-height: 1.4em;
+}
+
+pre code {
+  display: block;
+  width: 100%;
+}
+
+table.sourcetable {
+  width: 100%;
+
+  td.linenos {
+    color: desaturate(darken($color-section-background, 20%), 40%);
+    white-space: nowrap;
+    width: 1%;
+    font-weight: 300;
+  }
+
+  pre {
+    margin: 0;
+  }
+}
+
+pre code, table.sourcetable {
+  padding: 20px;
+  background-color: $color-section-background;
+}
+
+td.linenos {
+  padding-right: 15px;
+}
