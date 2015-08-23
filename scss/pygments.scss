@@ -5,7 +5,7 @@ $string: #BA2121;
 td.code .source {
   .c, .cm, .c1 { color: #9e5555; font-weight: 300; } /* Comment */
   .err { border: 1px solid #FF0000 }                 /* Error */
-  .k { color: #008000; font-weight: bold }           /* Keyword */
+  .k { color: #19177C; font-weight: $semibold }      /* Keyword */
   .o { color: #666666 }                              /* Operator */
   .cp { color: #BC7A00 }                             /* Comment.Preproc */
   .cs { color: #408080; font-style: italic }         /* Comment.Special */
@@ -20,8 +20,8 @@ td.code .source {
   .gu { color: #800080; font-weight: bold }          /* Generic.Subheading */
   .gt { color: #0040D0 }                             /* Generic.Traceback */
   .kc { color: #008000; font-weight: bold }          /* Keyword.Constant */
-  .kd { color: #008000; font-weight: bold }          /* Keyword.Declaration */
-  .kn { color: #008000; font-weight: bold }          /* Keyword.Namespace */
+  .kd { color: $string; font-weight: $semibold }     /* Keyword.Declaration */
+  .kn { color: $string; font-weight: bold }          /* Keyword.Namespace */
   .kp { color: #008000 }                             /* Keyword.Pseudo */
   .kr { color: #008000; font-weight: bold }          /* Keyword.Reserved */
   .kt { color: #B00040 }                             /* Keyword.Type */
@@ -36,7 +36,7 @@ td.code .source {
   .ne { color: #D2413A; font-weight: bold }          /* Name.Exception */
   .nf { color: #0000FF }                             /* Name.Function */
   .nl { color: #A0A000 }                             /* Name.Label */
-  .nn { color: #0000FF; font-weight: bold }          /* Name.Namespace */
+  .nn { color: $string; font-weight: bold }          /* Name.Namespace */
   .nt { color: #008000; font-weight: bold }          /* Name.Tag */
   .nv { color: #1c7805 }                             /* Name.Variable */
   .ow { color: #AA22FF; font-weight: bold }          /* Operator.Word */

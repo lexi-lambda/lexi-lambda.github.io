@@ -6,7 +6,7 @@ pre, code {
   font-family: $font-monospace;
 }
 
-p code {
+p code, li code {
   background-color: $color-section-background;
   border-radius: 3px;
   padding: 2px 5px;
