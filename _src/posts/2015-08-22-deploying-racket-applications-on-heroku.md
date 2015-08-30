@@ -1,6 +1,6 @@
     Title: Deploying Racket applications on Heroku
     Date: 2015-08-22T14:47:49
-    Tags: racket, heroku
+    Tags: racket, heroku, 12factor
 
 [Heroku][heroku] is a "platform as a service" that provides an incredibly simple way to deploy simple internet applications, and I take liberal advantage of its free tier for testing out simple applications. It has support for a variety of languages built-in, but Racket is not currently among them. Fortunately, Heroku provides an interface for adding custom build processes for arbitrary types of applications, called “buildpacks”. I've built one for Racket apps, and with just a little bit of configuration, it’s possible to get a Racket webserver running on Heroku.
 
