@@ -8,7 +8,7 @@ Macros are one of Racket's flagship features, and its macro system really is sta
 
 # Warning: this is not a macro tutorial
 
-First, a disclaimer: this post assumes at least some knowledge of Scheme/Racket macros. Ideally, you would be familiar with Racket itself. But if you aren't, fear not: if you get lost, don't worry. Hold on to the bigger picture, and you'll likely learn more than someone who knows enough to follow all the way through.
+First, a disclaimer: this post assumes at least some knowledge of Scheme/Racket macros. Ideally, you would be familiar with Racket itself. But if you aren't, fear not: if you get lost, don't worry. Hold on to the bigger picture, and you'll likely learn more than someone who knows enough to follow all the way through. If you *are* interested in learning about macros, I must recommend Greg Hendershott's [Fear of Macros][fear-of-macros]. It is good. This is not that.
 
 Now, with that out of the way, let's get started.
 
@@ -316,6 +316,7 @@ Truly, working in Racket feels like standing on the shoulders of giants. If you'
 
 [adts]: https://en.wikipedia.org/wiki/Algebraic_data_type
 [andmkent]: http://andmkent.com
+[fear-of-macros]: http://www.greghendershott.com/fear-of-macros/
 [matthias]: http://www.ccs.neu.edu/home/matthias/
 [mflatt]: http://www.cs.utah.edu/~mflatt/
 [racket-datatype]: https://github.com/andmkent/datatype
