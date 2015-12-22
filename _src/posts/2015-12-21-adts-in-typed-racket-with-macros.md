@@ -128,57 +128,34 @@ Since we don't care about the field names, what we want to do is just generate r
     ...))
 ```
 
-The `#,` lets us "escape" from the template to execute `(generate-temporary)` and interpolate its result into the syntax. Unfortunately, this doesn't work. We *do* generate a random field name, but the ellipsis will re-use the same generated value when it repeats the fields, rendering our whole effort pointless. Instead of relying on the ellipsis magic, we need to generate the struct definitions one at a time, ourselves.
+The `#,` lets us "escape" from the template to execute `(generate-temporary)` and interpolate its result into the syntax. Unfortunately, this doesn't work. We *do* generate a random field name, but the ellipsis will re-use the same generated value when it repeats the fields, rendering our whole effort pointless. We need to generate the field names once per type.
 
-## Procedural macro techniques
+## More leveraging syntax classes
 
-Our macro is just a little too complex to shove into a single syntax template, but we don't need to do too much restructuring to fix the issue. What we will do, though, is iterate through our values *manually*, which will allow us to create an entirely new random identifier for each and every field specified. To do this, we'll use a combination of `define/with-syntax` and Racket's list comprehensions, `for/list`.
-
-The `define/with-syntax` form binds values to pattern identifiers, which can be used within syntax patterns just like the ones bound by `syntax-parser`. This will allow us to break up our result into multiple steps. Technically, `define/with-syntax` is not strictly necessary—we could just use `` #` `` and `#,`—but it's cleaner to work with.
-
-We'll start by defining a set of constructor definitions, one per `data-constructor`:
+As it turns out, this is *also* easy to do with syntax classes. We can add an extra attribute to our `type` syntax class to generate a random identifier with each one. Again, we can use `#:attr` to do that automatically. Our new definition for `type` will look like this:
 
 ```racket
-(define/with-syntax [constructor-definition ...]
-  (for/list ([name (in-syntax #'(data-constructor.name ...))]
-             [params (in-syntax #'((data-constructor.params ...) ...))])
-    ))
+(begin-for-syntax
+  (define-syntax-class type
+    (pattern name:id
+             #:attr [param 1] '()
+             #:attr [field-id 1] '())
+    (pattern (name:id param ...+)
+             #:attr [field-id 1] (generate-temporaries #'(param ...)))))
 ```
 
-To fill in the body, we'll need to generate a set of constructor fields, then assemble them into a resulting structure definition. We can do that with a nested loop and `define/with-syntax`:
+Here we're using `generate-temporaries` instead of `generate-temporary`, which will conveniently generate a new identifier for each of the elements in the list we provide it. This way, we'll get a fresh identifier for each `param`.
+
+We can now fix our macro to use this `field-id` attribute instead of the static field name:
 
 ```racket
-(define/with-syntax [constructor-definition ...]
-  (for/list ([name (in-syntax #'(data-constructor.name ...))]
-             [params (in-syntax #'((data-constructor.params ...) ...))])
-
-    (define/with-syntax [constructor-field ...]
-      (for/list ([param (in-syntax params)])
-        #`[#,(generate-temporary) : #,param]))
-
-    #`(struct #,name (constructor-field ...))))
+#'(begin
+    (struct data-constructor.name
+      ([data-constructor.field-id : data-constructor.param] ...))
+    ...)
 ```
 
-This may look complicated, but it isn't too bad: we're using `generate-temporary` within our nested loop to generate a new identifier for each field within the struct. Finally, we're assembling them into a struct declaration. (It can be helpful to use the identifier-binding arrows in DrRacket to trace how values flow through the program.) With this in hand, we can implement our overall macro definition:
-
-```racket
-(define-syntax define-datatype
-  (syntax-parser
-    [(_ type-name:type data-constructor:type ...)
-
-     (define/with-syntax [constructor-definition ...]
-       (for/list ([name (in-syntax #'(data-constructor.name ...))]
-                  [params (in-syntax #'((data-constructor.param ...) ...))])
-
-         (define/with-syntax [constructor-field ...]
-           (for/list ([param (in-syntax params)])
-             #`[#,(generate-temporary) : #,param]))
-
-         #`(struct #,name (constructor-field ...))))
-
-     #'(begin
-         constructor-definition ...)]))
-```
+## Creating the supertype
 
 We're almost done—now we just need to implement our overall type, the one defined by `type-name`. This is implemented as a trivial type alias, but we need to ensure that polymorphic types are properly handled. For example, a non-polymorphic type would need to be handled like this:
 
@@ -192,7 +169,19 @@ However, a polymorphic type alias would need to include the type parameters in e
 (define-type (Tree a) (U (Empty a) (Leaf a) (Node a)))
 ```
 
-Once again, we can handle this with some very simple logic before including it in our template:
+How can we do this? Well, so far, we've been very declarative by using syntax patterns, templates, and classes. However, this is a more pernicious problem to solve with our declarative tools. Fortunately, it's very easy to fall back to using **procedural macros**.
+
+To build each properly-instantiated type, we'll use a combination of `define/with-syntax` and Racket's list comprehensions, `for/list`. The `define/with-syntax` form binds values to pattern identifiers, which can be used within syntax patterns just like the ones bound by `syntax-parser`. This will allow us to break up our result into multiple steps. Technically, `define/with-syntax` is not strictly necessary—we could just use `` #` `` and `#,`—but it's cleaner to work with.
+
+We'll start by defining a set of instantiated data constructor types, one per `data-constructor`:
+
+```racket
+(define/with-syntax [data-type ...]
+  (for/list ([name (in-syntax #'(data-constructor.name ...))])
+    ))
+```
+
+Now we can fill in the body with any code we'd like, so long as each body returns a syntax object. We can use some trivial branching logic to determine which form we need:
 
 ```racket
 (define/with-syntax [data-type ...]
@@ -200,32 +189,39 @@ Once again, we can handle this with some very simple logic before including it i
     (if (stx-null? #'(type-name.param ...))
         name
         #`(#,name type-name.param ...))))
+```
 
+Now with our definition for `data-type`, we can implement our type alias for the supertype extremely easily:
+
+```racket
 #'(define-type type-name (U data-type ...))
 ```
+
+## Putting it all together
 
 There's just one more thing to do before we can call this macro finished: we need to ensure that all the type parameters defined by `type-name` are in scope for each data constructor's structure definition. We can do this by making use of `type-name.param` within each produced struct definition, resulting in this:
 
 ```racket
-#`(struct (type-name.param ...) #,name (constructor-field ...))
+#'(begin
+    (struct data-constructor.name (type-name.param ...)
+      ([data-constructor.field-id : data-constructor.param] ...))
+    ...)
 ```
 
 And we're done! The final macro, now completed, looks like this:
 
 ```racket
+(begin-for-syntax
+  (define-syntax-class type
+    (pattern name:id
+             #:attr [param 1] '()
+             #:attr [field-id 1] '())
+    (pattern (name:id param ...+)
+             #:attr [field-id 1] (generate-temporaries #'(param ...)))))
+
 (define-syntax define-datatype
   (syntax-parser
     [(_ type-name:type data-constructor:type ...)
-
-     (define/with-syntax [constructor-definition ...]
-       (for/list ([name (in-syntax #'(data-constructor.name ...))]
-                  [params (in-syntax #'((data-constructor.param ...) ...))])
-
-         (define/with-syntax [constructor-field ...]
-           (for/list ([param (in-syntax params)])
-             #`[#,(generate-temporary) : #,param]))
-
-         #`(struct (type-name.param ...) #,name (constructor-field ...))))
 
      (define/with-syntax [data-type ...]
        (for/list ([name (in-syntax #'(data-constructor.name ...))])
@@ -234,11 +230,12 @@ And we're done! The final macro, now completed, looks like this:
              #`(#,name type-name.param ...))))
 
      #'(begin
-         constructor-definition ...
+         (struct (type-name.param ...) data-constructor.name
+           ([data-constructor.field-id : data-constructor.param] ...)) ...
          (define-type type-name (U data-type ...)))]))
 ```
 
-It's dense, certainly, but it is not as complicated or scary as it might seem. Granted, it might be helpful to add some explanatory comments, or even to pull certain aspects of it apart into separate functions, but I will leave it as a single definition for the sake of this post.
+It's a little bit dense, certainly, but it is not as complicated or scary as it might seem. It's a simple, mostly declarative, powerful way to transform a DSL into ordinary Typed Racket syntax, and now all we have to do is put it to use.
 
 # Using our ADTs
 
@@ -300,7 +297,7 @@ And of course, we can also use it to define ADTs that use concrete types rather 
 4 1/2
 ```
 
-There's all the power of ADTs, right in Racket, all implemented in 30 lines of code.
+There's all the power of ADTs, right in Racket, all implemented in 22 lines of code.
 
 # Conclusions and credit
 
@@ -310,7 +307,7 @@ This is, of course, a blessing and a curse. Lisps reject some of the syntactic l
 
 That said, I think it's pretty cool.
 
-Finally, I must give credit where credit is due. Thanks to [Andrew M. Kent][andmkent] for the creation of the [datatype][racket-datatype] package, which served as the inspiration for this blog post. Also thanks to [Ryan Culpepper][ryanc] and [Matthias Felleisen][matthias] for their work on creating `syntax/parse`, which is truly a marvelous tool for exploring the world of macros. And, of course, a big thanks to [Matthew Flatt][mflatt] for his implementation of hygiene in Racket, as well as much of the rest of Racket itself. Not to mention the entire legacy of those who formulated the foundations of the Scheme macro system and created the framework for all of this to be possible so many decades later.
+Finally, I must give credit where credit is due. Thanks to [Andrew M. Kent][andmkent] for the creation of the [datatype][racket-datatype] package, which served as the inspiration for this blog post. Many thanks to [Sam Tobin-Hochstadt][samth] for his work creating Typed Racket, as well as helping me dramatically simplify the implementation used in this blog post. Also thanks to [Ryan Culpepper][ryanc] and [Matthias Felleisen][matthias] for their work on creating `syntax/parse`, which is truly a marvelous tool for exploring the world of macros, and, of course, a big thanks to [Matthew Flatt][mflatt] for his implementation of hygiene in Racket, as well as much of the rest of Racket itself. Not to mention the entire legacy of those who formulated the foundations of the Scheme macro system and created the framework for all of this to be possible so many decades later.
 
 Truly, working in Racket feels like standing on the shoulders of giants. If you're intrigued, give it a shot. It's a fun feeling.
 
@@ -321,4 +318,5 @@ Truly, working in Racket feels like standing on the shoulders of giants. If you'
 [mflatt]: http://www.cs.utah.edu/~mflatt/
 [racket-datatype]: https://github.com/andmkent/datatype
 [ryanc]: http://www.ccs.neu.edu/home/ryanc/
+[samth]: http://www.ccs.neu.edu/home/samth/
 [syntax-parse]: http://docs.racket-lang.org/syntax/stxparse.html
