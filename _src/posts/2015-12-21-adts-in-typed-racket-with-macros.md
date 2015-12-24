@@ -297,7 +297,7 @@ And of course, we can also use it to define ADTs that use concrete types rather 
 4 1/2
 ```
 
-There's all the power of ADTs, right in Racket, all implemented in 22 lines of code.
+There's all the power of ADTs, right in Racket, all implemented in 22 lines of code. If you'd like to see all the code together in a runnable form, [I've put together a gist here][adts-gist].
 
 # Conclusions and credit
 
@@ -312,6 +312,7 @@ Finally, I must give credit where credit is due. Thanks to [Andrew M. Kent][andm
 Truly, working in Racket feels like standing on the shoulders of giants. If you're intrigued, give it a shot. It's a fun feeling.
 
 [adts]: https://en.wikipedia.org/wiki/Algebraic_data_type
+[adts-gist]: https://gist.github.com/lexi-lambda/18cf7a9156f743a1317e
 [andmkent]: http://andmkent.com
 [fear-of-macros]: http://www.greghendershott.com/fear-of-macros/
 [matthias]: http://www.ccs.neu.edu/home/matthias/
