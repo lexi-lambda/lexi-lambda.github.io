@@ -22,6 +22,7 @@ pre code {
 }
 
 pre code, div[class^='brush: '] {
+  background-color: $color-section-background;
   width: 100%;
   overflow: auto;
 }
@@ -43,7 +44,6 @@ table.sourcetable {
 
 pre code, table.sourcetable {
   padding: 20px;
-  background-color: $color-section-background;
 }
 
 td.linenos {
