@@ -35,7 +35,7 @@ This blog post is somewhat long and technical, so before proceeding any further,
 
 (provide mul
          (struct-out num)
-         (struct-out vals))
+         (struct-out vec))
 
 (struct num (val))
 (struct vec (vals))
@@ -92,7 +92,7 @@ What exactly is this dangerous-sounding “spooky action”, and what causes it?
 ```racket
 (provide mul
          (struct-out num)
-         (struct-out vals))
+         (struct-out vec))
 
 (struct num (val))
 (struct vec (vals))
