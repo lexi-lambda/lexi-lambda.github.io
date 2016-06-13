@@ -114,10 +114,10 @@ newtype Id a = Id Text
 This creates an opaque `Id` type, but it automatically generates conversions *to* textual formats. However, it does *not* automatically create `FromText` or `FromJSON` instances, which would be dangerous because decoding `Id`s can potentially fail. It’s then possible to write out those instances manually to preserve a type safety:
 
 ```haskell
-instance FromText (Maybe Id) where
+instance FromText (Maybe (Id a)) where
   fromText str = if isValidId str then Just (Id str) else Nothing
 
-instance FromJSON Id where
+instance FromJSON (Id a) where
   parseJSON (String val) = maybe (fail "invalid id") return (fromText val)
   parseJSON _            = fail "invalid id"
 ```
