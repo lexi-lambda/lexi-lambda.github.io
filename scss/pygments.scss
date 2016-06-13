@@ -23,7 +23,7 @@ td.code .source {
   .kd { color: $string; font-weight: $semibold }     /* Keyword.Declaration */
   .kn { color: $string; font-weight: bold }          /* Keyword.Namespace */
   .kp { color: #008000 }                             /* Keyword.Pseudo */
-  .kr { color: #008000; font-weight: bold }          /* Keyword.Reserved */
+  .kr { color: #A10327; font-weight: bold }          /* Keyword.Reserved */
   .kt { color: #B00040 }                             /* Keyword.Type */
   .m { color: #666666 }                              /* Literal.Number */
   .s { color: $string }                              /* Literal.String */
@@ -34,12 +34,12 @@ td.code .source {
   .nd { color: #AA22FF }                             /* Name.Decorator */
   .ni { color: #999999; font-weight: bold }          /* Name.Entity */
   .ne { color: #D2413A; font-weight: bold }          /* Name.Exception */
-  .nf { color: #0000FF }                             /* Name.Function */
+  .nf { color: #960037 }                             /* Name.Function */
   .nl { color: #A0A000 }                             /* Name.Label */
   .nn { color: $string; font-weight: bold }          /* Name.Namespace */
   .nt { color: #008000; font-weight: bold }          /* Name.Tag */
   .nv { color: #1c7805 }                             /* Name.Variable */
-  .ow { color: #AA22FF; font-weight: bold }          /* Operator.Word */
+  .ow { color: #666666; font-weight: bold }          /* Operator.Word */
   .w { color: #bbbbbb }                              /* Text.Whitespace */
   .mf { color: #666666 }                             /* Literal.Number.Float */
   .mh { color: #666666 }                             /* Literal.Number.Hex */
