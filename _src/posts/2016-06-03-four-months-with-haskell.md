@@ -431,7 +431,7 @@ I could spend weeks writing about all the things I really like or dislike about 
 
 I did not come to Haskell with a distaste for static typing, despite the fact that I write so much Racket, a dynamically typed language (by default, at least). I don’t really use Typed Racket, and despite my love for Haskell and its type system, I am not sure I will use much more of it than I did before. Haskell and Racket are very different languages, which is justified in some places and probably sort of circumstantial in others.
 
-The future of Haskell seems bright, and a lot of the changes in the just-release GHC 8 are extremely exciting. I did not list records as a pain point on this list because the changes in GHC 8 appear to make them a *lot* more palatable, although whether or not they solve that problem remains to be seen. I will absolutely continue to write Haskell and push it to its limits where I can, and hopefully try and take as much as I can from it along the way.
+The future of Haskell seems bright, and a lot of the changes in the just-released GHC 8 are extremely exciting. I did not list records as a pain point because the changes in GHC 8 appear to make them a *lot* more palatable, although whether or not they solve that problem completely remains to be seen. I will absolutely continue to write Haskell and push it to its limits where I can, and hopefully try and take as much as I can from it along the way.
 
 [atom-haskell]: https://github.com/atom-haskell
 [haskell-lens]: https://hackage.haskell.org/package/lens#readme
