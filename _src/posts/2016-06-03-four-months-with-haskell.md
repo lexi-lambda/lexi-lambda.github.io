@@ -66,7 +66,7 @@ instance Show (Id Post) where
   show (Id txt) = "post #" <> unpack txt
 ```
 
-This provides a simple framework for encoding entirely arbitrary information information into the type system, then asking the compiler to actually check assertions about that information. This is made even more powerful with some other extensions, which I’ll talk about shortly.
+This provides a simple framework for encoding entirely arbitrary information into the type system, then asking the compiler to actually check assertions about that information. This is made even more powerful with some other extensions, which I’ll talk about shortly.
 
 ## Letting the compiler write code
 
