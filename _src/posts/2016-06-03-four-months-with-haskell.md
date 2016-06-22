@@ -50,7 +50,7 @@ I’m going to start out by talking about *phantom types*, which are a pretty si
 newtype Id a = Id Text
 ```
 
-This type represents an id for some kind of value, but although the the kind of value is specified in the type as the `a` type parameter, it isn’t actually used anywhere on the data definition—no matter what `a` is, an `Id` is just a piece of text. This makes it possible to write functions that operate on specific kinds of ids, and those invariants will be statically checked by the compiler, even though the runtime representation is entirely identical:
+This type represents an id for some kind of value, but although the kind of value is specified in the type as the `a` type parameter, it isn’t actually used anywhere on the data definition—no matter what `a` is, an `Id` is just a piece of text. This makes it possible to write functions that operate on specific kinds of ids, and those invariants will be statically checked by the compiler, even though the runtime representation is entirely identical:
 
 ```haskell
 fetchUser :: MonadDB m => Id User -> m User
