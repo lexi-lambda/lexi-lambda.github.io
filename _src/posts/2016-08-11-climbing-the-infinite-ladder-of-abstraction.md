@@ -24,7 +24,7 @@ public void setName(String name) {
 }
 ```
 
-This is a bit of a cheap example, given that Java getters and setters are something of a programming language punching bag at this point, but I really did write them, and I really did get frustrated by them! I learned object-oriented design patterns, and I poured over books, forum threads, blog posts, and Stack Overflow questions about how to structure code to prevent spaghetti, but no matter how hard I tried, I kept having to type things that looked suspiciously similar to each other.
+This is a bit of a cheap example, given that Java getters and setters are something of a programming language punching bag at this point, but I really did write them, and I really did get frustrated by them! I learned object-oriented design patterns, and I pored over books, forum threads, blog posts, and Stack Overflow questions about how to structure code to prevent spaghetti, but no matter how hard I tried, I kept having to type things that looked suspiciously similar to each other.
 
 It was really quite frustrating, because no matter how I approached the problem, I ended up with a boilerplate-heavy mess. The *whole reason* I got started programming was to avoid this sort of thing, so what could I do? Well, it became increasingly obvious to me that Java had to go, and I needed to try something else. I started learning two very different programming languages, JavaScript and Objective-C, and I liked them both, for different reasons.
 
@@ -34,7 +34,7 @@ Both of these languages were flawed, as all languages are, but they opened my mi
 
 # Discovering Lisp
 
-Over the next few years, I grew to appreciate JavaScript’s small, simple core, despite rather disliking its object system and poor faculties for user-friendly data modeling. I poured over its history, and I found out that its design was heavily influenced by an obscure little language called Scheme, as well as an even more obscure language called Self, and a part of me started to wonder what it would be like to incorporate those languages’ ideas without some of the compromises JavaScript had made.
+Over the next few years, I grew to appreciate JavaScript’s small, simple core, despite rather disliking its object system and poor faculties for user-friendly data modeling. I pored over its history, and I found out that its design was heavily influenced by an obscure little language called Scheme, as well as an even more obscure language called Self, and a part of me started to wonder what it would be like to incorporate those languages’ ideas without some of the compromises JavaScript had made.
 
 This idea lingered in the back of my head for a couple years, and while I tried to play with Scheme a couple times, it was simply too inaccessible for me. I was used to languages with powerful, easy to use IDEs, and when I found myself with nothing more than a command-line executable and rather scarce documentation, I was at a loss for how to begin. Even if I could do math in the REPL, where could I go from there? I’d started programming by building games, then websites. What could I possibly do with Scheme?
 
