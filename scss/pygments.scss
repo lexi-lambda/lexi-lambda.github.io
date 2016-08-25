@@ -2,7 +2,7 @@ $semibold: 600;
 
 $string: #BA2121;
 
-td.code .source {
+td.code .source, .source pre {
   .c, .cm, .c1 { color: #9e5555; font-weight: 300; } /* Comment */
   .err { border: 1px solid #FF0000 }                 /* Error */
   .k { color: #19177C; font-weight: $semibold }      /* Keyword */

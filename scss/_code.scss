@@ -12,9 +12,15 @@ p code, li code {
   padding: 2px 5px;
 }
 
-pre code, table.sourcetable pre {
+pre code, table.sourcetable pre, .source pre {
   font-size: 0.9em;
   line-height: 1.4em;
+  margin: 0;
+}
+
+.source {
+  display: inline-block;
+  margin: 1em 1.5em;
 }
 
 pre code {
@@ -25,6 +31,9 @@ pre code, div[class^='brush: '] {
   background-color: $color-section-background;
   width: 100%;
   overflow: auto;
+
+  // enable inertial horizontal scrolling
+  -webkit-overflow-scrolling: touch;
 }
 
 table.sourcetable {

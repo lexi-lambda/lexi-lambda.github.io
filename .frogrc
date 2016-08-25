@@ -105,6 +105,6 @@ output-dir = out
 ## to locate the executable.
 python-executable = python
 ## Whether to use line numbers.
-pygments-linenos? = true
+pygments-linenos? = false
 ## CSS class for the wrapping <div> tag (default: 'highlight').
 pygments-cssclass = source

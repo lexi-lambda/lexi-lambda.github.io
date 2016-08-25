@@ -10,6 +10,11 @@ html {
 
 * {
   box-sizing: border-box;
+
+  // ask mobile browsers to please trust our judgement about font sizes
+  -webkit-text-size-adjust: 100%;
+  -moz-text-size-adjust: 100%;
+  -ms-text-size-adjust: 100%;
 }
 
 html, body {
