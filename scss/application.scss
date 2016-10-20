@@ -121,10 +121,12 @@ article.inline > header .title {
 article.main > header .title {
   font-size: 2.7em;
   margin-bottom: 10px;
+  margin-top: 0;
 }
 
-article h1 {
+.content h1 {
   font-size: 2em;
+  margin-top: 2em;
 }
 
 article.main > footer {
