@@ -190,3 +190,30 @@ blockquote {
     }
   }
 }
+
+.pagination {
+  display: flex;
+  margin-top: 4em;
+  padding: 0;
+
+  li {
+    flex: 1;
+    list-style: none;
+    text-align: center;
+
+    a {
+      display: block;
+      transition: background-color 0.25s ease-in-out;
+      width: 90%;
+    }
+
+    &.active a {
+      cursor: default;
+    }
+
+    a:hover, &.active a {
+      background-color: $color-primary;
+      color: white !important;
+    }
+  }
+}
