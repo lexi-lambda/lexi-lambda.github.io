@@ -11,7 +11,7 @@ env:
   - GH_REF: 'github.com/lexi-lambda/lexi-lambda.github.io.git'
   - secure: "cWYfJKfWfn3qSlTX26NpIAC7+HWJc9tsJ2PUNnYNc60CFWBbVf2Srjrtt8CCYOMheA7K/jFNlT/px1+JKzruHMEVuUHFwIV7K8MGzSI5H6Y4gzOEfRMX8QZ/dNBEOJmkaXn70jBjYiefmg9Y20Tc41jppm6/nCb2KAfdUPcj6Hr1yit23BPRbbdf0lKWPFJFdYKk/7433LJbSZryDDBMHNioudn8fpE40ww34lbIb92qdbMEHV/O6N0KyAQMabfcgqGpsLt8VNECJNxnwZi8MBbf6EfyaG8e9XX8fBpdmCJ9K8ShjrpDbBqEmwFH7SowzdfTDu5OMcfc4TdES68G+CwbHG0htdNM9HCgf3XeFDO5gUopepeuCmnoBaZDmsXybTxXB7wt51bk+zz6GOrTfYHn93U82LNRvjFMiiwSOZz9xUC43LRF/dWBDBkpsK9EVA8l1mtoRs+4haZsCtxLs9BYuoGKDmSPU/4doCtDFh1+Lqgca3SNtOa4UwnZrhkSqiUszlqNvJcaEw0fBFsapxEIwFWbQz9A8k+yDgSv1rBmxK9IKnBLxM2LQxEIAZ1tIKfZtAWVu8IDiMF4acticQSwCaRXAE0XSBJ5zbmIshtgJQTVcxb1sefV5IRBbp6NDNIBnVGm+pSTXdMPqbGt8hha/C0xF0Wr9vc9xoti/Ig="
   - RACKET_DIR: '~/racket'
-  - RACKET_VERSION: '6.2'
+  - RACKET_VERSION: '6.7'
 
 before_install:
 - git clone https://github.com/greghendershott/travis-racket.git

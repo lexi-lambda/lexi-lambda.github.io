@@ -10,6 +10,11 @@ npm run build
 pip install pygments
 raco frog --build
 
+# only deploy on non-PR pushes to source
+if [[ "$TRAVIS_PULL_REQUEST" != 'false' || "$TRAVIS_BRANCH" != 'source' ]]; then
+  exit 0;
+fi
+
 # go to the out directory and create a *new* Git repo
 cd out
 git init
