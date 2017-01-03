@@ -113,6 +113,8 @@ Of course, this blog post is about testing, so we’re going to go further and t
 Given that we now have functions depending on an interface instead of `IO`, we can create separate instances of our typeclasses for use in tests. Let’s start with the `renderUserProfile` function. We’ll create a simple wrapper around the `Identity` type, since we don’t actually care much about the “effects” of our `MonadDB` methods:
 
 ```haskell
+import Data.Functor.Identity
+
 newtype TestM a = TestM (Identity a)
   deriving (Functor, Applicative, Monad)
 
