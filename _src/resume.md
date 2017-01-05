@@ -56,9 +56,9 @@ I am a co-author of the [test-fixture][test-fixture] Haskell library, which aims
 
 The general technique is described in more detail in [this blog post][haskell-testing-blog-post]. Open research problems with this technique include cleanly testing polymorphic methods and better supporting concurrent programs, but [I’m working on that][test-fixture-polymorphic-issue].
 
-## The Rascal programming language
+## The Hackett programming language
 
-[Rascal][rascal] is a *very* new programming language that combines a Haskell-style type system and Racket’s cutting-edge macro technology into a statically typed Lisp that exposes type information at macro-expansion time. It is based on [research by Stephen Chang, Alex Knauth, and Ben Greenman about embedding types and typechecking as macros][types-as-macros]. It is semantically much closer to Haskell than Scheme, but it uses an s-expression-based syntax to enable more powerful syntactic abstractions.
+[Hackett][hackett] is a *very* new programming language that combines a Haskell-style type system and Racket’s cutting-edge macro technology into a statically typed Lisp that exposes type information at macro-expansion time. It is based on [research by Stephen Chang, Alex Knauth, and Ben Greenman about embedding types and typechecking as macros][types-as-macros]. It is semantically much closer to Haskell than Scheme, but it uses an s-expression-based syntax to enable more powerful syntactic abstractions.
 
 My efforts so far have involved fusing the new types-as-macros technique with more traditional unification-based type inference in a composable way. The initial results are promising, and my working prototype is currently pretty close to a somewhat usable ML, but the initial goal is to support all of Haskell 98’s core features.
 
@@ -67,6 +67,7 @@ My efforts so far have involved fusing the new types-as-macros technique with mo
 [envy]: https://github.com/lexi-lambda/envy
 [functional-doc]: http://docs.racket-lang.org/functional/interfaces.html
 [github]: https://github.com/lexi-lambda
+[hackett]: https://github.com/lexi-lambda/hackett
 [haskell-testing-blog-post]: /blog/2016/10/03/using-types-to-unit-test-in-haskell/
 [lens-doc]: http://docs.racket-lang.org/lens/lens-guide.html
 [megaparsack]: https://github.com/lexi-lambda/megaparsack
@@ -74,7 +75,6 @@ My efforts so far have involved fusing the new types-as-macros technique with mo
 [namespaced-transformer]: https://github.com/lexi-lambda/namespaced-transformer
 [racket-my-packages]: https://pkgd.racket-lang.org/pkgn/search?tags=author%3Alexi.lambda%40gmail.com
 [racket-tulip]: https://github.com/lexi-lambda/racket-tulip
-[rascal]: https://github.com/lexi-lambda/rascal
 [scripty]: https://github.com/lexi-lambda/scripty
 [test-fixture]: https://github.com/cjdev/test-fixture
 [test-fixture-doc]: http://hackage.haskell.org/package/test-fixture/docs/Control-Monad-TestFixture.html
