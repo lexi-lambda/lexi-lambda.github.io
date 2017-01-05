@@ -1,6 +1,8 @@
     Title: Rascal: a Haskell with more parentheses
     Date: 2017-01-02T09:16:42
-    Tags: rascal, racket, haskell, programming languages, functional programming
+    Tags: hackett, racket, haskell, programming languages, functional programming
+
+> **Note**: since the writing of this blog post, Rascal has been renamed to Hackett. You can read about why in [the followup blog post][rascal-is-hackett].
 
 “Hey! You got your Haskell in my Racket!”
 
@@ -142,8 +144,9 @@ In the meantime, I will try to keep picking away at Rascal in the small amount o
 [languages-in-an-afternoon]: https://www.youtube.com/watch?v=TfehOLha-18
 [mpj]: https://web.cecs.pdx.edu/~mpj/
 [racket-manifesto]: http://www.ccs.neu.edu/home/matthias/manifesto/
-[rascal]: https://github.com/lexi-lambda/rascal
-[rascal-monad]: https://github.com/lexi-lambda/rascal/blob/87d001a82c86fb66544d25c37ffba9be1ac63464/rascal-lib/rascal/monad.rkt#L48-L58
+[rascal]: https://github.com/lexi-lambda/hackett
+[rascal-is-hackett]: /blog/2017/01/05/rascal-is-now-hackett-plus-some-answers-to-questions/
+[rascal-monad]: https://github.com/lexi-lambda/hackett/blob/87d001a82c86fb66544d25c37ffba9be1ac63464/rascal-lib/rascal/monad.rkt#L48-L58
 [servant]: http://hackage.haskell.org/package/servant
 [stephen-diehl]: http://www.stephendiehl.com
 [thih]: https://web.cecs.pdx.edu/~mpj/thih/
