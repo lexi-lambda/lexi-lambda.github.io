@@ -168,13 +168,13 @@ class Monad m => MonadExit m where
   exitWith = lift . exitWith
 ```
 
-We have to use `m1` instead of `m`, since type variables in the instance head are always scoped, and the names would conflict. However, this creates another problem, since `m` no longer appears in the new `exitWith` type signature at all, so the `MonadExit m` constraint becomes ambiguous. We can fix this with a simple type equality ensuring that `m` and `t m1` must be the same type:
+We have to use `m1` instead of `m`, since type variables in the instance head are always scoped, and the names would conflict. However, this creates another problem, since our specialized type signature replaces `m` with `t m1`, which won’t quite work (as GHC can’t automatically figure out they should be the same). Instead, we can use `m` in the type signature, then just add a type equality constraint ensuring that `m` and `t m1` must be the same type:
 
 ```haskell
 class Monad m => MonadExit m where
   exitWith :: ExitCode -> m ()
 
-  default exitWith :: (MonadTrans t, MonadExit m1, m ~ t m1) => ExitCode -> t m1 ()
+  default exitWith :: (MonadTrans t, MonadExit m1, m ~ t m1) => ExitCode -> m ()
   exitWith = lift . exitWith
 ```
 
@@ -290,11 +290,11 @@ I will not go into the precise mechanics of how `MonadTransControl` works in thi
 ```haskell
 class Monad m => MonadReader r m | m -> r where
   ask :: m r
-  default ask :: (MonadTrans t, MonadReader r m1, m ~ t m1) => t m1 r
+  default ask :: (MonadTrans t, MonadReader r m1, m ~ t m1) => m r
   ask = lift ask
 
   local :: (r -> r) -> m a -> m a
-  default local :: (MonadTransControl t, MonadReader r m1, m ~ t m1) => (r -> r) -> t m1 a -> t m1 a
+  default local :: (MonadTransControl t, MonadReader r m1, m ~ t m1) => (r -> r) -> m a -> m a
   local = mapT . local
 
   reader :: (r -> a) -> m a
@@ -324,11 +324,11 @@ The default instances for the other mtl typeclasses are slightly different from 
 ```haskell
 class Monad m => MonadError e m | m -> e where
   throwError :: e -> m a
-  default throwError :: (MonadTrans t, MonadError e m1, m ~ t m1) => e -> t m1 a
+  default throwError :: (MonadTrans t, MonadError e m1, m ~ t m1) => e -> m a
   throwError = lift . throwError
 
   catchError :: m a -> (e -> m a) -> m a
-  default catchError :: (MonadTransControl t, MonadError e m1, m ~ t m1) => t m1 a -> (e -> t m1 a) -> t m1 a
+  default catchError :: (MonadTransControl t, MonadError e m1, m ~ t m1) => m a -> (e -> m a) -> m a
   catchError x f = liftWith (\run -> catchError (run x) (run . f)) >>= restoreT . return
 
 instance MonadError e m => MonadError e (ReaderT r m)
@@ -342,11 +342,11 @@ The `MonadState` interface turns out to be extremely simple, so it doesn’t eve
 ```haskell
 class Monad m => MonadState s m | m -> s where
   get :: m s
-  default get :: (MonadTrans t, MonadState s m1, m ~ t m1) => t m1 s
+  default get :: (MonadTrans t, MonadState s m1, m ~ t m1) => m s
   get = lift get
 
   put :: s -> m ()
-  default put :: (MonadTrans t, MonadState s m1, m ~ t m1) => s -> t m1 ()
+  default put :: (MonadTrans t, MonadState s m1, m ~ t m1) => s -> m ()
   put = lift . put
 
   state :: (s -> (a, s)) -> m a
@@ -370,15 +370,15 @@ Unexpectedly, `MonadWriter` turns out to be by far the trickiest of the bunch. I
 ```haskell
 class (Monoid w, Monad m) => MonadWriter w m | m -> w where
   writer :: (a, w) -> m a
-  default writer :: (MonadTrans t, MonadWriter w m1, m ~ t m1) => (a, w) -> t m1 a
+  default writer :: (MonadTrans t, MonadWriter w m1, m ~ t m1) => (a, w) -> m a
   writer = lift . writer
 
   tell :: w -> m ()
-  default tell :: (MonadTrans t, MonadWriter w m1, m ~ t m1) => w -> t m1 ()
+  default tell :: (MonadTrans t, MonadWriter w m1, m ~ t m1) => w -> m ()
   tell = lift . tell
 
   listen :: m a -> m (a, w)
-  default listen :: (MonadTransControl t, MonadWriter w m1, m ~ t m1) => t m1 a -> t m1 (a, w)
+  default listen :: (MonadTransControl t, MonadWriter w m1, m ~ t m1) => m a -> m (a, w)
   listen x = do
     (y, w) <- liftWith (\run -> listen (run x))
     y' <- restoreT (return y)
@@ -421,7 +421,7 @@ instance MonadTransSplit (StateT s) where
 Then, using this, it would be possible to write a generic version of `pass`:
 
 ```haskell
-default pass :: (MonadTransSplit t, MonadWriter w m1, m ~ t m1) => t m1 (a, w -> w) -> t m1 a
+default pass :: (MonadTransSplit t, MonadWriter w m1, m ~ t m1) => m (a, w -> w) -> m a
 pass m = do
   r <- liftWithSplit $ \run -> pass $ run m >>= \case
     (x, Just f) -> return (x, f)
