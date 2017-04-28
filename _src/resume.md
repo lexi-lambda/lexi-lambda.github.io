@@ -1,8 +1,8 @@
 # Bio
 
-My name is Alexis King, and I write a lot of software. I live in Los Angeles, but I’m potentially willing relocate, depending on location.
+My name is Alexis King, and I write a lot of software. I live in Los Angeles, and I’d prefer local or remote work, but I’m potentially willing relocate, depending on the location.
 
-I’m interested in functional programming and programming language research, and I try to spend as much time as I can writing Haskell and Racket. I mostly work on web applications and infrastructure, but I’m especially passionate about writing libraries and tooling.
+I’m interested in functional programming, static types, and programming language research, and I try to spend as much time as I can writing Haskell and Racket. I mostly work on web applications and infrastructure, but I’m especially passionate about writing libraries and tooling.
 
 I write about some of the things I do [on this blog](/), and I sometimes tweet about them and other things [on Twitter][twitter]. I work on a *lot* of open-source projects [on GitHub][github], and you can email me at [lexi.lambda@gmail.com][email].
 
@@ -30,7 +30,7 @@ I like explaining things, and I know how to make complex topics accessible, both
 
 I am deeply familiar with Haskell and its ecosystem, and I know how to do everything from practical type-level programming to metaprogramming with Template Haskell. I am skilled in structuring Haskell applications to make them testable and easy to change. I use a hand-picked complement of libraries and GHC extensions to turn Haskell into a compile-time assistant that knows so much about my domain that it can write a lot of my code for me.
 
-Recently, I’ve done a lot of work using servant, a Haskell type-level DSL for building REST-y HTTP APIs, which makes implementing complex APIs easy in a composable way. I also maintain two open-source Haskell libraries, [text-conversions][text-conversions] and [test-fixture][test-fixture].
+Recently, I’ve done a lot of work using servant, a Haskell type-level DSL for building REST-y HTTP APIs, which makes implementing complex APIs easy in a composable way. I also maintain three open-source Haskell libraries, [text-conversions][] and [test-fixture][], and [monad-persist][].
 
 ## Racket
 
@@ -38,9 +38,15 @@ I work *on* Racket almost as much as I work *with* Racket, and I know its state 
 
 I maintain [too many Racket libraries to list][racket-my-packages].
 
+# Other things I’m good at
+
+## AWS
+
+In large part because I like to stay as far away from “operations” as I possibly can, I’ve gotten pretty good at understanding how to safely and reliably deploy infrastructure on AWS in a way that won’t ever require me to `ssh` into a production box. Most notably, I’m knowledgable in creating *software-defined architecture*, architecture that can be tracked in version control, reliably replicated as necessary, and hooked together to coordinate between independent subsystems.
+
 ## JavaScript
 
-I am an expert in both JavaScript as a language and the JavaScript front end ecosystem. It’s perhaps not fair to say I *like* to use JavaScript, but knowing the language and its tools is pretty important for building modern web applications. I know *all* of the language, good parts and bad, and I have experience working with Backbone, Angular, React, Babel, Webpack, Browserify, Gulp, Mocha, Ramda, and most of the rest of the JS frontend soup.
+I am an expert in both JavaScript as a language and the JavaScript front end ecosystem. It’s not my favorite technology in the world, but knowing the language and its tools is pretty important for building modern web applications, even if you decide to use a compile-to-JS language, instead. I know *all* of the language, good parts and bad, and I have experience working with Backbone, Angular, React, Babel, Webpack, Browserify, Gulp, Mocha, Ramda, and most of the rest of the JS frontend soup.
 
 # Projects I’m working on
 
@@ -62,16 +68,20 @@ The general technique is described in more detail in [this blog post][haskell-te
 
 My efforts so far have involved fusing the new types-as-macros technique with more traditional unification-based type inference in a composable way. The initial results are promising, and my working prototype is currently pretty close to a somewhat usable ML, but the initial goal is to support all of Haskell 98’s core features.
 
+For more information [see the announcement blog post][hackett-announcement].
+
 [curly-fn]: https://github.com/lexi-lambda/racket-curly-fn
 [email]: mailto:lexi.lambda@gmail.com
 [envy]: https://github.com/lexi-lambda/envy
 [functional-doc]: http://docs.racket-lang.org/functional/interfaces.html
 [github]: https://github.com/lexi-lambda
 [hackett]: https://github.com/lexi-lambda/hackett
+[hackett-announcement]: /blog/2017/01/02/rascal-a-haskell-with-more-parentheses/
 [haskell-testing-blog-post]: /blog/2016/10/03/using-types-to-unit-test-in-haskell/
 [lens-doc]: http://docs.racket-lang.org/lens/lens-guide.html
 [megaparsack]: https://github.com/lexi-lambda/megaparsack
 [megaparsack-doc]: http://docs.racket-lang.org/megaparsack/index.html
+[monad-persist]: https://github.com/cjdev/monad-persist
 [namespaced-transformer]: https://github.com/lexi-lambda/namespaced-transformer
 [racket-my-packages]: https://pkgd.racket-lang.org/pkgn/search?tags=author%3Alexi.lambda%40gmail.com
 [racket-tulip]: https://github.com/lexi-lambda/racket-tulip
