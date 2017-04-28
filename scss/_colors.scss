@@ -1,7 +1,7 @@
 
 $color-background: #fffcfc;
 $color-primary: #e45b5b;
-$color-section-background: lighten($color-primary, 35%);
+$color-section-background: lighten($color-primary, 35.75%);
 
 $text-color-light: lighten($color-primary, 30%);
 $text-color-link: desaturate(darken($color-primary, 10%), 20%);
