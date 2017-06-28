@@ -4,10 +4,8 @@ set -ev # exit with nonzero exit code if anything fails
 # clear the output directory
 rm -rf out || exit 0;
 
-# build the blog files + install pygments for highlighting support
-npm install
+# build the blog files
 npm run build
-pip install pygments
 raco frog --build
 
 # only deploy on non-PR pushes to source

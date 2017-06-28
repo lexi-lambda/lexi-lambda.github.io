@@ -1,7 +1,6 @@
 gulp         = require 'gulp'
 
 autoprefixer = require 'gulp-autoprefixer'
-bower        = require 'gulp-bower'
 coffee       = require 'gulp-coffee'
 concat       = require 'gulp-concat'
 rename       = require 'gulp-rename'
@@ -10,15 +9,8 @@ sourcemaps   = require 'gulp-sourcemaps'
 uglify       = require 'gulp-uglify'
 gutil        = require 'gulp-util'
 
-bowerFiles   = require 'main-bower-files'
-
 gulp.task 'default', ['build']
-gulp.task 'build', ['bower', 'coffee', 'sass']
-gulp.task 'bower', ['bower-install', 'bower-files']
-
-gulp.task 'bower-install', -> bower()
-gulp.task 'bower-files', ->
-  gulp.src [], base: 'bower_components/'
+gulp.task 'build', ['coffee', 'sass']
 
 gulp.task 'coffee', ->
   gulp.src './coffee/**/*.coffee'
