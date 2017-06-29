@@ -1,6 +1,6 @@
     Title: Using types to unit-test in Haskell
     Date: 2016-10-03T01:20:43
-    Tags: haskell
+    Tags: haskell, testing
 
 Object-oriented programming languages make unit testing easy by providing obvious boundaries between units of code in the form of classes and interfaces. These boundaries make it easy to stub out parts of a system to test functionality in isolation, which makes it possible to write fast, deterministic test suites that are robust in the face of change. When writing Haskell, it can be unclear how to accomplish the same goals: even inside pure code, it can become difficult to test a particular code path without also testing all its collaborators.
 
