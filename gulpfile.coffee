@@ -10,7 +10,7 @@ uglify       = require 'gulp-uglify'
 gutil        = require 'gulp-util'
 
 gulp.task 'default', ['build']
-gulp.task 'build', ['coffee', 'sass']
+gulp.task 'build', ['coffee', 'sass', 'image']
 
 gulp.task 'coffee', ->
   gulp.src './coffee/**/*.coffee'
@@ -31,6 +31,11 @@ gulp.task 'sass', ->
     .pipe sourcemaps.write()
     .pipe gulp.dest './out/css/'
 
+gulp.task 'image', ->
+  gulp.src './images/**/*'
+    .pipe gulp.dest './out/img/'
+
 gulp.task 'watch', ->
   gulp.watch './coffee/**/*.coffee', ['coffee']
   gulp.watch './scss/**/*.scss', ['sass']
+  gulp.watch './images/**/*', ['image']

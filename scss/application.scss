@@ -243,3 +243,9 @@ blockquote {
     }
   }
 }
+
+div.figure, article.main > p > a {
+  & > img {
+    max-width: 100%;
+  }
+}
