@@ -32,7 +32,7 @@
                         #:line-numbers? #f
                         #:css-class "source")
       (auto-embed-tweets #:parents? #t)
-      (add-racket-doc-links #:code? #t #:prose? #t)))
+      (add-racket-doc-links #:code? #f #:prose? #t)))
 
 ;; Called from `raco frog --clean`.
 (define/contract (clean)
