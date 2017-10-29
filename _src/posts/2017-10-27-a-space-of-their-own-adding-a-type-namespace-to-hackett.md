@@ -62,7 +62,9 @@ This works fine. But what happens if the programmer decides to change the name o
 
 Can you spot the bug? Disturbingly, this code *still compiles*! Even though `bar` is not a member of `Foo` anymore, it’s still a valid pattern, since names used as patterns match anything, just as the `y` pattern matches against any integer inside the `baz` constructor. If Hackett had a pattern redundancy checker, it could at least hopefully catch this mistake, but as things are, this could would silently compile and do the wrong thing: `(foo->integer (baz 42))` will still produce `0`, not `42`, since the first case always matches.
 
-Haskell escapes this flaw by syntactically distinguishing between patterns and ordinary bindings by requiring all constructors start with an uppercase letter. Hackett does not currently enforce this, but it seems like an increasingly good idea. Separating the namespaces is the big hurdle needed to implement such a feature, and happily, it is now complete. The `Tuple` example from above is perfectly legal Hackett.
+Haskell escapes this flaw by syntactically distinguishing between patterns and ordinary bindings by requiring all constructors start with an uppercase letter. This means that programmers often want to define data constructors and type constructors with the same name, such as the `Tuple` example above, which is illegal if a programming language only supports a single namespace.
+
+Although Hackett now supports two namespaces, it does not currently enforce this naming convention, but it seems like an increasingly good idea. Separating the namespaces is the biggest hurdle needed to implement such a feature, and happily, it is now complete. The `Tuple` example from above is perfectly legal Hackett.
 
 # Adding namespaces to a language
 
