@@ -10,7 +10,7 @@ I write about some of the things I do [on this blog](/), and I sometimes tweet a
 
 ## Programming languages and DSLs
 
-I have spent a lot of time turning complicated problems into less complicated ones by building languages to solve them, focusing on everything from [environment variable management][envy] to [type-safe unit testing][test-fixture] to [shell scripts that manage their own dependencies][scripty].
+I have spent a lot of time turning complicated problems into less complicated ones by building languages to solve them, focusing on everything from [environment variable management][envy] to [type-safe unit testing][monad-mock] to [shell scripts that manage their own dependencies][scripty]. I work on [a programming language called Hackett](#the-hackett-programming-language).
 
 ## Web applications and APIs
 
@@ -22,15 +22,15 @@ I dedicate most of my free time to developing and maintaining open source softwa
 
 ## Teaching and technical writing
 
-I like explaining things, and I know how to make complex topics accessible, both in writing and in person. I give talks and workshops, write [this blog](/), and [document][megaparsack-doc] [all of my][functional-doc] [software][lens-doc] [extensively][test-fixture-doc].
+I like explaining things, and I know how to make complex topics accessible, both in writing and in person. I give talks and workshops, write [this blog](/), and [document][hackett-doc] [all][megaparsack-doc] [of my][functional-doc] [software][lens-doc] [extensively][test-fixture-doc].
 
 # Things I like to use
 
 ## Haskell
 
-I am deeply familiar with Haskell and its ecosystem, and I know how to do everything from practical type-level programming to metaprogramming with Template Haskell. I am skilled in structuring Haskell applications to make them testable and easy to change. I use a hand-picked complement of libraries and GHC extensions to turn Haskell into a compile-time assistant that knows so much about my domain that it can write a lot of my code for me.
+I am deeply familiar with Haskell and its ecosystem, and I know how to do everything from practical type-level programming to metaprogramming with Template Haskell. I am skilled in structuring Haskell applications to make them testable and easy to change. I use a tailored set of libraries and GHC extensions to turn Haskell into a compile-time assistant that knows so much about my domain that it can write a lot of my code for me.
 
-Recently, I’ve done a lot of work using servant, a Haskell type-level DSL for building REST-y HTTP APIs, which makes implementing complex APIs easy in a composable way. I also maintain three open-source Haskell libraries, [text-conversions][] and [test-fixture][], and [monad-persist][].
+Recently, I’ve done a lot of work using servant, a Haskell type-level DSL for building REST-y HTTP APIs, which makes implementing complex APIs easy in a composable way. I also maintain four open-source Haskell libraries, [text-conversions][], [monad-mock][], [monad-persist][], and [test-fixture][].
 
 ## Racket
 
@@ -38,17 +38,21 @@ I work *on* Racket almost as much as I work *with* Racket, and I know its state 
 
 I maintain [too many Racket libraries to list][racket-my-packages].
 
-# Other things I’m good at
-
-## AWS
-
-In large part because I like to stay as far away from “operations” as I possibly can, I’ve gotten pretty good at understanding how to safely and reliably deploy infrastructure on AWS in a way that won’t ever require me to `ssh` into a production box. Most notably, I’m knowledgable in creating *software-defined architecture*, architecture that can be tracked in version control, reliably replicated as necessary, and hooked together to coordinate between independent subsystems.
-
-## JavaScript
-
-I am an expert in both JavaScript as a language and the JavaScript front end ecosystem. It’s not my favorite technology in the world, but knowing the language and its tools is pretty important for building modern web applications, even if you decide to use a compile-to-JS language, instead. I know *all* of the language, good parts and bad, and I have experience working with Backbone, Angular, React, Babel, Webpack, Browserify, Gulp, Mocha, Ramda, and most of the rest of the JS frontend soup.
-
 # Projects I’m working on
+
+## The Hackett programming language
+
+[Hackett][hackett] is a *very* new programming language that combines a Haskell-style type system and Racket’s cutting-edge macro technology into a statically typed Lisp that exposes type information at macroexpansion time. It is based on [research by Stephen Chang, Alex Knauth, and Ben Greenman about embedding types and typechecking as macros][types-as-macros]. Hackett semantically much closer to Haskell than Scheme, but it uses an s-expression-based syntax to enable more powerful syntactic abstractions.
+
+My efforts so far have yielded a working implementation of most of Haskell 98, though it is slow and not especially user-friendly. The implementation involves a fusion of the types-as-macros techniques with a more traditional unification-based typechecker. Hackett is already powerful enough to solve simple programming problems, especially when paired with Racket’s extensive ecosystem of libraries, but there is still much work to be done around improving performance and adding more essential type system features.
+
+For more information [see the Hackett documentation][hackett-doc] and [my blog posts on Hackett][hackett-blog-posts].
+
+## Testing strongly-typed monadic effects in Haskell
+
+I am a co-author of the [monad-mock][] and [test-fixture][] Haskell libraries, which aim to assist Haskell developers in flexibly testing effectful code without any boilerplate and without giving up any static guarantees. These are implemented with a combination of some type-level trickery, a monadic implementation of explicit typeclass dictionary passing, and some Template Haskell utilities for eliminating boilerplate and unnecessary manual maintenance.
+
+The general techniques is described in more detail in [this blog post on monad-mock][monad-mock-blog-post] and [this blog post on test-fixture][haskell-testing-blog-post]. Open problems with these techniques include cleanly testing polymorphic methods and better supporting concurrent programs, but [I’m working on that][test-fixture-polymorphic-issue].
 
 ## racket-tulip and Racket language tooling
 
@@ -56,19 +60,16 @@ I maintain a [working prototype][racket-tulip] of the [tulip][tulip-lang] progra
 
 Other research in a related space has involved looking into ways to compose syntactic language extensions in safe and predictable ways, making reader syntax as composable and safe as ordinary Racket macros. This work is demonstrated by the [curly-fn][curly-fn] package, powered by the underlying [namespaced-transformer][namespaced-transformer] library.
 
-## Testing strongly-typed monadic effects in Haskell
+# Other things I know about
 
-I am a co-author of the [test-fixture][test-fixture] Haskell library, which aims to assist Haskell developers in flexibly testing effectful code without any boilerplate and without giving up any static guarantees. This is implemented with a combination of some type-level trickery, a monadic implementation of explicit typeclass dictionary passing, and a Template Haskell utility for eliminating boilerplate and unnecessary manual maintenance.
+## AWS
 
-The general technique is described in more detail in [this blog post][haskell-testing-blog-post]. Open research problems with this technique include cleanly testing polymorphic methods and better supporting concurrent programs, but [I’m working on that][test-fixture-polymorphic-issue].
+In large part because I like to stay as far away from “operations” as I possibly can, I’ve gotten pretty good at understanding how to safely and reliably deploy infrastructure on AWS in a way that won’t ever require me to `ssh` into a production box. Most notably, I’m knowledgable in creating *software-defined architecture*, architecture that can be tracked in version control, reliably replicated as necessary, and hooked together to coordinate between independent subsystems.
 
-## The Hackett programming language
+## JavaScript
 
-[Hackett][hackett] is a *very* new programming language that combines a Haskell-style type system and Racket’s cutting-edge macro technology into a statically typed Lisp that exposes type information at macro-expansion time. It is based on [research by Stephen Chang, Alex Knauth, and Ben Greenman about embedding types and typechecking as macros][types-as-macros]. It is semantically much closer to Haskell than Scheme, but it uses an s-expression-based syntax to enable more powerful syntactic abstractions.
+I am an expert in both JavaScript-the-language and the JavaScript front-end ecosystem. It’s not my favorite technology in the world, but knowing the language and its tools is pretty important for building modern web applications, even if you decide to use a compile-to-JS language, instead. I know *all* of the language, good parts and bad, and I have experience working with Backbone, Angular, React, Babel, Webpack, Browserify, Gulp, Mocha, Ramda, and most of the rest of the JS frontend soup.
 
-My efforts so far have involved fusing the new types-as-macros technique with more traditional unification-based type inference in a composable way. The initial results are promising, and my working prototype is currently pretty close to a somewhat usable ML, but the initial goal is to support all of Haskell 98’s core features.
-
-For more information [see the announcement blog post][hackett-announcement].
 
 [curly-fn]: https://github.com/lexi-lambda/racket-curly-fn
 [email]: mailto:lexi.lambda@gmail.com
@@ -77,11 +78,15 @@ For more information [see the announcement blog post][hackett-announcement].
 [github]: https://github.com/lexi-lambda
 [hackett]: https://github.com/lexi-lambda/hackett
 [hackett-announcement]: /blog/2017/01/02/rascal-a-haskell-with-more-parentheses/
+[hackett-blog-posts]: /tags/hackett.html
+[hackett-doc]: https://pkg-build.racket-lang.org/doc/hackett@hackett-doc/
 [haskell-testing-blog-post]: /blog/2016/10/03/using-types-to-unit-test-in-haskell/
 [lens-doc]: http://docs.racket-lang.org/lens/lens-guide.html
 [megaparsack]: https://github.com/lexi-lambda/megaparsack
 [megaparsack-doc]: http://docs.racket-lang.org/megaparsack/index.html
 [monad-persist]: https://github.com/cjdev/monad-persist
+[monad-mock]: https://github.com/cjdev/monad-mock
+[monad-mock-blog-post]: /blog/2017/06/29/unit-testing-effectful-haskell-with-monad-mock/
 [namespaced-transformer]: https://github.com/lexi-lambda/namespaced-transformer
 [racket-my-packages]: https://pkgd.racket-lang.org/pkgn/search?tags=author%3Alexi.lambda%40gmail.com
 [racket-tulip]: https://github.com/lexi-lambda/racket-tulip
