@@ -40,31 +40,31 @@ So, remember: don’t use `stack install`! `stack` works best when everything li
 
 Okay, so now that you know to never use `stack install`, what *do* you use? Well, `stack build` is probably all you need. Let’s cover some variations of `stack build` that I use most frequently.
 
-Once you have a `stack` project, you can build it by simply running `stack build` within the project directory. However, for local development, this is usually unnecessarily slow because it runs the GHC optimizer. For faster development build times, pass the `--fast` flag to disable optimizations, along with the `-j` flag to enable building dependencies in parallel:
+Once you have a `stack` project, you can build it by simply running `stack build` within the project directory. However, for local development, this is usually unnecessarily slow because it runs the GHC optimizer. For faster development build times, pass the `--fast` flag to disable optimizations:
 
 ```
-$ stack build -j 8 --fast
+$ stack build --fast
 ```
 
-Additionally, you can enable more fine-grained, module-level parallel builds (instead of just package-level parallelism) by adding `--ghc-options=-j`, but there are conflicting accounts on whether or not this actually makes things faster or slower. I haven’t extensively tested to see whether or not this is the case, so I mostly leave it off.
+By default, `stack` builds dependencies with coarse-grained, package-level parallelism, but you can enable more fine-grained, module-level parallel builds by adding `--ghc-options=-j`. Unfortunately, there are conflicting accounts on whether or not this actually makes things faster or slower in practice, and I haven’t extensively tested to see whether or not this is the case, so I mostly leave it off.
 
 Usually, you also want to build and run the tests along with your code, which you can enable with the `--test` flag. Additionally, `stack test` is an alias for `stack build --test`, so these two commands are equivalent:
 
 ```
-$ stack build -j 8 --fast --test
-$ stack test -j 8 --fast
+$ stack build --fast --test
+$ stack test --fast
 ```
 
 Also, it is useful to build documentation as well as code! You can do this by passing the `--haddock` flag, but unfortunately, I find Haddock sometimes takes an unreasonably long time to run. Therefore, since I usually only care about running Haddock on my dependencies, I usually pass the `--haddock-deps` flag instead, which prevents having to re-run Haddock every time you build:
 
 ```
-$ stack test -j 8 --fast --haddock-deps
+$ stack test --fast --haddock-deps
 ```
 
 Finally, I usually want to build and test my project in the background whenever my code changes. Fortunately, this can be done easily by using the `--file-watch` flag, making it easy to incrementally change project code and immediately see results:
 
 ```
-$ stack test -j 8 --fast --haddock-deps --file-watch
+$ stack test --fast --haddock-deps --file-watch
 ```
 
 This is the command I usually use to develop my Haskell projects.
@@ -120,7 +120,7 @@ Atom’s editor integration is powered by `ghc-mod`, a program that uses the GHC
 As mentioned above, **`stack install` is not what you want**. Tools like `ghc-mod`, `hlint`, `hoogle`, `weeder`, and `intero` work best when installed as part of the sandbox, *not* globally, since that ensures they will match the current GHC version your project is using. This can be done per-project using the ordinary `stack build` command, so the easiest way to properly install `ghc-mod` into a `stack` project is with the following command:
 
 ```
-$ stack build -j 8 ghc-mod
+$ stack build ghc-mod
 ```
 
 Unfortunately, this means you will need to run that command inside every single `stack` project individually in order to properly set it up so that `stack exec -- ghc-mod` will find the correct executable. One way to circumvent this is by using a recently-added `stack` flag designed for this explicit purpose, `--copy-compiler-tool`. This is like `--copy-bins`, but it copies the executables into a *compiler-specific location*, so a tool built for GHC 8.0.2 will be stored separately from the same tool built for GHC 8.2.2. `stack exec` arranges for the executables for the current compiler version to end up in the `PATH`, so you only need to build and install your tools once per compiler version.
@@ -128,7 +128,7 @@ Unfortunately, this means you will need to run that command inside every single 
 Does this kind of suck? Yes, a little bit, but it sucks a whole lot less than all your editor integration breaking every time you switch to a project that uses a different version of GHC. I use the following command in a fresh sandbox when a Stackage LTS comes out for a new version of GHC:
 
 ```
-$ stack build -j 8 --copy-compiler-tool ghc-mod hoogle weeder
+$ stack build --copy-compiler-tool ghc-mod hoogle weeder
 ```
 
 This way, I only have to build those tools once, and I don’t worry about rebuilding them again until a the next release of GHC. To verify that things are working properly, you should be able to create a fresh `stack` project, run a command like this one, and get a similar result:
