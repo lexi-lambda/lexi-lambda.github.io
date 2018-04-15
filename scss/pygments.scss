@@ -3,7 +3,7 @@ $semibold: 600;
 $string: #BA2121;
 
 td.code .source, .source pre {
-  .c, .cm, .c1 { color: #9e5555; font-weight: 300; } /* Comment */
+  .c, .cm, .c1 { color: #9e5555 }                    /* Comment */
   .k { color: #19177C; font-weight: $semibold }      /* Keyword */
   .o { color: #666666 }                              /* Operator */
   .cp { color: #BC7A00 }                             /* Comment.Preproc */
