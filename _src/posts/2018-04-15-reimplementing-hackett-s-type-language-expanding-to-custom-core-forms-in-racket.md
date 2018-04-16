@@ -489,10 +489,10 @@ Applying this to the other relevant clauses, we get an updated version of the `e
                                 (head a.expansion b.expansion))]
     [pattern (head:#%type:forall ~! x:id {~var t (type intdef-ctx)})
              #:attr expansion (syntax/loc/props this-syntax
-                                (#%type:forall x t.expansion))]
+                                (head x t.expansion))]
     [pattern (head:#%type:qual ~! {~var a (type intdef-ctx)} {~var b (type intdef-ctx)})
              #:attr expansion (syntax/loc/props this-syntax
-                                (head:#%type:qual a.expansion b.expansion))]
+                                (head a.expansion b.expansion))]
     [pattern (#%type:bound-var ~! _:id)
              #:attr expansion this-syntax]
     [pattern (#%type:wobbly-var ~! _:id)
@@ -597,10 +597,10 @@ It took a lot of work, but we finally managed to write a custom type language, a
                                 (head a.expansion b.expansion))]
     [pattern (head:#%type:forall ~! x:id {~var t (type intdef-ctx)})
              #:attr expansion (syntax/loc/props this-syntax
-                                (#%type:forall x t.expansion))]
+                                (head x t.expansion))]
     [pattern (head:#%type:qual ~! {~var a (type intdef-ctx)} {~var b (type intdef-ctx)})
              #:attr expansion (syntax/loc/props this-syntax
-                                (head:#%type:qual a.expansion b.expansion))]
+                                (head a.expansion b.expansion))]
     [pattern (#%type:bound-var ~! _:id)
              #:attr expansion this-syntax]
     [pattern (#%type:wobbly-var ~! _:id)
