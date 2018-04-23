@@ -389,30 +389,15 @@ Now, we can add an additional case to `expanded-type` to handle `letrec-syntaxes
          #:attr expansion #'t*.expansion]
 ```
 
-But even this isn’t quite right. The problem with this implementation is that it throws away the existing `intdef-ctx` argument to `expanded-type`, which means those bindings will be lost as soon as we introduce a new set. To fix this, we have to do two things: we need to pass the previous definition context as an argument to `syntax-local-make-definition-context` so the bindings will be in scope when we call `syntax-local-bind-syntaxes`, and we will need to pass *both* contexts to the `type` syntax class, since `local-expand` can accept multiple definition contexts if they are provided in a list. Since the previous definition context might be `#f`, a single definition context, or a list of definition contexts, we’ll write some helper functions that handle all the potential cases:
-
-```racket
-(begin-for-syntax
-  (define (internal-definition-context-extend old-ctx)
-    (if (list? old-ctx)
-        (syntax-local-make-definition-context (first old-ctx))
-        (syntax-local-make-definition-context old-ctx)))
-
-  (define (internal-definition-context-cons new-ctx old-ctx)
-    (cond [(not old-ctx) new-ctx]
-          [(list? old-ctx) (cons new-ctx old-ctx)]
-          [else (list new-ctx old-ctx)])))
-```
-
-Now we can use these two functions to ensure we can properly preserve all previous definition contexts when we create a new one:
+But even this isn’t quite right. The problem with this implementation is that it throws away the existing `intdef-ctx` argument to `expanded-type`, which means those bindings will be lost as soon as we introduce a new set. To fix this, we have to make the new definition context a *child* of the previous definition context by passing the old context as an argument to `syntax-local-make-definition-context`. This will ensure the parent bindings are brought into scope when expanding using the child context:
 
 ```racket
 [pattern (letrec-syntaxes+values ~! ([(id:id ...) e:expr] ...) () t:expr)
-         #:do [(define intdef-ctx* (internal-definition-context-extend intdef-ctx))
+         #:do [(define intdef-ctx* (syntax-local-make-definition-context intdef-ctx))
                (for ([ids (in-list (attribute id))]
                      [e (in-list (attribute e))])
                  (syntax-local-bind-syntaxes ids e intdef-ctx*))]
-         #:with {~var t* (type (internal-definition-context-cons intdef-ctx* intdef-ctx))} #'t
+         #:with {~var t* (type intdef-ctx*)} #'t
          #:attr expansion #'t*.expansion]
 ```
 
@@ -476,11 +461,11 @@ Applying this to the other relevant clauses, we get an updated version of the `e
     #:commit
     #:literal-sets [kernel-literals type-literals]
     [pattern (letrec-syntaxes+values ~! ([(id:id ...) e:expr] ...) () t:expr)
-             #:do [(define intdef-ctx* (internal-definition-context-extend intdef-ctx))
+             #:do [(define intdef-ctx* (syntax-local-make-definition-context intdef-ctx))
                    (for ([ids (in-list (attribute id))]
                          [e (in-list (attribute e))])
                      (syntax-local-bind-syntaxes ids e intdef-ctx*))]
-             #:with {~var t* (type (internal-definition-context-cons intdef-ctx* intdef-ctx))} #'t
+             #:with {~var t* (type intdef-ctx*)} #'t
              #:attr expansion #'t*.expansion]
     [pattern (#%type:con ~! _:id)
              #:attr expansion this-syntax]
@@ -505,11 +490,11 @@ Now we’re getting closer, but if you can believe it, even *this* isn’t good 
 
 ```racket
 [pattern (head:letrec-syntaxes+values ~! ([(id:id ...) e:expr] ...) () t:expr)
-         #:do [(define intdef-ctx* (internal-definition-context-extend intdef-ctx))
+         #:do [(define intdef-ctx* (syntax-local-make-definition-context intdef-ctx))
                (for ([ids (in-list (attribute id))]
                      [e (in-list (attribute e))])
                  (syntax-local-bind-syntaxes ids e intdef-ctx*))]
-         #:with {~var t* (type (internal-definition-context-cons intdef-ctx* intdef-ctx))} #'t
+         #:with {~var t* (type intdef-ctx*)} #'t
          #:attr expansion (~> (internal-definition-context-track intdef-ctx* #'t*.expansion)
                               (syntax-track-origin this-syntax #'head))]
 ```
@@ -518,7 +503,7 @@ Now we’ve *finally* dotted all our i’s and crossed our t’s. While it does 
 
 ## Connecting our custom language to Hackett
 
-It took a lot of work, but we finally managed to write a custom type language, and while the code is not exactly simple, it’s not actually very long. The entire implementation of our custom type language is less than 90 lines of code:
+It took a lot of work, but we finally managed to write a custom type language, and while the code is not exactly simple, it’s not actually very long. The entire implementation of our custom type language is less than 80 lines of code:
 
 ```racket
 #lang racket/base
@@ -526,22 +511,11 @@ It took a lot of work, but we finally managed to write a custom type language, a
 (require (for-meta 2 racket/base
                      syntax/parse)
          (for-syntax racket/base
-                     racket/list
                      syntax/intdef
                      threading)
          syntax/parse/define)
 
 (begin-for-syntax
-  (define (internal-definition-context-extend old-ctx)
-    (if (list? old-ctx)
-        (syntax-local-make-definition-context (first old-ctx))
-        (syntax-local-make-definition-context old-ctx)))
-
-  (define (internal-definition-context-cons new-ctx old-ctx)
-    (cond [(not old-ctx) new-ctx]
-          [(list? old-ctx) (cons new-ctx old-ctx)]
-          [else (list new-ctx old-ctx)]))
-
   (define-syntaxes [syntax/loc/props quasisyntax/loc/props]
     (let ()
       (define (make-syntax/loc/props name syntax-id)
@@ -583,11 +557,11 @@ It took a lot of work, but we finally managed to write a custom type language, a
     #:commit
     #:literal-sets [kernel-literals type-literals]
     [pattern (head:letrec-syntaxes+values ~! ([(id:id ...) e:expr] ...) () t:expr)
-             #:do [(define intdef-ctx* (internal-definition-context-extend intdef-ctx))
+             #:do [(define intdef-ctx* (syntax-local-make-definition-context intdef-ctx))
                    (for ([ids (in-list (attribute id))]
                          [e (in-list (attribute e))])
                      (syntax-local-bind-syntaxes ids e intdef-ctx*))]
-             #:with {~var t* (type (internal-definition-context-cons intdef-ctx* intdef-ctx))} #'t
+             #:with {~var t* (type intdef-ctx*)} #'t
              #:attr expansion (~> (internal-definition-context-track intdef-ctx* #'t*.expansion)
                                   (syntax-track-origin this-syntax #'head))]
     [pattern (#%type:con ~! _:id)
