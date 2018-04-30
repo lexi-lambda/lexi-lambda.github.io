@@ -599,7 +599,7 @@ As for whether or not the change will accomplish the goals I had in mind, I thin
 
 Unfortunately, the technique outlined in this blog post is not completely flawless. Due to its reliance on the `local-expand` stop list, this technique is incompatible with macros that force recursive expansion using an empty stop list. In the upcoming reimplementation of the Racket macroexpander to be released in Racket 7, this includes `syntax-parameterize`, which unfortunately means syntax parameters don’t work in the type language. This is a problem, and while it’s not a dealbreaker, it is something that will almost certainly have to be fixed at some point. Fortunately, it isn’t intractable, and I’ve been discussing some potential approaches to fixing the problem, whether via changes to the macroexpander or by making macros like `syntax-parameterize` cooperate better with things like Hackett’s type language.
 
-Finally, as seems to be the case more and more with my blog posts, I cannot express enough thanks to [Matthew Flatt][mflatt], without whose help I would probably not have been able to get everything working (not to mention that the Racket macro system would not exist without Matthew inventing and implementing it nearly singlehandedly). Matthew does an almost unfathomable number of things for Racket already without me pestering him with questions, bug reports, and feature requests, but he’s always patient and helpful all the same. Thank you.
+Finally, as seems to be the case more and more with my blog posts, I cannot express enough thanks to [Matthew Flatt][mflatt], without whose help I would probably not have been able to get everything working (not to mention that the Racket macro system would not exist without Matthew inventing and implementing it nearly singlehandedly). Matthew does an almost unfathomable number of things for Racket already without me pestering him with questions, bug reports, and feature requests, but he’s always patient and helpful all the same. Also, once again, I’d like to thank [Ryan Culpepper][ryanc] for [his incredible work on constructing tools for the working macro developer][ryanc-dissertation], including writing the fantastic `syntax/parse` library that powers essentially everything I do. Thank you both.
 
 
 
@@ -610,6 +610,8 @@ Finally, as seems to be the case more and more with my blog posts, I cannot expr
 [make-variable-like-transformer]: http://docs.racket-lang.org/syntax/transformer-helpers.html#%28def._%28%28lib._syntax%2Ftransformer..rkt%29._make-variable-like-transformer%29%29
 [mflatt]: http://www.cs.utah.edu/~mflatt/
 [reference-fully-expanded-programs]: http://docs.racket-lang.org/reference/syntax-model.html#%28part._fully-expanded%29
+[ryanc]: http://www.ccs.neu.edu/home/ryanc/
+[ryanc-dissertation]: https://www2.ccs.neu.edu/racket/pubs/dissertation-culpepper.pdf
 [syntax-parse-pattern-directives]: http://docs.racket-lang.org/syntax/stxparse-specifying.html#%28part._.Pattern_.Directives%29
 [tweet-new-job]: https://twitter.com/lexi_lambda/status/976533916596097024
 [tweet-typeclass-deriving-1]: https://twitter.com/lexi_lambda/status/985051504867446786
