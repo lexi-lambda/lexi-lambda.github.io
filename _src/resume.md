@@ -1,6 +1,6 @@
 # Bio
 
-My name is Alexis King, and I write [a lot of software][github-repos]. I live in Los Angeles.
+My name is Alexis King, and I write [a lot of software][github-repos]. I live in Chicago.
 
 I’m interested in functional programming, static types, and programming language research, and I try to spend as much time as I can writing Haskell and Racket. I mostly work on web applications and infrastructure, but I’m especially passionate about writing libraries, open-source software, and various kinds of tooling.
 
