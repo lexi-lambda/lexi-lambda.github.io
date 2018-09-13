@@ -33,7 +33,7 @@ However, this is just syntactic sugar. The above form is really just a macro for
   (lambda (x) (* x 2)))
 ```
 
-Since we only really care about fully-expanded programs, we’ll focus exclusively on the expanded version of `define` in this blog post, since if we handle that, we’ll also handle the function shorthand’s expansion.
+Since we only care about fully-expanded programs, we’ll focus exclusively on the expanded version of `define` in this blog post, since if we handle that, we’ll also handle the function shorthand’s expansion.
 
 In contrast to `define`, there is also `let`, which has a rather different shape. A `let` form *is* an expression, and it creates local bindings in a delimited scope:
 
@@ -191,7 +191,7 @@ Now, both `#%plain-lambda` and `case-lambda` can be handled in a few lines of co
    (head clause.expansion ...))]
 ```
 
-Finally, we need to tackle the three `let` forms. None of these really involve any more fundamental ideas than what we’ve already covered, but they are a little bit more involved than the variants of lambda due to the need to handle the RHSs. Each variant is slightly different, but not dramatically so: the bindings aren’t in scope when expanding the RHSs of `let-values`, but they are for `letrec-values` and `letrec-syntaxes+values`, and `letrec-syntaxes+values` creates transformer bindings and must evaluate some RHSs in phase 1 while `let-values` and `letrec-values` exclusively bind runtime bindings. It would be possible to implement these three forms in separate clauses, but since we’d ideally like to duplicate as little code as possible, we can write a rather elaborate `syntax/parse` pattern to handle all three binding forms all at once.
+Finally, we need to tackle the three `let` forms. None of these involve any fundamentally new ideas, but they are a little bit more involved than the variants of lambda due to the need to handle the RHSs. Each variant is slightly different, but not dramatically so: the bindings aren’t in scope when expanding the RHSs of `let-values`, but they are for `letrec-values` and `letrec-syntaxes+values`, and `letrec-syntaxes+values` creates transformer bindings and must evaluate some RHSs in phase 1 while `let-values` and `letrec-values` exclusively bind runtime bindings. It would be possible to implement these three forms in separate clauses, but since we’d ideally like to duplicate as little code as possible, we can write a rather elaborate `syntax/parse` pattern to handle all three binding forms all at once.
 
 We’ll start by handling `let-values` alone to keep things simple:
 
@@ -213,7 +213,7 @@ So far, we haven’t actually tapped very far into `syntax/parse`’s pattern la
 
 ```racket
 [({~or {~and head:let-values {~bind [rec? #f]}}
-       {~and head:letrec-values {~bind [rec? #f]}}}
+       {~and head:letrec-values {~bind [rec? #t]}}}
   ~! ([(x:id ...) rhs] ...) body ...)
  #:do [(define intdef-ctx (syntax-local-make-definition-context (current-intdef-ctx)))
        (syntax-local-bind-syntaxes (append* (attribute x)) #f intdef-ctx)]
@@ -627,7 +627,7 @@ Amazingly, due to the fact that we’ve taken complete control of the expansion 
 4
 ```
 
-If we write a wrapper macro that applies our evil version of `expand-expression` to its body, then wrap a use of our `print-up-to` macro with it, it will really execute the loop in reverse order:
+If we write a wrapper macro that applies our evil version of `expand-expression` to its body, then wrap a use of our `print-up-to` macro with it, it will execute the loop in reverse order:
 
 ```racket
 (define-syntax-parser hijack-for-loops
@@ -667,7 +667,7 @@ The system outlined in this blog post is not something I would recommend using i
 
   1. The technology outlined in this post, while perhaps not directly applicable to existing real-world problems, provides a framework for implementing various new kinds of syntax transformations in Racket *without* extending the macro system. It demonstrates the expressive power of the macro system, and it hopefully lays the foundation for a better, more high-level interface for users who wish to define their own languages with custom core forms.
 
-  2. This system provides insight in to the way the Racket macroexpander operates, *in terms of the userspace syntax API*. The canonical existing model of hygienic macroexpansion, in the aforementioned [Bindings as Sets of Scopes][scope-sets] paper, does not explain the workings of internal definition contexts in detail, and it certainly doesn’t explain them in terms that a Racket programmer would already be familiar with. By reencoding those ideas within the macro system itself, an advanced macro writer may be able to more easily connect concepts in the macro system’s implementation to concepts they have already been exposed to.
+  2. This system provides insight into the way the Racket macroexpander operates, *in terms of the userspace syntax API*. The canonical existing model of hygienic macroexpansion, in the aforementioned [Bindings as Sets of Scopes][scope-sets] paper, does not explain the workings of internal definition contexts in detail, and it certainly doesn’t explain them in terms that a Racket programmer would already be familiar with. By reencoding those ideas within the macro system itself, an advanced macro writer may be able to more easily connect concepts in the macro system’s implementation to concepts they have already been exposed to.
 
   3. The capability of the proof-of-concept outlined here demonstrates that the limitation imposed by the existing implementation of the stop list (namely, the way it is implicitly extended with additional identifiers) is essentially artificial, and it can be hacked around with sufficient (albeit significant) effort. This isn’t enormously important, but it is somewhat relevant to a recent debate in [a GitHub issue][gh-issue-2154] about the handling of the `local-expand` stop list.
 
