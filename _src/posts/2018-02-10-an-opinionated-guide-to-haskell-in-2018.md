@@ -213,7 +213,7 @@ This is a lot, and a few of them are likely to be more controversial than others
 
 ## Trivial lifting of standards-imposed limitations
 
-A few extensions are tiny changes that lift limitations that really have no reason to exist, other than that they are mandated by the standard. I am not sure why these restrictions are in the standard to being with, other than perhaps a misguided attempt at making the language simpler. These extensions include the following:
+A few extensions are tiny changes that lift limitations that really have no reason to exist, other than that they are mandated by the standard. I am not sure why these restrictions are in the standard to begin with, other than perhaps a misguided attempt at making the language simpler. These extensions include the following:
 
   - [`EmptyCase`][EmptyCase]
   - [`FlexibleContexts`][FlexibleContexts]
