@@ -1,11 +1,11 @@
 #!/bin/bash
-set -ev # exit with nonzero exit code if anything fails
+set -ev -o pipefail # exit with nonzero exit code if anything fails
 
 # clear the output directory
-rm -rf out || exit 0;
+rm -rf out
 
 # build the blog files
-npm run build
+yarn run build
 raco frog --build
 
 # only deploy on non-PR pushes to source

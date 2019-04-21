@@ -1,41 +1,36 @@
-gulp         = require 'gulp'
+import gulp          from 'gulp'
 
-autoprefixer = require 'gulp-autoprefixer'
-coffee       = require 'gulp-coffee'
-concat       = require 'gulp-concat'
-rename       = require 'gulp-rename'
-sass         = require 'gulp-sass'
-sourcemaps   = require 'gulp-sourcemaps'
-uglify       = require 'gulp-uglify'
-gutil        = require 'gulp-util'
+import autoprefixer  from 'gulp-autoprefixer'
+import compileCoffee from 'gulp-coffee'
+import concat        from 'gulp-concat'
+import rename        from 'gulp-rename'
+import compileSass   from 'gulp-sass'
+import uglify        from 'gulp-uglify'
 
-gulp.task 'default', ['build']
-gulp.task 'build', ['coffee', 'sass', 'image']
-
-gulp.task 'coffee', ->
-  gulp.src './coffee/**/*.coffee'
-    .pipe sourcemaps.init()
-    .pipe(coffee()).on 'error', gutil.log
+export js = ->
+  gulp.src './coffee/**/*.coffee', sourcemaps: true
+    .pipe compileCoffee()
     .pipe concat 'application.js'
     .pipe uglify()
     .pipe rename extname: '.min.js'
-    .pipe sourcemaps.write()
     .pipe gulp.dest './out/js/'
 
-gulp.task 'sass', ->
-  gulp.src './scss/**/*.scss'
-    .pipe sourcemaps.init()
-    .pipe sass().on 'error', sass.logError
+export css = ->
+  gulp.src './scss/**/*.scss', sourcemaps: true
+    .pipe compileSass().on 'error', compileSass.logError
     .pipe autoprefixer()
     .pipe rename extname: '.min.css'
-    .pipe sourcemaps.write()
     .pipe gulp.dest './out/css/'
 
-gulp.task 'image', ->
+export images = ->
   gulp.src './images/**/*'
     .pipe gulp.dest './out/img/'
 
-gulp.task 'watch', ->
-  gulp.watch './coffee/**/*.coffee', ['coffee']
-  gulp.watch './scss/**/*.scss', ['sass']
-  gulp.watch './images/**/*', ['image']
+export build = gulp.parallel js, css, images
+
+export watch = ->
+  gulp.watch './coffee/**/*.coffee', js
+  gulp.watch './scss/**/*.scss', css
+  gulp.watch './images/**/*', images
+
+export default gulp.series build
