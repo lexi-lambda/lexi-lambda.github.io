@@ -31,21 +31,48 @@ html, body {
 }
 
 #page-content > section[role=main] {
+  color: #312323;
   flex: 1;
+  font-size: 1.1em;
+  font-weight: 300;
+  line-height: 2.1em;
   padding: 0 30px;
+
+  @media (min-width: 800px) {
+    font-size: 1.2em;
+    line-height: 2.1em;
+  }
 
   & > .content {
     margin: 0 auto;
     padding: 40px 0;
-    max-width: 780px;
+    max-width: 850px;
 
     @media (max-width: 550px) {
       padding: 30px 0;
     }
+
+    @media (min-width: 800px) {
+      & > article {
+        & > p, & > ul, & > ol, & > blockquote, .date-and-tags, .read-more, .footnotes {
+          margin-left: 75px;
+          margin-right: 75px;
+        }
+
+        h1:not(.title), h2, h3, h4, h5, h6 {
+          margin-left: 40px;
+          margin-right: 40px;
+        }
+      }
+    }
   }
 
-  p {
-    line-height: 1.9em;
+  p, blockquote {
+    margin-bottom: 1.2em;
+
+    @media (min-width: 800px) {
+      margin-bottom: 2em;
+    }
   }
 
   li {
@@ -58,6 +85,43 @@ html, body {
     &:hover {
       color: $text-color-link-light;
       text-decoration: none;
+    }
+  }
+
+  blockquote {
+    margin-left: 0;
+    margin-right: 0;
+    padding: 1em 1.5em 1em 2em;
+    border-left: 5px solid #f3ecec;
+    background-color: $color-section-background;
+
+    & > :first-child {
+      margin-top: 0;
+    }
+    & > :last-child {
+      margin-bottom: 0;
+    }
+  }
+
+  hr {
+    border: none;
+    display: block;
+    margin: 2em 0;
+    width: 100%;
+
+    @media (min-width: 800px) {
+      margin: 4em 0;
+    }
+
+    &::before {
+      content: '◆❖◆';
+      color: #e2caca;
+      display: block;
+      margin: 0 auto;
+      text-align: center;
+      letter-spacing: 6em;
+      margin-right: -6em;
+      font-size: 0.9em;
     }
   }
 }
@@ -102,10 +166,20 @@ html, body {
 }
 
 article > header {
+  .title {
+    font-size: 2.3em;
+    font-weight: 700;
+    line-height: 1.4em;
+    margin-bottom: 0.4em;
+
+    @media (max-width: 550px) {
+      font-size: 2em;
+    }
+  }
+
   .date-and-tags time {
     color: $text-color-primary;
     font-size: 1.5em;
-    font-weight: 300;
   }
 
   .tags a {
@@ -113,30 +187,22 @@ article > header {
   }
 }
 
-article.inline > header {
-  .title {
-    font-size: 2.3em;
-    margin-bottom: 10px;
-
-    @media (max-width: 550px) {
-      font-size: 2em;
-    }
-  }
+article.inline {
+  margin-bottom: 4em;
 
   .date-and-tags {
     margin-bottom: 20px;
+  }
+
+  .read-more-text {
+    font-style: italic;
+    padding-right: 0.25em;
   }
 }
 
 article.main > header {
   .title {
-    font-size: 2.7em;
-    margin-bottom: 10px;
     margin-top: 0;
-
-    @media (max-width: 550px) {
-      font-size: 2.2em;
-    }
   }
 
   .date-and-tags {
@@ -145,8 +211,13 @@ article.main > header {
 }
 
 .content h1 {
-  font-size: 2em;
+  font-size: 1.75em;
+  line-height: 1.5em;
   margin-top: 2em;
+
+  @media (min-width: 800px) {
+    font-size: 2em;
+  }
 }
 
 .footnotes {
@@ -160,6 +231,7 @@ article.main > footer {
 
 h1, h2, h3, h4, h5, h6 {
   font-family: $font-sans-serif;
+  font-weight: 400;
 }
 
 a {
@@ -169,12 +241,6 @@ a {
   &:hover {
     text-decoration: underline;
   }
-}
-
-blockquote {
-  background-color: #F6F6F6;
-  margin: 0;
-  padding: 0.5em 35px;
 }
 
 .navigation-bar {
@@ -216,7 +282,7 @@ blockquote {
   }
 }
 
-.pagination {
+.pagination, .pager {
   display: flex;
   margin-top: 4em;
   padding: 0;
@@ -225,21 +291,23 @@ blockquote {
     flex: 1;
     list-style: none;
     text-align: center;
+  }
+}
 
-    a {
-      display: block;
-      transition: background-color 0.25s ease-in-out;
-      width: 90%;
-    }
+.pagination li {
+  a {
+    display: block;
+    transition: background-color 0.25s ease-in-out;
+    width: 90%;
+  }
 
-    &.active a {
-      cursor: default;
-    }
+  &.active a {
+    cursor: default;
+  }
 
-    a:hover, &.active a {
-      background-color: $color-primary;
-      color: white !important;
-    }
+  a:hover, &.active a {
+    background-color: $color-primary;
+    color: white !important;
   }
 }
 

@@ -3,6 +3,7 @@
 
 pre, code {
   font-family: $font-monospace;
+  font-variant-ligatures: none;
 }
 
 p code, li code {
@@ -12,8 +13,8 @@ p code, li code {
 }
 
 pre code, table.sourcetable pre, .source pre {
-  font-size: 0.95em;
-  line-height: 1.6em;
+  font-size: 0.9em;
+  line-height: 1.75em;
   margin: 0;
 }
 
@@ -28,12 +29,17 @@ pre code {
 
 pre code, div[class^='brush: '] {
   background-color: $color-section-background;
+  border: 5px solid $color-section-background-border;
+  border-radius: 10px;
   margin: 1em 0;
-  width: 100%;
   overflow: auto;
 
   // enable inertial horizontal scrolling
   -webkit-overflow-scrolling: touch;
+
+  @media (min-width: 800px) {
+    margin: 2em 0;
+  }
 }
 
 table.sourcetable {

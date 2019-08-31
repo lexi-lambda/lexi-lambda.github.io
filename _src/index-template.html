@@ -10,5 +10,10 @@
       @|tags|
     </div>
   </header>
-  @|content|
+  @|content-only|
+  @(when more?
+    @list{
+      <footer class="read-more">
+        <a href="@|uri-path|"><span class="read-more-text">Read more</span> →</a>
+      </footer>})
 </article>
