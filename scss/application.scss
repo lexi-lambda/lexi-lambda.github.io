@@ -1,6 +1,5 @@
-@import 'colors';
 @import 'code';
-@import 'fonts';
+@import 'variables';
 
 html {
   background-color: $color-background;
@@ -31,37 +30,60 @@ html, body {
 }
 
 #page-content > section[role=main] {
+  $content-padding: 30px;
+
   color: #312323;
   flex: 1;
   font-size: 1.1em;
   font-weight: 300;
-  line-height: 2.1em;
-  padding: 0 30px;
+  line-height: 2em;
+  padding: 0 $content-padding;
 
-  @media (min-width: 800px) {
-    font-size: 1.2em;
-    line-height: 2.1em;
+  @media (max-width: 550px) {
+    font-size: 0.9em;
+    line-height: 2em;
   }
 
   & > .content {
     margin: 0 auto;
     padding: 40px 0;
-    max-width: 850px;
 
     @media (max-width: 550px) {
       padding: 30px 0;
     }
 
-    @media (min-width: 800px) {
-      & > article {
-        & > p, & > ul, & > ol, & > blockquote, .date-and-tags, .read-more, .footnotes {
-          margin-left: 75px;
-          margin-right: 75px;
+    & > article {
+      & > * {
+        margin-left: auto;
+        margin-right: auto;
+        max-width: $content-width-small;
+      }
+
+      & > h1, & > h2, & > h3, & > h4, & > h5, & > h6 {
+        max-width: $content-width-medium;
+      }
+
+      & > header {
+        max-width: $content-width-large;
+
+        .date-and-tags {
+          max-width: $content-width-small;
+          margin-left: auto;
+          margin-right: auto;
+        }
+      }
+
+      & > pre code, & > div[class^='brush: '], & > .table-wrapper {
+        max-width: 100%;
+        width: 100%;
+
+        @media (min-width: $content-width-small + $content-padding * 2) {
+          min-width: $content-width-small;
+          width: fit-content;
         }
 
-        h1:not(.title), h2, h3, h4, h5, h6 {
-          margin-left: 40px;
-          margin-right: 40px;
+        @media (min-width: $content-width-max + $content-padding * 2) {
+          max-width: $content-width-max;
         }
       }
     }
@@ -73,10 +95,6 @@ html, body {
     @media (min-width: 800px) {
       margin-bottom: 2em;
     }
-  }
-
-  li {
-    line-height: 1.8em;
   }
 
   a {
@@ -103,6 +121,45 @@ html, body {
     }
   }
 
+  .table-wrapper {
+    display: block;
+    margin: 1em auto;
+    overflow: auto;
+
+    // enable inertial horizontal scrolling
+    -webkit-overflow-scrolling: touch;
+
+    @media (max-width: 700px) {
+      font-size: 0.9em;
+      line-height: 1.9em;
+    }
+
+    @media (max-width: 500px) {
+      font-size: 0.8em;
+      line-height: 1.8em;
+    }
+
+    @media (min-width: 800px) {
+      margin: 2em auto;
+    }
+
+    table {
+      border-collapse: collapse;
+      border-spacing: 0;
+      border: 3px solid $color-section-background-border;
+      width: 100%;
+
+      thead tr, tr:nth-child(2n) {
+        background-color: $color-section-background-border;
+      }
+
+      td, th {
+        border: 0;
+        padding: 0.6em 1.5em;
+      }
+    }
+  }
+
   hr {
     border: none;
     display: block;
@@ -126,8 +183,12 @@ html, body {
   }
 }
 
+.no-line-wrapping {
+  white-space: nowrap;
+}
+
 // hide the blog title in the navbar on small screen sizes
-@media (max-width: 550px) {
+@media (max-width: 575px) {
   #blog-title-header {
     display: none;
   }
@@ -172,8 +233,9 @@ article > header {
     line-height: 1.4em;
     margin-bottom: 0.4em;
 
-    @media (max-width: 550px) {
+    @media (max-width: 575px) {
       font-size: 2em;
+      line-height: 1.4em;
     }
   }
 
@@ -222,6 +284,7 @@ article.main > header {
 
 .footnotes {
   font-size: small;
+  line-height: 2em;
   margin-top: 4em;
 }
 
