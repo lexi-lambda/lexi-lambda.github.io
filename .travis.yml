@@ -24,7 +24,7 @@ install:
 - pip install pygments
 
 # install frog
-- raco pkg install --no-setup --auto frog
+- raco pkg install --no-setup --auto https://github.com/lexi-lambda/frog.git#blog
 - raco setup -D --pkgs frog
 
 script: bash ./deploy.sh
