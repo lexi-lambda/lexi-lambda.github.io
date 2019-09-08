@@ -253,7 +253,7 @@ captureAndCloseOverInputState :: m a -> m (b (a, OutputState m))
 What’s more, we no longer need the `InputState` associated type at all! This is an improvement, since it simplifies the API and removes the possibility for any misuse of the input state, since it’s never directly exposed. On the other hand, it has a more complicated type: it produces a monadic action *that returns another monadic action*. This can be a little more difficult to grok, which is why I presented the original version first, but it may help to consider how the above type arises naturally from the following definition:
 
 ```haskell
-captureAndCloseOverInputState m = captureInputState m <$> closeOverInputState
+captureAndCloseOverInputState m = closeOverInputState m <$> captureInputState
 ```
 
 Let’s update the `MonadBaseControl` class to incorporate this simplification:
