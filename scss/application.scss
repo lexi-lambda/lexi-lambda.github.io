@@ -97,6 +97,10 @@ html, body {
     }
   }
 
+  sup, sub {
+    line-height: 0;
+  }
+
   a {
     color: $text-color-link;
 
