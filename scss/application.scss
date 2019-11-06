@@ -73,6 +73,10 @@ html, body {
         }
       }
 
+      &.main > footer {
+        max-width: $content-width-large;
+      }
+
       & > pre code, & > div[class^='brush: '], & > .table-wrapper {
         max-width: 100%;
         width: 100%;

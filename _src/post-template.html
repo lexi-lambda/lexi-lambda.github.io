@@ -12,6 +12,13 @@
   </header>
   @|content|
   <footer>
-    @older/newer-links[older-uri older-title newer-uri newer-title]
+    <ul class="pager">
+      <li class="previous">
+        @(when newer-uri @list{<a href="@newer-uri">&larr; <em>@|newer-title|</em></a>})
+      </li>
+      <li class="next">
+        @(when older-uri @list{<a href="@older-uri"><em>@|older-title|</em> &rarr;</a>})
+      </li>
+    </ul>
   </footer>
 </article>
