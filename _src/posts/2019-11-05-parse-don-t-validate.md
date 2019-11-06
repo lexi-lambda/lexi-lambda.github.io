@@ -153,7 +153,7 @@ What’s more, it’s trivial to recover the old behavior of `head` from the new
 
 ```haskell
 head' :: [a] -> Maybe a
-head' = head . nonEmpty
+head' = fmap head . nonEmpty
 ```
 
 Note that the inverse is *not* true: there is no way to obtain the new version of `head` from the old one. All in all, the second approach is superior on all axes.
