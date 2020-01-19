@@ -18,7 +18,7 @@ I’ve wanted to write this blog post for a while, but what finally made me deci
 
 Given the argument being made in the blog post—that you should use precise types whenever possible—one can see where this misinterpretation comes from. How could a proxy server possibly be written in such a style, since it cannot anticipate the structure of its payloads? The commenter’s conclusion is that strict static typing is at odds with programs that don’t know the structure of their inputs ahead of time.
 
-[The second comment was left on Hacker News](https://news.ycombinator.com/item?id=21479933), and it it is significantly shorter than the first one:
+[The second comment was left on Hacker News](https://news.ycombinator.com/item?id=21479933), and it is significantly shorter than the first one:
 
 > What would be the type signature of, say, Python's `pickle.load()`?
 
@@ -117,7 +117,7 @@ handleEvent payload = case fromJSON payload of
   Error _ -> pure ()
 ```
 
-This is still in the spirit of “parse, don’t validate” because we’re still parsing the values we *do* care about as early as possible, so we don’t fall into the double-validation trap. At no point do we take a code path that depends on a value being well-formed without first ensuring (with the help of the type system) that it is, in fact, actually well-formed. We don’t have to respond to an ill-formed value by raising an error! We just have to explicitly ignore it.
+This is still in the spirit of “parse, don’t validate” because we’re still parsing the values we *do* care about as early as possible, so we don’t fall into the double-validation trap. At no point do we take a code path that depends on a value being well-formed without first ensuring (with the help of the type system) that it is, in fact, actually well-formed. We don’t have to respond to an ill-formed value by raising an error! We just have to be explicit about ignoring it.
 
 This illustrates an important point: the `Event` type in this Haskell code doesn’t describe “all possible events,” it describes all the events that the application cares about. Likewise, the code that parses those events’ payloads only worries about the fields the application needs, and it ignores extraneous ones. A static type system doesn’t require you eagerly write a schema for the whole universe, it simply requires you to be up front about the things you need.
 
@@ -129,7 +129,7 @@ This turns out to have a lot of pleasant benefits even though knowledge about in
 
   - Finally, we neatly avoid all the gotchas related to shotgun parsing [mentioned in the previous blog post][parse-dont-validate:shotgun], since we still haven’t compromised on any of those principles.
 
-We’ve already invalidated the first half of the claim: that statically typed languages can’t deal with data where the structure isn’t completely known. Let’s now look at the other half, which states that dynamically typed languages can process data where the structure isn’t known at all. Maybe that still sounds right, but if you slow down and think about it more carefully, you’ll find it can’t be right.
+We’ve already invalidated the first half of the claim: that statically typed languages can’t deal with data where the structure isn’t completely known. Let’s now look at the other half, which states that dynamically typed languages can process data where the structure isn’t known at all. Maybe that still sounds right, but if you slow down and think about it more carefully, you’ll find it can’t be.
 
 The above JavaScript code makes all the same assumptions our Haskell code does: it assumes event payloads are JSON objects with an `event_type` field, and it assumes `signup` payloads include `data.user.name` and `data.user.email` fields. It certainly can’t do anything useful with truly unknown input! If a new event payload is added, our JavaScript code can’t magically adapt to handle it simply because it is dynamically typed. Dynamic typing just means the types of values are carried alongside them at runtime and checked as the program executes; the types are still there, and this program still implicitly relies on them being particular things.
 
