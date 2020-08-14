@@ -316,7 +316,7 @@ So when you have a property you want to capture in your types, take a step back 
 
 I write Haskell for a living, and I wrote this blog post with both my coworkers and the broader Haskell community in mind, but if I had *only* written it with those people in mind, it wouldn’t make sense to have spent so much time explaining basic Haskell. These techniques can be used in almost any statically typed programming language, though it’s certainly easier in some than others.
 
-I don’t want people to come away from this blog post with an impression that I think TypeScript is a bad language, or that I’m claiming Haskell can do things TypeScript can’t. In fact, TypeScript *can* do all the things I’ve talked about in this blog post! As proof, are TypeScript definitions of both `EvenList` and `Natural`:
+I don’t want people to come away from this blog post with an impression that I think TypeScript is a bad language, or that I’m claiming Haskell can do things TypeScript can’t. In fact, TypeScript *can* do all the things I’ve talked about in this blog post! As proof, here are TypeScript definitions of both `EvenList` and `Natural`:
 
 ```typescript
 type EvenList<T> = [] | [T, T, EvenList<T>];
