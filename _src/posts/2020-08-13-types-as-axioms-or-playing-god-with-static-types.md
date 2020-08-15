@@ -46,7 +46,7 @@ Now if we write `emptyLike(42) * 10`, the typechecker will once again complain, 
 
 When type systems are approached from this perspective, the result is often frustration. The programmer knows that the equivalent untyped JavaScript is perfectly well-behaved, so the typechecker comes off as being the highly unfortunate combination of stubborn yet dim-witted. What’s more, the programmer likely has little mental model of the typechecker’s internal operation, so when types like the above are inferred (not explicitly written), it can be unclear what solutions exist to make the error go away.
 
-At this point, the programmer may give up. “Stupid typechecker,” they grumble, changing the return type of `emptyList` to `any`. “If it can’t even figure this out, can it *really* be all that useful?”
+At this point, the programmer may give up. “Stupid typechecker,” they grumble, changing the return type of `emptyLike` to `any`. “If it can’t even figure this out, can it *really* be all that useful?”
 
 Sadly, this relationship with the typechecker is all too common, and gradually-typed languages in particular tend to create a vicious cycle of frustration:
 
