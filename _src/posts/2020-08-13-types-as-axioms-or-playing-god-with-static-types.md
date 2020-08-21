@@ -30,7 +30,7 @@ function getFirst(arr: number[]): number | undefined {
 }
 ```
 
-This function would work perfectly well given a list of strings, but if you write `getFirst(["hello", "world"])`, the typechecker will complain. Of course, in this example the restriction is thoroughly self-imposed—it would be easy to give this function a generic type—but sometimes it’s not quite so easy. For example, suppose we write a function where the return type depends upon the type of the argument:
+If we ignore the type annotations and consider only the dynamic semantics of JavaScript, this function would work perfectly well given a list of strings. However, if we write `getFirst(["hello", "world"])`, the typechecker will complain. In this example, the restriction is thoroughly self-imposed—it would be easy to give this function a more generic type—but it’s not always that easy. For example, suppose we wrote a function where the return type depends upon the type of the argument:
 
 ```typescript
 function emptyLike(val: number | string): number | string {
@@ -42,7 +42,7 @@ function emptyLike(val: number | string): number | string {
 }
 ```
 
-Now if we write `emptyLike(42) * 10`, the typechecker will once again complain, claiming the result could be a string—it can’t “figure out” that when we pass a number, we always get a number back.
+Now if we write `emptyLike(42) * 10`, the typechecker will once again complain, claiming the result might be a string—it can’t “figure out” that when we pass a number, we always get a number back.
 
 When type systems are approached from this perspective, the result is often frustration. The programmer knows that the equivalent untyped JavaScript is perfectly well-behaved, so the typechecker comes off as being the highly unfortunate combination of stubborn yet dim-witted. What’s more, the programmer likely has little mental model of the typechecker’s internal operation, so when types like the above are inferred (not explicitly written), it can be unclear what solutions exist to make the error go away.
 
