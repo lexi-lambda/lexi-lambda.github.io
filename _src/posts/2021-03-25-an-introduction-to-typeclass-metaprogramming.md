@@ -1173,7 +1173,7 @@ Again, the idea is to move the type information we *learn* from picking this ins
 
 ## Example 3: Subtyping constraints
 
-At least, we have reached the final example of this blog post. For this one, I have the pleasure of providing a real-world example from a production Haskell codebase: while I was working at [Hasura][hasura], I had the pleasure of designing an internal parser combinator library that captures aspects of the [GraphQL][graphql] type system. One such aspect of that type system is a form of subtyping; GraphQL essentially has two “kinds” of types—input types and output types—but some types can be used as both.
+At last, we have reached the final example of this blog post. For this one, I have the pleasure of providing a real-world example from a production Haskell codebase: while I was working at [Hasura][hasura], I had the pleasure of designing an internal parser combinator library that captures aspects of the [GraphQL][graphql] type system. One such aspect of that type system is a form of subtyping; GraphQL essentially has two “kinds” of types—input types and output types—but some types can be used as both.
 
 Haskell has no built-in support for subtyping, so most Haskell programs do their best to get away with parametric polymorphism instead. However, in our case, we actually need to distinguish (at runtime) types in the “both” category from those that are exclusively input or exclusively output types. Consequently, our `GQLKind` datatype has three cases:
 
