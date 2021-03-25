@@ -10,7 +10,7 @@ This blog post attempts to remedy that by providing an overview of the foundatio
 
 # Part 1: Basic building blocks
 
-Template metaprogramming is a big subject, which makes covering it in a blog post tricky. To break it into more manageable chunks, this post is divided into several parts, each of which introduces new type system features or type-level programming techniques, then presents an example of how they can be applied.
+Typeclass metaprogramming is a big subject, which makes covering it in a blog post tricky. To break it into more manageable chunks, this post is divided into several parts, each of which introduces new type system features or type-level programming techniques, then presents an example of how they can be applied.
 
 To start, we’ll cover the absolute foundations of typeclass metaprogramming.
 
