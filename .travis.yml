@@ -23,8 +23,7 @@ install:
 # install pygments for highlighting support
 - pip install pygments
 
-# install markdown and frog
-- raco pkg install --no-setup --auto https://github.com/lexi-lambda/markdown.git#fix-footnote-leading-space
+# install frog
 - raco pkg install --no-setup --auto https://github.com/lexi-lambda/frog.git#blog
 - raco setup -D --pkgs frog
 
