@@ -234,7 +234,7 @@ guardUnit x = case isUnit @a of
   False -> Right x
 ```
 
-The idea is that this function uses `isUnit` to detect if its argument is of type `()`, and if it is, it returns an error. However, even though we marked `IsUnit ()` overlapping, we still get an overlapping instance error:
+The intent of `guardUnit` is to use `isUnit` to detect if its argument is of type `()`, and if it is, to return an error. However, even though we marked `IsUnit ()` overlapping, we still get an overlapping instance error:
 
 ```
 error:
@@ -990,7 +990,7 @@ Consider again the type of the `pairUp` function above (without the typeclass fo
 pairUp :: Even as -> HList as -> HList (PairUp as)
 ```
 
-We used both a GADT, `Even` and a type family, `PairUp`. But we could have, in theory, used *only* a GADT and eliminated the type family altogether. Consider this variation on the `Even` proof term:
+We used both a GADT, `Even`, and a type family, `PairUp`. But we could have, in theory, used *only* a GADT and eliminated the type family altogether. Consider this variation on the `Even` proof term:
 
 ```haskell
 data EvenPairs as bs where
@@ -1173,7 +1173,7 @@ Again, the idea is to move the type information we *learn* from picking this ins
 
 ## Example 3: Subtyping constraints
 
-At least, we have reached the final example of this blog post. For this one, I have the pleasure of providing a real-world example from a production Haskell codebase: while I was working at [Hasura][hasura], I had the pleasure of designing an internal parser combinator library that captures aspects of the [GraphQL][graphql] type system. One such aspect of that type system is a form of subtyping; GraphQL essentially has two “kinds” of types—input types and output types—but some types can be used as both.
+At last, we have reached the final example of this blog post. For this one, I have the pleasure of providing a real-world example from a production Haskell codebase: while I was working at [Hasura][hasura], I had the opportunity to design an internal parser combinator library that captures aspects of the [GraphQL][graphql] type system. One such aspect of that type system is a form of subtyping; GraphQL essentially has two “kinds” of types—input types and output types—but some types can be used as both.
 
 Haskell has no built-in support for subtyping, so most Haskell programs do their best to get away with parametric polymorphism instead. However, in our case, we actually need to distinguish (at runtime) types in the “both” category from those that are exclusively input or exclusively output types. Consequently, our `GQLKind` datatype has three cases:
 
