@@ -1,0 +1,672 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <title>Defeating Racket’s separate compilation guarantee</title>
+    <meta name="description" content="Being a self-described programming-language programming language is an ambitious goal. To preserve predictability while permitting linguistic extension, Racket comes equipped with a module system carefully designed to accommodate composable and compilable...">
+    <meta name="author"      content="Alexis King">
+    <meta name="keywords"    content="racket, macros">
+    <meta name="viewport"    content="width=device-width, initial-scale=1.0">
+    <link rel="icon"      href="/favicon.ico">
+    <link rel="canonical" href="http://lexi-lambda.github.io/blog/2019/04/21/defeating-racket-s-separate-compilation-guarantee/">
+    <link rel="next" href="/blog/2018/10/06/macroexpand-anywhere-with-local-apply-transformer/">
+    <link rel="prev" href="/blog/2019/09/07/demystifying-monadbasecontrol/">
+    <!-- CSS -->
+    <link rel="stylesheet" type="text/css" href="https://fonts.googleapis.com/css?family=Merriweather+Sans:400,300,300italic,400italic,700,700italic,800,800italic|Merriweather:400,300,300italic,400italic,700,700italic,900,900italic|Fira+Code:300,400,500,600,700">
+    <link rel="stylesheet" type="text/css" href="/css/application.min.css">
+    <link rel="stylesheet" type="text/css" href="/css/pygments.min.css">
+    <!-- Feeds -->
+    <link rel="alternate" type="application/atom+xml"
+          href="/feeds/all.atom.xml" title="Atom Feed">
+    <link rel="alternate" type="application/rss+xml"
+          href="/feeds/all.rss.xml" title="RSS Feed">
+    <!-- JS -->
+    <!-- <script src="/js/application.min.js"></script> -->
+    <script type="text/javascript">
+      (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+      (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+      m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+      })(window,document,'script','//www.google-analytics.com/analytics.js','ga');
+
+      ga('create', 'UA-65250372-1', 'auto');
+      ga('send', 'pageview');
+    </script>
+  </head>
+  <body>
+    <div id="page-content">
+      <!-- Navigation Bar -->
+      <header>
+        <nav role="navigation" class="navigation-bar">
+          <ul class="navigation-items left">
+            <li id="blog-title-header"><a href="/"><h1>Alexis King</h1></a></li>
+          </ul>
+          <ul class="navigation-items center"></ul>
+          <ul class="navigation-items right">
+            <li><a href="/">Home</a></li>
+            <li><a href="/resume.html">About Me</a></li>
+          </ul>
+        </nav>
+      </header>
+      <section role="main">
+        <!-- Main column -->
+        <div class="content" class="col-md-12">
+
+
+
+          <article class="main">
+  <header>
+    <h1 class="title">Defeating Racket’s separate compilation guarantee</h1>
+    <div class='date-and-tags'>
+      <time datetime="2019-04-21T05:30:00">
+        2019-04-21
+      </time>
+      <span style="margin: 0 3px">⦿</span>
+      <span class="tags"><a href="/tags/racket.html">racket</a>, <a href="/tags/macros.html">macros</a></span>
+    </div>
+  </header>
+
+<p>Being a self-described <a href="https://felleisen.org/matthias/manifesto/sec_pl-pl.html">programming-language programming language</a> is an ambitious goal. To preserve predictability while permitting linguistic extension, Racket comes equipped with a module system carefully designed to accommodate <a href="https://www.cs.utah.edu/plt/publications/macromod.pdf">composable and compilable macros</a>. One of the module system’s foundational properties is its <a href="https://docs.racket-lang.org/reference/eval-model.html#%28part._separate-compilation%29"><em>separate compilation guarantee</em></a>, which imposes strong, unbreakable limits on the extent of compile-time side-effects. It is <em>essential</em> for preserving static guarantees in a world where compiling a module can execute arbitrary code, and despite numerous unsafe trapdoors that have crept into Racket since its birth as PLT Scheme, none have ever given the programmer the ability to cheat it.</p>
+
+<p>Yet today, in this blog post, we’re going to do exactly that.</p>
+<!-- more-->
+
+<h1 id="what-is-the-separate-compilation-guarantee">What is the separate compilation guarantee?</h1>
+
+<p>Before we get to the fun part (i.e. breaking things), let’s go over some fundamentals so we understand what we’re breaking. The authoritative source for the separate compilation guarantee is <a href="https://docs.racket-lang.org/reference/eval-model.html#%28part._separate-compilation%29">the Racket reference</a>, but it is dense, as authoritative sources tend to be. Although I enjoy reading technical manuals for sport, it is my understanding that not all the people who read this blog are as strange as I am, so let’s start with a quick primer, instead. (If you’re already an expert, feel free to <a href="#section:main-start">skip to the next section</a>.)</p>
+
+<p>Racket is a macro-enabled programming language. In Racket, a macro is a user-defined, code-to-code transformation that occurs at compile-time. These transformations cannot make arbitrary changes to the program—in Racket, they are usually required to be <em>local</em>, affecting a single expression or definition at a time—but they may be implemented using arbitrary code. This means that a macro can, if it so desires, read the SSH keys off your filesystem and issue an HTTP request to send them someplace.</p>
+
+<p>That kind of attack is bad, admittedly, but it’s also <em>uninteresting</em>: Racket allows you do all that and then some, making no attempt to prevent it.<sup><a href="#2019-04-21-defeating-racket-s-separate-compilation-guarantee-footnote-1-definition" name="2019-04-21-defeating-racket-s-separate-compilation-guarantee-footnote-1-return">1</a></sup> Racket calls these “external effects,” things that affect state outside of the programming language. They sound scary, but in practice, <em>internal effects</em>—effects that mutate state inside the programming language—are a much bigger obstacle to practical programming. Let’s take a look at why.</p>
+
+<p>Let’s say we have a module with some global, mutable state. Perhaps it is used to keep track of a set of delicious foods:</p>
+
+<div class="brush: racket">
+ <div class="source">
+  <pre><span></span><span class="c1">;; foods.rkt</span>
+<span class="kn">#lang </span><span class="nn">racket</span>
+<span class="p">(</span><span class="k">provide</span> <span class="n">delicious-food?</span> <span class="n">add-delicious-food!</span><span class="p">)</span>
+
+<span class="p">(</span><span class="k">define</span> <span class="n">delicious-foods</span> <span class="p">(</span><span class="nb">mutable-set</span><span class="p">))</span>
+
+<span class="p">(</span><span class="k">define</span> <span class="p">(</span><span class="n">delicious-food?</span> <span class="n">food</span><span class="p">)</span>
+  <span class="p">(</span><span class="nb">set-member?</span> <span class="n">delicious-foods</span> <span class="n">food</span><span class="p">))</span>
+
+<span class="p">(</span><span class="k">define</span> <span class="p">(</span><span class="n">add-delicious-food!</span> <span class="n">new-food</span><span class="p">)</span>
+  <span class="p">(</span><span class="nb">set-add!</span> <span class="n">delicious-foods</span> <span class="n">new-food</span><span class="p">))</span>
+</pre></div>
+
+</div>
+
+<p>Using this interface, let’s write a program that checks if a particular food, given as a command-line argument, is delicious:</p>
+
+<div class="brush: racket">
+ <div class="source">
+  <pre><span></span><span class="c1">;; check-food.rkt</span>
+<span class="kn">#lang </span><span class="nn">racket</span>
+<span class="p">(</span><span class="k">require</span> <span class="s2">"foods.rkt"</span><span class="p">)</span>
+
+<span class="p">(</span><span class="n">add-delicious-food!</span> <span class="s2">"pineapple"</span><span class="p">)</span>
+<span class="p">(</span><span class="n">add-delicious-food!</span> <span class="s2">"sushi"</span><span class="p">)</span>
+<span class="p">(</span><span class="n">add-delicious-food!</span> <span class="s2">"cheesecake"</span><span class="p">)</span>
+
+<span class="p">(</span><span class="k">command-line</span>
+  <span class="kd">#:args</span> <span class="p">[</span><span class="n">food-to-check</span><span class="p">]</span>
+  <span class="p">(</span><span class="k">if</span> <span class="p">(</span><span class="n">delicious-food?</span> <span class="n">food-to-check</span><span class="p">)</span>
+      <span class="p">(</span><span class="nb">printf</span> <span class="s2">"~a is a delicious food.</span><span class="se">\n</span><span class="s2">"</span> <span class="n">food-to-check</span><span class="p">)</span>
+      <span class="p">(</span><span class="nb">printf</span> <span class="s2">"~a is not delicious.</span><span class="se">\n</span><span class="s2">"</span> <span class="n">food-to-check</span><span class="p">)))</span>
+</pre></div>
+
+</div>
+
+<div class="brush: sh">
+ <div class="source">
+  <pre><span></span>$ racket check-food.rkt cheesecake
+cheesecake is a delicious food.
+$ racket check-food.rkt licorice
+licorice is not delicious.
+</pre></div>
+
+</div>
+
+<p>Exhilarating. (Sorry, licorice fans.) But what if a <em>macro</em> were to call <code>add-delicious-food!</code>? What would happen? For example, what if we wrote a macro to add a lot of foods at once?<sup><a href="#2019-04-21-defeating-racket-s-separate-compilation-guarantee-footnote-2-definition" name="2019-04-21-defeating-racket-s-separate-compilation-guarantee-footnote-2-return">2</a></sup></p>
+
+<div class="brush: racket">
+ <div class="source">
+  <pre><span></span><span class="p">(</span><span class="k">require</span> <span class="n">syntax/parse/define</span><span class="p">)</span>
+<span class="p">(</span><span class="n">define-simple-macro</span> <span class="p">(</span><span class="n">add-food-combinations!</span> <span class="p">[</span><span class="n">fst:string</span> <span class="k">...</span><span class="p">]</span>
+                                             <span class="p">[</span><span class="n">snd:string</span> <span class="k">...</span><span class="p">])</span>
+  <span class="kd">#:do</span> <span class="p">[(</span><span class="k">for*</span> <span class="p">([</span><span class="n">fst-str</span> <span class="p">(</span><span class="nb">in-list</span> <span class="p">(</span><span class="nb">syntax-&gt;datum</span> <span class="o">#&#39;</span><span class="p">[</span><span class="n">fst</span> <span class="k">...</span><span class="p">]))]</span>
+               <span class="p">[</span><span class="n">snd-str</span> <span class="p">(</span><span class="nb">in-list</span> <span class="p">(</span><span class="nb">syntax-&gt;datum</span> <span class="o">#&#39;</span><span class="p">[</span><span class="n">snd</span> <span class="k">...</span><span class="p">]))])</span>
+          <span class="p">(</span><span class="n">add-delicious-food!</span> <span class="p">(</span><span class="nb">string-append</span> <span class="n">fst-str</span> <span class="s2">" "</span> <span class="n">snd-str</span><span class="p">)))]</span>
+  <span class="p">(</span><span class="nb">void</span><span class="p">))</span>
+
+<span class="c1">; should add “fried chicken,” “roasted chicken”, “fried potato,” and “roasted potato”</span>
+<span class="p">(</span><span class="n">add-food-combinations!</span> <span class="p">[</span><span class="s2">"fried"</span> <span class="s2">"roasted"</span><span class="p">]</span> <span class="p">[</span><span class="s2">"chicken"</span> <span class="s2">"potato"</span><span class="p">])</span>
+</pre></div>
+
+</div>
+
+<p>Now, what do you think executing <code>racket check-food.rkt 'fried chicken'</code> will do?</p>
+
+<p>Clearly, the program should print <code>fried chicken is a delicious food</code>, and indeed, many traditional Lisp systems would happily produce such a result. After all, running <code>racket check-food.rkt 'fried chicken'</code> must load the source code inside <code>check-food.rkt</code>, expand and compile it, then run the result. While the program is being expanded, the compile-time calls to <code>add-delicious-food!</code> should add new elements to the <code>delicious-food</code> set, so when the program is executed, the string <code>"fried chicken"</code> ought to be in it.</p>
+
+<p>But if you actually try this yourself, you will find that <em>isn’t</em> what happens. Instead, Racket rejects the program:</p>
+
+<div class="brush: sh">
+ <div class="source">
+  <pre><span></span>$ racket check-food.rkt <span class="s1">&#39;fried chicken&#39;</span>
+check-food.rkt:12:11: add-delicious-food!: reference to an unbound identifier
+  at phase: <span class="m">1</span><span class="p">;</span> the transformer environment
+  in: add-delicious-food!
+</pre></div>
+
+</div>
+
+<p>Why does Racket reject this program? Well, consider that Racket allows programs to be pre-compiled using <code>raco make</code>, doing all the work of macroexpansion and compilation to bytecode ahead of time. Subsequent runs of the program will use the pre-compiled version, without having to run all the macros again. This is a problem, since expanding the <code>add-food-combinations!</code> macro had side-effects that our program depended on!</p>
+
+<p>If Racket allowed the above program, it might do different things depending on whether it was pre-compiled. Running directly from source code might treat <code>'fried chicken'</code> as a delicious food, while running from pre-compiled bytecode might not. Racket considers this unacceptable, so it disallows the program entirely.</p>
+
+<h2 id="preserving-separate-compilation-via-phases">Preserving separate compilation via phases</h2>
+
+<p>Hopefully, you are now mostly convinced that the above program is a bad one, but you might have some lingering doubts. You might, for example, wonder if Racket disallows mutable compile-time state entirely. That is not the case—Racket really does allow everything that happens at runtime to happen at compile-time—but it does prevent compile-time and run-time state from ever <em>interacting</em>. Racket stratifies every program into a compile-time part and a run-time part, and it restricts communication between them to limited, well-defined channels (mainly via expanding to code that does something at run-time).</p>
+
+<p>Racket calls this system of stratification <em>phases</em>. Code that executes at run-time belongs to the <em>run-time phase</em>, while code that executes at compile-time (i.e. macros) belongs to the <em>compile-time phase</em>. When a variable is defined, it is always defined in a particular phase, so bindings declared with <code>define</code> can only be used at run-time, while bindings declared with <code>define-for-syntax</code> can only be used at compile-time. Since <code>add-delicious-food!</code> was declared using <code>define</code>, it was not allowed (and in fact was not even visible) in the body of the <code>add-food-combinations!</code> macro.</p>
+
+<p>While the whole macro system could work precisely as just described, such a strict stratification would be incredibly rigid. Since every definition would belong to either run-time or compile-time, but never both, reusing run-time code to implement macros would be impossible. While the example in the previous section might make it seem like that’s a good thing, it very often isn’t: imagine if general-purpose functions like <code>map</code> and <code>filter</code> all needed to be written twice!</p>
+
+<p>To avoid this problem, Racket allows modules to be imported at both run-time and compile-time, so long as it’s done explicitly. Writing <code>(require "some-library.rkt")</code> requires <code>some-library.rkt</code> for run-time code, but writing <code>(require (for-syntax "some-library.rkt"))</code> requires it for compile-time code. Requiring a module <code>for-syntax</code> is sort of like implicitly adjusting all of its uses of <code>define</code> to be <code>define-for-syntax</code>, instead, effectively shifting all the code from run-time to compile-time. This kind of operation is therefore known as <em>phase shifting</em> in Racket terminology.</p>
+
+<p>We can use phase shifting to make the program we wrote compile. If we adjust the <code>require</code> at the beginning of our program, then we can ensure <code>add-delicious-food!</code> is visible to both the run-time and compile-time parts of <code>check-food.rkt</code>:</p>
+
+<div class="brush: racket">
+ <div class="source">
+  <pre><span></span><span class="p">(</span><span class="k">require</span> <span class="s2">"foods.rkt"</span> <span class="p">(</span><span class="k">for-syntax</span> <span class="s2">"foods.rkt"</span><span class="p">))</span>
+</pre></div>
+
+</div>
+
+<p>Now our program compiles. However, if you’ve been following everything carefully, you should be wondering why! According to the last section, sharing state between run-time and compile-time fundamentally can’t work without introducing inconsistencies between uncompiled and pre-compiled code. And that’s true—such a thing would cause all sorts of problems, and Racket doesn’t allow it. If you run the program, whether pre-compiled or not, you’ll find it always does the same thing:</p>
+
+<div class="brush: sh">
+ <div class="source">
+  <pre><span></span>$ racket check-food.rkt <span class="s1">&#39;fried chicken&#39;</span>
+fried chicken is not delicious.
+</pre></div>
+
+</div>
+
+<p>This seems rather confusing. What happened to the calls to <code>add-delicious-food!</code> inside our <code>add-food-combinations!</code> macro? If we stick a <code>printf</code> inside <code>add-delicious-food!</code>, we’ll find that it really does get called:</p>
+
+<div class="brush: racket">
+ <div class="source">
+  <pre><span></span><span class="p">(</span><span class="k">define</span> <span class="p">(</span><span class="n">add-delicious-food!</span> <span class="n">new-food</span><span class="p">)</span>
+  <span class="p">(</span><span class="nb">printf</span> <span class="s2">"Registering ~a as a delicious food.</span><span class="se">\n</span><span class="s2">"</span> <span class="n">new-food</span><span class="p">)</span>
+  <span class="p">(</span><span class="nb">set-add!</span> <span class="n">delicious-foods</span> <span class="n">new-food</span><span class="p">))</span>
+</pre></div>
+
+</div>
+
+<div class="brush: sh">
+ <div class="source">
+  <pre><span></span>$ racket check-food.rkt <span class="s1">&#39;fried chicken&#39;</span>
+Registering fried chicken as a delicious food.
+Registering fried potato as a delicious food.
+Registering roasted chicken as a delicious food.
+Registering roasted potato as a delicious food.
+Registering pineapple as a delicious food.
+Registering sushi as a delicious food.
+Registering cheesecake as a delicious food.
+fried chicken is not delicious.
+</pre></div>
+
+</div>
+
+<p>And in fact, if we pre-compile <code>check-food.rkt</code>, we’ll see that the first four registrations appear at compile-time, exactly as we expect:</p>
+
+<div class="brush: sh">
+ <div class="source">
+  <pre><span></span>$ raco make check-food.rkt
+Registering fried chicken as a delicious food.
+Registering fried potato as a delicious food.
+Registering roasted chicken as a delicious food.
+Registering roasted potato as a delicious food.
+$ racket check-food.rkt <span class="s1">&#39;fried chicken&#39;</span>
+Registering pineapple as a delicious food.
+Registering sushi as a delicious food.
+Registering cheesecake as a delicious food.
+fried chicken is not delicious.
+</pre></div>
+
+</div>
+
+<p>The compile-time registrations really are happening, but Racket is automatically restricting the compile-time side-effects so they only apply at compile-time. After compilation has finished, Racket ensures that compile-time side effects are thrown away, and the run-time code starts over with fresh, untouched state. This guarantees consistent behavior, since it becomes impossible to distinguish at run-time whether a module was just compiled on the fly, or if it was pre-compiled long ago (possibly even on someone else’s computer).</p>
+
+<p>This is the essence of the separate compilation guarantee. To summarize:</p>
+
+<ul>
+ <li>
+  <p>Run-time and compile-time are distinct <em>phases</em> of execution, which cannot interact.</p></li>
+ <li>
+  <p>Modules can be required at multiple phases via <em>phase shifting</em>, but their state is kept separate. Each phase gets its own copy of the state.</p></li>
+ <li>
+  <p>Ensuring that the state is kept separate ensures predictable program behavior, no matter when the program is compiled.</p></li></ul>
+
+<p>This summary is a simplification of phases in Racket. The full Racket module system does not have only two phases, since macros can also be <em>used</em> at compile-time to implement other macros, effectively creating a separate “compile-time” for the compile-time code. Each compile-time pass is isolated to its own phase, creating a finite but arbitrarily large number of distinct program phases (all but one of which occur at compile-time).</p>
+
+<p>Furthermore, the separate compilation guarantee does not just isolate the state of each phase from the state of other phases but also isolates all compile-time state from the compile-time state of other modules. This ensures that compilation is still deterministic even if modules are compiled in a different <em>order</em>, or if several modules are sometimes compiled individually while other times compiled together all at once.</p>
+
+<p>If you want to learn more, the full details of the module system are described at length in the <a href="https://docs.racket-lang.org/guide/phases.html">General Phase Levels</a> section of the Racket Guide, but the abridged summary I’ve described is enough for the purposes of this blog post. If the bulleted list above mostly made sense to you, you’re ready to move on.</p>
+
+<h1 id="section:main-start">How we’re going to break it</h1>
+
+<p>The separate compilation guarantee is a sturdy opponent, but it is not without weaknesses. Although no API in Racket, safe or unsafe, allows arbitrarily disabling phase separation, a couple features of Racket are already known to allow limited forms of cross-phase communication.</p>
+
+<p>The most significant of these, and the one we’ll be using as our vector of attack, is the logger. Unlike many logging systems, which are exclusively string-oriented, Racket’s logging interface allows structured logging by associating an arbitrary Racket value with each and every log message. Since it is possible to set up listeners within Racket that receive log messages sent to a particular “topic,” the logger can be used as a communication channel to send values between different parts of a program.</p>
+
+<p>The following program illustrates how this works. One thread creates a listener for all log messages on the topic <code>'send-me-a-value</code> using <code>make-log-receiver</code>, then uses <code>sync</code> to block until a value is received. Meanwhile, a second thread sends values through the logger using <code>log-message</code>. Together, this creates a makeshift buffered, asynchronous channel:</p>
+
+<div class="brush: racket">
+ <div class="source">
+  <pre><span></span><span class="c1">;; log-comm.rkt</span>
+<span class="kn">#lang </span><span class="nn">racket</span>
+
+<span class="p">(</span><span class="k">define</span> <span class="n">t1</span>
+  <span class="p">(</span><span class="nb">thread</span>
+   <span class="p">(</span><span class="k">lambda</span> <span class="p">()</span>
+     <span class="p">(</span><span class="k">define</span> <span class="n">recv</span> <span class="p">(</span><span class="nb">make-log-receiver</span> <span class="p">(</span><span class="nb">current-logger</span><span class="p">)</span> <span class="o">&#39;</span><span class="ss">debug</span> <span class="o">&#39;</span><span class="ss">send-me-a-value</span><span class="p">))</span>
+     <span class="p">(</span><span class="k">let</span> <span class="n">loop</span> <span class="p">()</span>
+       <span class="p">(</span><span class="nb">println</span> <span class="p">(</span><span class="nb">sync</span> <span class="n">recv</span><span class="p">))</span>
+       <span class="p">(</span><span class="n">loop</span><span class="p">)))))</span>
+
+<span class="p">(</span><span class="k">define</span> <span class="n">t2</span>
+  <span class="p">(</span><span class="nb">thread</span>
+   <span class="p">(</span><span class="k">lambda</span> <span class="p">()</span>
+     <span class="p">(</span><span class="k">let</span> <span class="n">loop</span> <span class="p">([</span><span class="n">n</span> <span class="mi">0</span><span class="p">])</span>
+       <span class="p">(</span><span class="nb">log-message</span> <span class="p">(</span><span class="nb">current-logger</span><span class="p">)</span> <span class="o">&#39;</span><span class="ss">debug</span> <span class="o">&#39;</span><span class="ss">send-me-a-value</span> <span class="s2">""</span> <span class="n">n</span> <span class="no">#f</span><span class="p">)</span>
+       <span class="p">(</span><span class="nb">sleep</span> <span class="mi">1</span><span class="p">)</span>
+       <span class="p">(</span><span class="n">loop</span> <span class="p">(</span><span class="nb">add1</span> <span class="n">n</span><span class="p">))))))</span>
+
+<span class="p">(</span><span class="nb">thread-wait</span> <span class="n">t1</span><span class="p">)</span> <span class="c1">; wait forever</span>
+</pre></div>
+
+</div>
+
+<pre><code>$ racket log-comm.rkt
+'#(debug "" 1 send-me-a-value)
+'#(debug "" 2 send-me-a-value)
+'#(debug "" 3 send-me-a-value)
+'#(debug "" 4 send-me-a-value)
+^Cuser break</code></pre>
+
+<p>In this program, the value being sent through the logger is just a number, which isn’t very interesting. But the value really can be <em>any</em> value, even arbitrary closures or mutable data structures. It’s even possible to send a <a href="https://docs.racket-lang.org/guide/concurrency.html#%28part._.Channels%29">channel</a> through a logger, which can subsequently be used to communicate directly, without having to abuse the logger.</p>
+
+<p>Generally, this feature of loggers isn’t very useful, since Racket has plenty of features for cross-thread communication. What’s special about the logger, however, is that it is global, and it is cross-phase.</p>
+
+<p>The cross-phase nature of the logger makes some sense. If a Racket program creates a namespace (that is, a fresh environment for dynamic evaluation), then uses it to expand and compile a Racket module, the process of compilation might produce some log messages, and the calling thread might wish to receive them. It wouldn’t be a very useful logging system if log messages during compile-time were always lost. However, this convenience is a loophole in the phase separation system, since it allows values to flow—bidirectionally—between phases.</p>
+
+<p>This concept forms the foundation of our exploit, but it alone is not a new technique, and I did not discover it. However, all existing uses I know of that use the logger for cross-phase communication require control of the parent namespace in which modules are being compiled, which means some code must exist “outside” the actual program. That technique does not work for ordinary programs run directly with <code>racket</code> or compiled directly with <code>raco make</code>, so to get there, we’ll need something more clever.</p>
+
+<h2 id="the-challenge">The challenge</h2>
+
+<p>Our goal, therefore, is to share state between phases <em>without</em> controlling the compilation namespace. More precisely, we want to be able to create an arbitrary module-level definition that is <em>cross-phase persistent</em>, which means it will be evaluated once and only once no matter how many times its enclosing module is re-instantiated (i.e. given a fresh, untouched state) at various phases. A phase-shifted <code>require</code> of the module that contains the definition should share state with an unshifted version of the module, breaking the separate compilation guarantee wide open.</p>
+
+<p>To use the example from the previous section, we should be able to adjust <code>foods.rkt</code> very slightly…</p>
+
+<div class="brush: racket">
+ <div class="source">
+  <pre><span></span><span class="c1">;; foods.rkt</span>
+<span class="kn">#lang </span><span class="nn">racket</span>
+<span class="p">(</span><span class="k">require</span> <span class="s2">"define-cross-phase.rkt"</span><span class="p">)</span>
+<span class="p">(</span><span class="k">provide</span> <span class="n">delicious-food?</span> <span class="n">add-delicious-food!</span><span class="p">)</span>
+
+<span class="c1">; share across phases</span>
+<span class="p">(</span><span class="n">define/cross-phase</span> <span class="n">delicious-foods</span> <span class="p">(</span><span class="nb">mutable-set</span><span class="p">))</span>
+
+<span class="cm">#| ... |#</span>
+</pre></div>
+
+</div>
+
+<p>…and the <code>delicious-foods</code> mutable state should magically become cross-phase persistent. When running <code>check-food.rkt</code> from source, we should see the side-effects persisted from the module’s compilation, while running from pre-compiled bytecode should give us the result with compile-time effects discarded.</p>
+
+<p>We already know the logger is going to be part of our exploit, but implementing <code>define/cross-phase</code> on top of it is more subtle than it might seem. In our previous example that used <code>make-log-receiver</code>, we had well-defined sender and receiver threads, but who is the “sender” in our multi-phased world? And what exactly is the sender sending?</p>
+
+<p>To answer those questions, allow me to outline the general idea of our approach:</p>
+
+<ol>
+ <li>
+  <p>The first time our <code>foods.rkt</code> module is instantiated, at any phase, it evaluates the <code>(mutable-set)</code> expression to produce a new mutable set. It spawns a sender thread that sends this value via the logger to anyone who will listen, and that thread lingers in the background for the remaining duration of the program.</p></li>
+ <li>
+  <p>All subsequent instantiations of <code>foods.rkt</code> do <em>not</em> evaluate the <code>(mutable-set)</code> expression. Instead, they obtain the existing set by creating a log receiver and obtaining the value the sender thread is broadcasting. This ensures that a single value is shared across all instantiations of the module.</p></li></ol>
+
+<p>This sounds deceptively simple, but the crux of the problem is how to determine whether <code>foods.rkt</code> has previously been instantiated or not. Since we can only communicate across phases via the logger, we cannot use any shared state to directly record the first time the module is instantiated. We can listen to a log receiver and wait to see if we get a response, but this introduces a race condition: how long do we wait until giving up and deciding we’re the first instantiation? Worse, what if two threads instantiate the module at the same time, and both threads end up spawning a new sender thread, duplicating the state?</p>
+
+<p>The true challenge, therefore, is to develop a protocol by which we can be <em>certain</em> we are the first instantiation of a module, without relying on any unspecified behavior, and without introducing any race conditions. This is possible, but it isn’t obvious, and it requires combining loggers with some extra tools available to the Racket programmer.</p>
+
+<h2 id="the-key-idea">The key idea</h2>
+
+<p>It’s finally time to tackle the key idea at the heart of our exploit: garbage collection. In Racket, garbage collection is an observable effect, since Racket allows attaching finalizers to values via <a href="https://docs.racket-lang.org/reference/willexecutor.html">wills and executors</a>. Since a single heap is necessarily shared by the entire VM, behavior happening on other threads (even in other phases) can be indirectly observed by creating a unique value—a “canary”—then sending it to another thread, and waiting to see if it will be garbage collected or not (that is, whether or not the canary “dies”).</p>
+
+<p>Remember that logs and log receivers are effectively buffered, multicast, asynchronous FIFO channels. Since they are buffered, if any thread is already listening to a logger topic when a value is sent, it cannot possibly be garbage collected until that thread either reads it and discards it or the receiver itself is garbage collected. It’s possible to use this mechanism to observe whether or not another thread is already listening on a topic, as the following program demonstrates:<sup><a href="#2019-04-21-defeating-racket-s-separate-compilation-guarantee-footnote-3-definition" name="2019-04-21-defeating-racket-s-separate-compilation-guarantee-footnote-3-return">3</a></sup></p>
+
+<div class="brush: racket">
+ <div class="source">
+  <pre><span></span><span class="c1">;; check-receivers.rkt</span>
+<span class="kn">#lang </span><span class="nn">racket</span>
+
+<span class="p">(</span><span class="k">define</span> <span class="p">(</span><span class="n">check-receivers</span> <span class="n">topic</span><span class="p">)</span>
+  <span class="p">(</span><span class="k">define</span> <span class="n">executor</span> <span class="p">(</span><span class="nb">make-will-executor</span><span class="p">))</span>
+  <span class="c1">; limit scope of `canary` so we don’t retain a reference</span>
+  <span class="p">(</span><span class="k">let</span> <span class="p">()</span>
+    <span class="p">(</span><span class="k">define</span> <span class="n">canary</span> <span class="p">(</span><span class="nb">gensym</span> <span class="o">&#39;</span><span class="ss">canary</span><span class="p">))</span>
+    <span class="p">(</span><span class="nb">will-register</span> <span class="n">executor</span> <span class="n">canary</span> <span class="nb">void</span><span class="p">)</span>
+    <span class="p">(</span><span class="nb">log-message</span> <span class="p">(</span><span class="nb">current-logger</span><span class="p">)</span> <span class="o">&#39;</span><span class="ss">debug</span> <span class="n">topic</span> <span class="s2">""</span> <span class="n">canary</span> <span class="no">#f</span><span class="p">))</span>
+  <span class="p">(</span><span class="k">if</span> <span class="p">(</span><span class="k">begin</span>
+        <span class="p">(</span><span class="nb">collect-garbage</span><span class="p">)</span>
+        <span class="p">(</span><span class="nb">collect-garbage</span><span class="p">)</span>
+        <span class="p">(</span><span class="nb">collect-garbage</span><span class="p">)</span>
+        <span class="p">(</span><span class="nb">sync/timeout</span> <span class="mi">0</span> <span class="n">executor</span><span class="p">))</span>
+      <span class="p">(</span><span class="nb">printf</span> <span class="s2">"no receivers for ~v</span><span class="se">\n</span><span class="s2">"</span> <span class="n">topic</span><span class="p">)</span>
+      <span class="p">(</span><span class="nb">printf</span> <span class="s2">"receiver exists for ~v</span><span class="se">\n</span><span class="s2">"</span> <span class="n">topic</span><span class="p">)))</span>
+
+<span class="c1">; add a receiver on topic &#39;foo</span>
+<span class="p">(</span><span class="k">define</span> <span class="n">recv</span> <span class="p">(</span><span class="nb">make-log-receiver</span> <span class="p">(</span><span class="nb">current-logger</span><span class="p">)</span> <span class="o">&#39;</span><span class="ss">debug</span> <span class="o">&#39;</span><span class="ss">foo</span><span class="p">))</span>
+
+<span class="p">(</span><span class="k">define</span> <span class="n">t1</span> <span class="p">(</span><span class="nb">thread</span> <span class="p">(</span><span class="k">λ</span> <span class="p">()</span> <span class="p">(</span><span class="n">check-receivers</span> <span class="o">&#39;</span><span class="ss">foo</span><span class="p">))))</span>
+<span class="p">(</span><span class="k">define</span> <span class="n">t2</span> <span class="p">(</span><span class="nb">thread</span> <span class="p">(</span><span class="k">λ</span> <span class="p">()</span> <span class="p">(</span><span class="n">check-receivers</span> <span class="o">&#39;</span><span class="ss">bar</span><span class="p">))))</span>
+
+<span class="p">(</span><span class="nb">thread-wait</span> <span class="n">t1</span><span class="p">)</span>
+<span class="p">(</span><span class="nb">thread-wait</span> <span class="n">t2</span><span class="p">)</span>
+</pre></div>
+
+</div>
+
+<pre><code>$ racket check-receivers.rkt
+no receivers for 'bar
+receiver exists for 'foo</code></pre>
+
+<p>However, this program has some problems. For one, it needs to call <code>collect-garbage</code> several times to be certain that the canary will be collected if there are no listeners, which can take a second or two, and it also assumes that three calls to <code>collect-garbage</code> will be enough to collect the canary, though there is no guarantee that will be true.</p>
+
+<p>A bulletproof solution should be both reasonably performant and guaranteed to work. To get there, we have to combine this idea with something more. Here’s the trick: instead of sending the canary alone, send a <a href="https://docs.racket-lang.org/guide/concurrency.html#%28part._.Channels%29">channel</a> alongside it. Synchronize on both the canary’s executor <em>and</em> the channel so that the thread will unblock if either the canary is collected <em>or</em> the channel is received and sent a value using <code>channel-put</code>. Have the receiver listen for the channel on a separate thread, and when it receives it, send a value back to unblock the waiting thread as quickly as possible, without needing to rely on a timeout or a particular number of calls to <code>collect-garbage</code>.</p>
+
+<p>Using that idea, we can revise the program:</p>
+
+<div class="brush: racket">
+ <div class="source">
+  <pre><span></span><span class="c1">;; check-receivers.rkt</span>
+<span class="kn">#lang </span><span class="nn">racket</span>
+
+<span class="p">(</span><span class="k">define</span> <span class="p">(</span><span class="n">check-receivers</span> <span class="n">topic</span><span class="p">)</span>
+  <span class="p">(</span><span class="k">define</span> <span class="n">chan</span> <span class="p">(</span><span class="nb">make-channel</span><span class="p">))</span>
+  <span class="p">(</span><span class="k">define</span> <span class="n">executor</span> <span class="p">(</span><span class="nb">make-will-executor</span><span class="p">))</span>
+  <span class="c1">; limit scope of `canary` so we don’t retain a reference</span>
+  <span class="p">(</span><span class="k">let</span> <span class="p">()</span>
+    <span class="p">(</span><span class="k">define</span> <span class="n">canary</span> <span class="p">(</span><span class="nb">gensym</span> <span class="o">&#39;</span><span class="ss">canary</span><span class="p">))</span>
+    <span class="p">(</span><span class="nb">will-register</span> <span class="n">executor</span> <span class="n">canary</span> <span class="nb">void</span><span class="p">)</span>
+    <span class="p">(</span><span class="nb">log-message</span> <span class="p">(</span><span class="nb">current-logger</span><span class="p">)</span> <span class="o">&#39;</span><span class="ss">debug</span> <span class="n">topic</span> <span class="s2">""</span>
+                 <span class="c1">; send the channel + the canary</span>
+                 <span class="p">(</span><span class="nb">vector-immutable</span> <span class="n">chan</span> <span class="n">canary</span><span class="p">)</span> <span class="no">#f</span><span class="p">))</span>
+  <span class="p">(</span><span class="k">if</span> <span class="p">(</span><span class="k">let</span> <span class="n">loop</span> <span class="p">([</span><span class="n">n</span> <span class="mi">0</span><span class="p">])</span>
+        <span class="p">(</span><span class="nb">sleep</span><span class="p">)</span> <span class="c1">; yield to try to let the receiver thread work</span>
+        <span class="p">(</span><span class="k">match</span> <span class="p">(</span><span class="nb">sync/timeout</span> <span class="mi">0</span>
+                             <span class="p">(</span><span class="nb">wrap-evt</span> <span class="n">chan</span> <span class="p">(</span><span class="k">λ</span> <span class="p">(</span><span class="n">v</span><span class="p">)</span> <span class="o">&#39;</span><span class="ss">received</span><span class="p">))</span>
+                             <span class="p">(</span><span class="nb">wrap-evt</span> <span class="n">executor</span> <span class="p">(</span><span class="k">λ</span> <span class="p">(</span><span class="n">v</span><span class="p">)</span> <span class="o">&#39;</span><span class="ss">collected</span><span class="p">)))</span>
+          <span class="p">[</span><span class="o">&#39;</span><span class="ss">collected</span> <span class="no">#t</span><span class="p">]</span>
+          <span class="p">[</span><span class="o">&#39;</span><span class="ss">received</span>  <span class="no">#f</span><span class="p">]</span>
+          <span class="p">[</span><span class="k">_</span> <span class="c1">; collect garbage and try again</span>
+           <span class="p">(</span><span class="nb">collect-garbage</span> <span class="p">(</span><span class="k">if</span> <span class="p">(</span><span class="nb">&lt;</span> <span class="n">n</span> <span class="mi">3</span><span class="p">)</span> <span class="o">&#39;</span><span class="ss">minor</span> <span class="o">&#39;</span><span class="ss">major</span><span class="p">))</span>
+           <span class="p">(</span><span class="n">loop</span> <span class="p">(</span><span class="nb">add1</span> <span class="n">n</span><span class="p">))]))</span>
+      <span class="p">(</span><span class="nb">printf</span> <span class="s2">"no receivers for ~v</span><span class="se">\n</span><span class="s2">"</span> <span class="n">topic</span><span class="p">)</span>
+      <span class="p">(</span><span class="nb">printf</span> <span class="s2">"receiver exists for ~v</span><span class="se">\n</span><span class="s2">"</span> <span class="n">topic</span><span class="p">)))</span>
+
+<span class="c1">; add a receiver on topic &#39;foo</span>
+<span class="p">(</span><span class="k">define</span> <span class="n">recv</span> <span class="p">(</span><span class="nb">make-log-receiver</span> <span class="p">(</span><span class="nb">current-logger</span><span class="p">)</span> <span class="o">&#39;</span><span class="ss">debug</span> <span class="o">&#39;</span><span class="ss">foo</span><span class="p">))</span>
+<span class="p">(</span><span class="nb">void</span> <span class="p">(</span><span class="nb">thread</span>
+       <span class="p">(</span><span class="k">λ</span> <span class="p">()</span>
+         <span class="p">(</span><span class="k">let</span> <span class="n">loop</span> <span class="p">()</span>
+           <span class="p">(</span><span class="k">match</span> <span class="p">(</span><span class="nb">sync</span> <span class="n">recv</span><span class="p">)</span>
+             <span class="p">[(</span><span class="nb">vector</span> <span class="k">_</span> <span class="k">_</span> <span class="p">(</span><span class="nb">vector</span> <span class="n">chan</span> <span class="k">_</span><span class="p">)</span> <span class="k">_</span><span class="p">)</span>
+              <span class="p">(</span><span class="nb">channel-put</span> <span class="n">chan</span> <span class="no">#t</span><span class="p">)</span>
+              <span class="p">(</span><span class="n">loop</span><span class="p">)])))))</span>
+
+<span class="p">(</span><span class="k">define</span> <span class="n">t1</span> <span class="p">(</span><span class="nb">thread</span> <span class="p">(</span><span class="k">λ</span> <span class="p">()</span> <span class="p">(</span><span class="n">check-receivers</span> <span class="o">&#39;</span><span class="ss">foo</span><span class="p">))))</span>
+<span class="p">(</span><span class="k">define</span> <span class="n">t2</span> <span class="p">(</span><span class="nb">thread</span> <span class="p">(</span><span class="k">λ</span> <span class="p">()</span> <span class="p">(</span><span class="n">check-receivers</span> <span class="o">&#39;</span><span class="ss">bar</span><span class="p">))))</span>
+
+<span class="p">(</span><span class="nb">thread-wait</span> <span class="n">t1</span><span class="p">)</span>
+<span class="p">(</span><span class="nb">thread-wait</span> <span class="n">t2</span><span class="p">)</span>
+</pre></div>
+
+</div>
+
+<p>Now the program completes almost instantly. For this simple program, the explicit <code>(sleep)</code> call is effective enough at yielding that, on my machine, <code>(check-receivers 'foo)</code> returns without ever calling <code>collect-garbage</code>, and <code>(check-receivers 'bar)</code> returns after performing a single minor collection.</p>
+
+<p>This is extremely close to a bulletproof solution, but there are two remaining subtle issues:</p>
+
+<ol>
+ <li>
+  <p>There is technically a race condition between the <code>(sync recv)</code> in the receiver thread and the subsequent <code>channel-put</code>, since it’s possible for the canary to be received, discarded, and garbage collected before reaching the call to <code>channel-put</code>, which the sending thread would incorrectly interpret as indicating the topic has no receivers.</p>
+  <p> To fix that, the receiver thread can send the canary itself back through the channel, which fundamentally has to work, since the value cannot be collected until it has been received by the sending thread, at which point the <code>sync</code> has already chosen the channel.</p></li>
+ <li>
+  <p>It is possible for the receiver thread to receive the log message and call <code>channel-put</code>, but for the sending thread to somehow die in the meantime (which cannot be protected against in general in Racket, since <code>thread-kill</code> immediately and forcibly terminates a thread). If this were to happen, the sending thread would never obtain the value from the channel, blocking the receiving thread indefinitely.</p>
+  <p> A solution is to spawn a new thread for each <code>channel-put</code> instead of calling it directly from the receiving thread. Conveniently, this both ensures the receiving thread never gets stuck and avoids resource leaks, since the Racket runtime is smart enough to GC a thread blocked on a channel that has no other references and therefore can never be unblocked.</p></li></ol>
+
+<p>With those fixes in place, the program is, to the best of my knowledge, bulletproof. It will always correctly determine whether or not a logger has a listener, with no race conditions or reliance upon unspecified behavior of the Racket runtime. It does, however, make a couple of assumptions.</p>
+
+<p>First, it assumes that the value of <code>(current-logger)</code> is shared between the threads. It is true that <code>(current-logger)</code> can be changed, and sometimes is, but it’s usually done via <code>parameterize</code>, not mutation of the parameter directly. Therefore, this can largely be mitigated by storing the value of <code>(current-logger)</code> at module instantiation time.</p>
+
+<p>Second, it assumes that no other receivers are listening on the same topic. Technically, even using a unique, uninterned key for the topic is insufficient to ensure that no receivers are listening to it, since a receiver can choose to listen to all topics. However, in practice, it is highly unlikely that any receiver would willfully choose to listen to all topics at the <code>'debug</code> level, since the receiver would be inundated with enormous amounts of useless information. Even if such a receiver were to be created, it is highly likely that it would dequeue the messages as quickly as possible and discard the accompanying payload, since doing otherwise would cause all messages to be retained in memory, leading to a significant memory leak.</p>
+
+<p>Both these problems can be mitigated by using a logger other than the root logger, which is easy in this example. However, for the purpose of subverting the separate compilation guarantee, we would have no way to share the logger object itself across phases, defeating the whole purpose, so we are forced to use the root logger and hope the above two assumptions remain true (but they usually do).</p>
+
+<h2 id="preparing-the-exploit">Preparing the exploit</h2>
+
+<p>If you’ve made it here, congratulations! The most difficult part of this blog post is over. All that’s left is the fun part: performing the exploit.</p>
+
+<p>The bulk of our implementation is a slightly adapted version of <code>check-receivers</code>:</p>
+
+<div class="brush: racket">
+ <div class="source">
+  <pre><span></span><span class="c1">;; define-cross-phase.rkt</span>
+<span class="kn">#lang </span><span class="nn">racket</span>
+
+<span class="p">(</span><span class="k">define</span> <span class="n">root-logger</span> <span class="p">(</span><span class="nb">current-logger</span><span class="p">))</span>
+
+<span class="p">(</span><span class="k">define</span> <span class="p">(</span><span class="n">make-cross-phase</span> <span class="n">topic</span> <span class="k">thunk</span><span class="p">)</span>
+  <span class="p">(</span><span class="k">define</span> <span class="n">receiver</span> <span class="p">(</span><span class="nb">make-log-receiver</span> <span class="n">root-logger</span> <span class="o">&#39;</span><span class="ss">debug</span> <span class="n">topic</span><span class="p">))</span>
+  <span class="p">(</span><span class="k">define</span> <span class="n">chan</span> <span class="p">(</span><span class="nb">make-channel</span><span class="p">))</span>
+  <span class="p">(</span><span class="k">define</span> <span class="n">executor</span> <span class="p">(</span><span class="nb">make-will-executor</span><span class="p">))</span>
+
+  <span class="p">(</span><span class="k">let</span> <span class="p">()</span>
+    <span class="p">(</span><span class="k">define</span> <span class="n">canary</span> <span class="p">(</span><span class="nb">gensym</span> <span class="o">&#39;</span><span class="ss">canary</span><span class="p">))</span>
+    <span class="p">(</span><span class="nb">will-register</span> <span class="n">executor</span> <span class="n">canary</span> <span class="p">(</span><span class="k">λ</span> <span class="p">(</span><span class="n">v</span><span class="p">)</span> <span class="o">&#39;</span><span class="ss">collected</span><span class="p">))</span>
+    <span class="p">(</span><span class="nb">log-message</span> <span class="n">root-logger</span> <span class="o">&#39;</span><span class="ss">debug</span> <span class="n">topic</span> <span class="s2">""</span>
+                 <span class="p">(</span><span class="nb">vector-immutable</span> <span class="n">canary</span> <span class="n">chan</span><span class="p">)</span> <span class="no">#f</span><span class="p">)</span>
+    <span class="p">(</span><span class="k">let</span> <span class="n">loop</span> <span class="p">()</span>
+      <span class="p">(</span><span class="k">match</span> <span class="p">(</span><span class="nb">sync</span> <span class="n">receiver</span><span class="p">)</span>
+        <span class="p">[(</span><span class="nb">vector</span> <span class="k">_</span> <span class="k">_</span> <span class="p">(</span><span class="nb">vector</span> <span class="k">_</span> <span class="p">(</span><span class="k">==</span> <span class="n">chan</span> <span class="nb">eq?</span><span class="p">))</span> <span class="k">_</span><span class="p">)</span>
+         <span class="p">(</span><span class="nb">void</span><span class="p">)]</span>
+        <span class="p">[</span><span class="k">_</span>
+         <span class="p">(</span><span class="n">loop</span><span class="p">)])))</span>
+
+  <span class="p">(</span><span class="k">define</span> <span class="n">execute-evt</span> <span class="p">(</span><span class="nb">wrap-evt</span> <span class="n">executor</span> <span class="nb">will-execute</span><span class="p">))</span>
+  <span class="p">(</span><span class="k">define</span> <span class="n">result</span> <span class="p">(</span><span class="k">let</span> <span class="n">loop</span> <span class="p">([</span><span class="n">n</span> <span class="mi">0</span><span class="p">])</span>
+                   <span class="p">(</span><span class="nb">sleep</span><span class="p">)</span>
+                   <span class="p">(</span><span class="k">or</span> <span class="p">(</span><span class="nb">sync/timeout</span> <span class="mi">0</span> <span class="n">chan</span> <span class="n">execute-evt</span><span class="p">)</span>
+                       <span class="p">(</span><span class="k">begin</span>
+                         <span class="p">(</span><span class="nb">collect-garbage</span> <span class="p">(</span><span class="k">if</span> <span class="p">(</span><span class="nb">&lt;</span> <span class="n">n</span> <span class="mi">3</span><span class="p">)</span> <span class="o">&#39;</span><span class="ss">minor</span> <span class="o">&#39;</span><span class="ss">major</span><span class="p">))</span>
+                         <span class="p">(</span><span class="n">loop</span> <span class="p">(</span><span class="nb">add1</span> <span class="n">n</span><span class="p">))))))</span>
+
+  <span class="p">(</span><span class="k">match</span> <span class="n">result</span>
+    <span class="p">[(</span><span class="nb">vector</span> <span class="k">_</span> <span class="n">value</span><span class="p">)</span>
+     <span class="n">value</span><span class="p">]</span>
+    <span class="p">[</span><span class="o">&#39;</span><span class="ss">collected</span>
+     <span class="p">(</span><span class="k">define</span> <span class="n">value</span> <span class="p">(</span><span class="k">thunk</span><span class="p">))</span>
+     <span class="p">(</span><span class="nb">thread</span>
+      <span class="p">(</span><span class="k">λ</span> <span class="p">()</span>
+        <span class="p">(</span><span class="k">let</span> <span class="n">loop</span> <span class="p">()</span>
+          <span class="p">(</span><span class="k">match</span> <span class="p">(</span><span class="nb">sync</span> <span class="n">receiver</span><span class="p">)</span>
+            <span class="p">[(</span><span class="nb">vector</span> <span class="k">_</span> <span class="k">_</span> <span class="p">(</span><span class="nb">vector</span> <span class="n">canary</span> <span class="n">chan</span><span class="p">)</span> <span class="k">_</span><span class="p">)</span>
+             <span class="p">(</span><span class="nb">thread</span> <span class="p">(</span><span class="k">λ</span> <span class="p">()</span> <span class="p">(</span><span class="nb">channel-put</span> <span class="n">chan</span> <span class="p">(</span><span class="nb">vector-immutable</span> <span class="n">canary</span> <span class="n">value</span><span class="p">))))</span>
+             <span class="p">(</span><span class="n">loop</span><span class="p">)]))))</span>
+     <span class="n">value</span><span class="p">]))</span>
+</pre></div>
+
+</div>
+
+<p>There are a few minor differences, which I’ll list:</p>
+
+<ol>
+ <li>
+  <p>The most obvious difference is that <code>make-cross-phase</code> does the work of both checking if a receiver exists—which I’ll call the <em>manager thread</em>—and spawning it if it doesn’t. If it does end up spawning a manager thread, it evaluates the given thunk to produce a value, which becomes the cross-phase value that will be sent through the channel alongside the canary.</p></li>
+ <li>
+  <p>Once the manager thread is created, subsequent calls to <code>make-cross-phase</code> will receive the value through the channel and return it instead of re-invoking <code>thunk</code>. This is what ensures the right-hand side of each use of <code>define/cross-phase</code> is only ever evaluated once.</p></li>
+ <li>
+  <p>Since <code>make-cross-phase</code> needs to create a log receiver if no manager thread exists, it does so immediately, before sending the canary through the logger. This avoids a race condition between multiple threads that are simultaneously competing to become the manager thread, where both threads could send a canary through the logger before either was listening, both canaries would get GC’d, and both threads would spawn a new manager.<sup><a href="#2019-04-21-defeating-racket-s-separate-compilation-guarantee-footnote-4-definition" name="2019-04-21-defeating-racket-s-separate-compilation-guarantee-footnote-4-return">4</a></sup></p>
+  <p> Creating the receiver before sending the canary avoids this problem, but the thread now needs to receive its own canary and discard it before synchronizing on the channel and executor, since otherwise it will retain a reference to the canary. It’s possible that in between creating the receiver and sending the canary, another thread also sent a canary, so it needs to drop any log messages it finds that don’t include its own canary.</p>
+  <p> This ends up working out perfectly, since every thread drops all the messages received before the one containing its own canary, but retains all subsequent values. This means that only one thread can ever “win” and become the manager, since the first thread to send a canary is guaranteed to retain all subsequent canaries, yet also guaranteed its canary will be GC’d. Other threads racing to become the manager will remain blocked until the manager thread is created, since its canaries will be retained by the manager-to-be until it dequeues them.</p>
+  <p> (This is the most subtle part of the process to get right, but conveniently, it mostly just works out without very much code. If you didn’t understand any of the above three paragraphs, it isn’t a big deal.)</p></li></ol>
+
+<p>The final piece to this puzzle is to define the <code>define/cross-phase</code> macro that wraps <code>make-cross-phase</code>. The macro is actually slightly more involved than just generating a call to <code>make-cross-phase</code> directly, since we’d like to use an uninterned symbol for the topic instead of an interned one, just to ensure it is unique. Ordinarily, this might seem impossible, since an uninterned symbol is fundamentally a unique value that needs to be communicated across phases, and the whole problem we are solving is creating a communication channel that spans phases. However, Racket actually provides some built-in support for sharing uninterned symbols across phases (plus some other kinds of values, but they must always be immutable). To do this, we need to generate a <a href="https://docs.racket-lang.org/reference/eval-model.html#%28part._cross-phase._persistent-modules%29">cross-phase persistent submodule</a> that exports an uninterned symbol, then pass that symbol as the topic to <code>make-cross-phase</code>:</p>
+
+<div class="brush: racket">
+ <div class="source">
+  <pre><span></span><span class="p">(</span><span class="k">require</span> <span class="p">(</span><span class="k">for-syntax</span> <span class="n">racket/syntax</span><span class="p">)</span>
+         <span class="n">syntax/parse/define</span><span class="p">)</span>
+
+<span class="p">(</span><span class="k">provide</span> <span class="n">define/cross-phase</span><span class="p">)</span>
+
+<span class="p">(</span><span class="n">define-simple-macro</span> <span class="p">(</span><span class="n">define/cross-phase</span> <span class="n">x:id</span> <span class="n">e:expr</span><span class="p">)</span>
+  <span class="kd">#:with</span> <span class="n">topic-mod-name</span> <span class="p">(</span><span class="n">generate-temporary</span> <span class="o">&#39;</span><span class="ss">cross-phase-topic-key</span><span class="p">)</span>
+  <span class="p">(</span><span class="k">begin</span>
+    <span class="p">(</span><span class="k">module</span> <span class="n">topic-mod-name</span> <span class="o">&#39;</span><span class="ss">#%kernel</span>
+      <span class="p">(</span><span class="k">#%declare</span> <span class="kd">#:cross-phase-persistent</span><span class="p">)</span>
+      <span class="p">(</span><span class="k">#%provide</span> <span class="n">topic</span><span class="p">)</span>
+      <span class="p">(</span><span class="k">define-values</span> <span class="p">[</span><span class="n">topic</span><span class="p">]</span> <span class="p">(</span><span class="nb">gensym</span> <span class="s2">"cross-phase"</span><span class="p">)))</span>
+    <span class="p">(</span><span class="k">require</span> <span class="o">&#39;</span><span class="ss">topic-mod-name</span><span class="p">)</span>
+    <span class="p">(</span><span class="k">define</span> <span class="n">x</span> <span class="p">(</span><span class="n">make-cross-phase</span> <span class="n">topic</span> <span class="p">(</span><span class="k">λ</span> <span class="p">()</span> <span class="n">e</span><span class="p">)))))</span>
+</pre></div>
+
+</div>
+
+<p>And that’s really it. We’re done.</p>
+
+<h2 id="executing-the-exploit">Executing the exploit</h2>
+
+<p>With our implementation of <code>define/cross-phase</code> in hand, all that’s left to do is run our original <code>check-foods.rkt</code> program and see what happens:</p>
+
+<div class="brush: sh">
+ <div class="source">
+  <pre><span></span>$ racket check-food.rkt <span class="s1">&#39;fried chicken&#39;</span>
+set-add!: contract violation:
+expected: set?
+given: <span class="o">(</span>mutable-set <span class="s2">"fried chicken"</span> <span class="s2">"roasted chicken"</span> <span class="s2">"roasted potato"</span> <span class="s2">"fried potato"</span><span class="o">)</span>
+argument position: 1st
+other arguments...:
+  x: <span class="s2">"pineapple"</span>
+</pre></div>
+
+</div>
+
+<p>Well, I don’t know what you expected. Play stupid games, win stupid prizes.</p>
+
+<p>This error actually makes sense, but it belies one reason (of many) why this whole endeavor is probably a bad idea. Although we’ve managed to make our mutable set cross-phase persistent, our references to set operations like <code>set-add!</code> and <code>set-member?</code> are not, and every time <code>racket/set</code> is instantiated in a fresh phase, it creates an entirely new instance of the <code>set</code> structure type. This means that even though we have a bona fide mutable set, it isn’t actually the type of set that this phase’s <code>set-add!</code> understands!</p>
+
+<p>Of course, this isn’t a problem that some liberal application of <code>define/cross-phase</code> can’t solve:</p>
+
+<div class="brush: racket">
+ <div class="source">
+  <pre><span></span><span class="c1">;; foods.rkt</span>
+<span class="kn">#lang </span><span class="nn">racket</span>
+<span class="p">(</span><span class="k">require</span> <span class="s2">"define-cross-phase.rkt"</span><span class="p">)</span>
+<span class="p">(</span><span class="k">provide</span> <span class="n">delicious-food?</span> <span class="n">add-delicious-food!</span><span class="p">)</span>
+
+<span class="p">(</span><span class="n">define/cross-phase</span> <span class="n">cross:set-member?</span> <span class="nb">set-member?</span><span class="p">)</span>
+<span class="p">(</span><span class="n">define/cross-phase</span> <span class="n">cross:set-add!</span> <span class="nb">set-add!</span><span class="p">)</span>
+
+<span class="p">(</span><span class="n">define/cross-phase</span> <span class="n">delicious-foods</span> <span class="p">(</span><span class="nb">mutable-set</span><span class="p">))</span>
+
+<span class="p">(</span><span class="k">define</span> <span class="p">(</span><span class="n">delicious-food?</span> <span class="n">food</span><span class="p">)</span>
+  <span class="p">(</span><span class="n">cross:set-member?</span> <span class="n">delicious-foods</span> <span class="n">food</span><span class="p">))</span>
+
+<span class="p">(</span><span class="k">define</span> <span class="p">(</span><span class="n">add-delicious-food!</span> <span class="n">new-food</span><span class="p">)</span>
+  <span class="p">(</span><span class="n">cross:set-add!</span> <span class="n">delicious-foods</span> <span class="n">new-food</span><span class="p">))</span>
+</pre></div>
+
+</div>
+
+<div class="brush: sh">
+ <div class="source">
+  <pre><span></span>$ racket check-food.rkt <span class="s1">&#39;fried chicken&#39;</span>
+fried chicken is a delicious food.
+$ raco make check-food.rkt
+$ racket check-food.rkt <span class="s1">&#39;fried chicken&#39;</span>
+fried chicken is not delicious.
+</pre></div>
+
+</div>
+
+<p>And thus we find that another so-called “guarantee” isn’t.</p>
+
+<h1 id="reflection">Reflection</h1>
+
+<p>Now comes the time in the blog post when I have to step back and think about what I’ve done. Have mercy.</p>
+
+<p>Everything in this blog post is a terrible idea. No, you should not use loggers for anything that isn’t logging, you shouldn’t use wills and executors for critical control flow, and obviously you should absolutely not intentionally break one of the most helpful guarantees the Racket module system affords you.</p>
+
+<p>But I thought it was fun to do all that, anyway.</p>
+
+<p>The meaningful takeaways from this blog post aren’t that the separate compilation guarantee can be broken, nor that any of the particular techniques I used hold, but that</p>
+
+<ol>
+ <li>
+  <p>ensuring non-trivial guarantees is really hard,</p></li>
+ <li>
+  <p>despite that, the separate compilation guarantee is really, really hard to break,</p></li>
+ <li>
+  <p>the separate compilation guarantee is good, and you should appreciate the luxury it affords you while writing Racket macros,</p></li>
+ <li>
+  <p>avoiding races in a concurrent environment can be extremely subtle,</p></li>
+ <li>
+  <p>and Racket is totally <em>awesome</em> for giving me this much rope to hang myself with.</p></li></ol>
+
+<p>If you want to hang yourself with Racket, too, <a href="https://gist.github.com/lexi-lambda/f173a84fc9727977bcea657b3bb0cd4f">runnable code from this blog post is available here</a>.</p>
+
+<div class="footnotes">
+ <ol>
+  <li id="2019-04-21-defeating-racket-s-separate-compilation-guarantee-footnote-1-definition" class="footnote-definition">
+   <p>This isn’t <em>strictly</em> true, since Racket provides sandboxing mechanisms that can compile and execute untrusted code without file system or network access, but this is not the default compilation mode. Usually, it doesn’t matter nearly as much as it might sound: most of the time, if you’re compiling untrusted code, you’re also going to run it, and running untrusted code can do all those things, anyway.&nbsp;<a href="#2019-04-21-defeating-racket-s-separate-compilation-guarantee-footnote-1-return">↩</a></p></li>
+  <li id="2019-04-21-defeating-racket-s-separate-compilation-guarantee-footnote-2-definition" class="footnote-definition">
+   <p>This is actually a <em>terrible</em> use case for a macro, since an ordinary function would do just fine, but I’m simplifying a little to keep the example small.&nbsp;<a href="#2019-04-21-defeating-racket-s-separate-compilation-guarantee-footnote-2-return">↩</a></p></li>
+  <li id="2019-04-21-defeating-racket-s-separate-compilation-guarantee-footnote-3-definition" class="footnote-definition">
+   <p>Racket actually provides this functionality directly via the <code>log-level?</code> procedure. However, since <code>log-level?</code> provides no way to determine how <em>many</em> receivers are listening to a topic, using it to guard against creating a receiver is vulnerable to a race condition that the garbage collection-based approach can avoid, as is discussed later. Furthermore, the GC technique is more likely to be resilient to nosy log receivers listening on all topics at the <code>'debug</code> level, since they will almost certainly dequeue and discard the value quickly (as otherwise they would leak large quantities of memory).&nbsp;<a href="#2019-04-21-defeating-racket-s-separate-compilation-guarantee-footnote-3-return">↩</a></p></li>
+  <li id="2019-04-21-defeating-racket-s-separate-compilation-guarantee-footnote-4-definition" class="footnote-definition">
+   <p>This race is the one that makes using <code>log-level?</code> untenable, since the receiver needs to be created before the topic is checked for listeners to avoid the race, which can’t be done with <code>log-level?</code> (since it would always return <code>#t</code>).&nbsp;<a href="#2019-04-21-defeating-racket-s-separate-compilation-guarantee-footnote-4-return">↩</a></p></li></ol></div>
+  <footer>
+    <ul class="pager">
+      <li class="previous">
+        <a href="/blog/2019/09/07/demystifying-monadbasecontrol/">&larr; <em>Demystifying <code>MonadBaseControl</code></em></a>
+      </li>
+      <li class="next">
+        <a href="/blog/2018/10/06/macroexpand-anywhere-with-local-apply-transformer/"><em>Macroexpand anywhere with <code>local-apply-transformer</code>!</em> &rarr;</a>
+      </li>
+    </ul>
+  </footer>
+</article>
+        </div>
+      </section>
+      <footer>
+        <div class="content">
+          <h2 id="copyright-notice">© 2021, Alexis King</h2>
+          <h3>
+            Built with <a href="https://github.com/greghendershott/frog">Frog</a>, the
+            <strong>fr</strong>ozen bl<strong>og</strong> tool.
+          </h3>
+          <h3>
+            Feeds are available via <a href="/feeds/all.atom.xml">Atom</a>
+            or <a href="/feeds/all.rss.xml">RSS</a>.
+          </h3>
+        </div>
+      </footer>
+    </div>
+  </body>
+</html>

@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <title>Rascal is now Hackett, plus some answers to questions</title>
+    <meta name="description" content="Since I published my blog post introducing Rascal, I’ve gotten some _amazing_ feedback, more than I had ever anticipated! One of the things that was pointed out, though, is that Rascal is a language that already exists. Given that the name “Rascal” came f...">
+    <meta name="author"      content="Alexis King">
+    <meta name="keywords"    content="hackett, racket, haskell, programming languages">
+    <meta name="viewport"    content="width=device-width, initial-scale=1.0">
+    <link rel="icon"      href="/favicon.ico">
+    <link rel="canonical" href="http://lexi-lambda.github.io/blog/2017/01/05/rascal-is-now-hackett-plus-some-answers-to-questions/">
+    <link rel="next" href="/blog/2017/01/02/rascal-a-haskell-with-more-parentheses/">
+    <link rel="prev" href="/blog/2017/04/28/lifts-for-free-making-mtl-typeclasses-derivable/">
+    <!-- CSS -->
+    <link rel="stylesheet" type="text/css" href="https://fonts.googleapis.com/css?family=Merriweather+Sans:400,300,300italic,400italic,700,700italic,800,800italic|Merriweather:400,300,300italic,400italic,700,700italic,900,900italic|Fira+Code:300,400,500,600,700">
+    <link rel="stylesheet" type="text/css" href="/css/application.min.css">
+    <link rel="stylesheet" type="text/css" href="/css/pygments.min.css">
+    <!-- Feeds -->
+    <link rel="alternate" type="application/atom+xml"
+          href="/feeds/all.atom.xml" title="Atom Feed">
+    <link rel="alternate" type="application/rss+xml"
+          href="/feeds/all.rss.xml" title="RSS Feed">
+    <!-- JS -->
+    <!-- <script src="/js/application.min.js"></script> -->
+    <script type="text/javascript">
+      (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+      (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+      m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+      })(window,document,'script','//www.google-analytics.com/analytics.js','ga');
+
+      ga('create', 'UA-65250372-1', 'auto');
+      ga('send', 'pageview');
+    </script>
+  </head>
+  <body>
+    <div id="page-content">
+      <!-- Navigation Bar -->
+      <header>
+        <nav role="navigation" class="navigation-bar">
+          <ul class="navigation-items left">
+            <li id="blog-title-header"><a href="/"><h1>Alexis King</h1></a></li>
+          </ul>
+          <ul class="navigation-items center"></ul>
+          <ul class="navigation-items right">
+            <li><a href="/">Home</a></li>
+            <li><a href="/resume.html">About Me</a></li>
+          </ul>
+        </nav>
+      </header>
+      <section role="main">
+        <!-- Main column -->
+        <div class="content" class="col-md-12">
+
+
+
+          <article class="main">
+  <header>
+    <h1 class="title">Rascal is now Hackett, plus some answers to questions</h1>
+    <div class='date-and-tags'>
+      <time datetime="2017-01-05T05:25:32">
+        2017-01-05
+      </time>
+      <span style="margin: 0 3px">⦿</span>
+      <span class="tags"><a href="/tags/hackett.html">hackett</a>, <a href="/tags/racket.html">racket</a>, <a href="/tags/haskell.html">haskell</a>, <a href="/tags/programming-languages.html">programming languages</a></span>
+    </div>
+  </header>
+
+<p>Since I published <a href="/blog/2017/01/02/rascal-a-haskell-with-more-parentheses/">my blog post introducing Rascal</a>, I’ve gotten some <em>amazing</em> feedback, more than I had ever anticipated! One of the things that was pointed out, though, is that <a href="http://www.rascal-mpl.org">Rascal is a language that already exists</a>. Given that the name “Rascal” came from a mixture of “Racket” and “Haskell”, I always had an alternative named planned, and that’s “Hackett”. So, to avoid confusion as much as possible, <a href="https://github.com/lexi-lambda/hackett"><strong>Rascal is now known as Hackett</strong></a>.</p>
+
+<p>With that out of the way, I also want to answer some of the other questions I received, both to hopefully clear up some confusion and to have something I can point to if I get the same questions in the future.</p>
+<!-- more-->
+
+<h1 id="whats-in-a-name">What’s in a name?</h1>
+
+<p>First, a little trivia.</p>
+
+<p>I’ve already mentioned that the old “Rascal” name was based on the names “Racket” and “Haskell”, which is true. However, it had a slightly deeper meaning, too: the name fit a tradition of naming languages in the Scheme family after somewhat nefarious things, such as “Gambit”, “Guile”, “Larceny”, and “Racket” itself. The name goes back a little bit further to the Planner programming language; Scheme was originally called Schemer, but it was (no joke) shorted due to filename length restrictions.</p>
+
+<p>Still, my language isn’t really a Scheme, so the weak connection wasn’t terribly relevant. Curious readers might be wondering if there’s any deeper meaning to the name “Hackett” than a mixture of the two language names. In fact, there is. Hackett is affectionately named after the <a href="https://en.wikipedia.org/wiki/Steve_Hackett">Genesis progressive rock guitarist, Steve Hackett</a>, one of my favorite musicians. The fact that the name is a homophone with “hack-it” is another convenient coincidence.</p>
+
+<p>Perhaps not the most interesting thing in this blog post, but there it is.</p>
+
+<h1 id="why-racket-why-not-haskell">Why Racket? Why <em>not</em> Haskell?</h1>
+
+<p>One of the most common questions I received is why I used Racket as the implementation language instead of Haskell. This is a decent question, and I think it likely stems at least in part from an item of common confusion: <strong>Racket is actually two things, a programming language and a programming language platform</strong>. The fact that the two things have the same name is probably not ideal, but it’s what we’ve got.</p>
+
+<p>Racket-the-language is obviously the primary language used on the Racket platform, but there’s actually surprisingly little need for that to be the case; it’s simply the language that is worked on the most. Much of the Racket tooling, including the compiler, macroexpander, and IDE, are actually totally language agnostic. If someone came along and wrote a language that got more popular than <code>#lang racket</code>, then there wouldn’t really be anything hardcoded into any existing tooling that would give the impression that <code>#lang racket</code> was ever the more “dominant” language, aside from the name.</p>
+
+<p>For this reason, Racket is ideal for implementing new programming languages, moreso than pretty much any other platform out there. The talk I linked to in the previous blog post, <a href="https://www.youtube.com/watch?v=TfehOLha-18">Languages in an Afternoon</a>, describes this unique capability. It’s short, only ~15 minutes, but if you’re not into videos, I can try and explain why Racket is so brilliant for this sort of thing.</p>
+
+<p>By leveraging the Racket platform instead of implementing my language from scratch, I get the following things pretty much for free:</p>
+
+<ol>
+ <li>
+  <p>I get a JIT compiler for my code, and I don’t have to implement a compiler myself.</p></li>
+ <li>
+  <p>I also get a package manager that can cooperate with Hackett code to deliver Hackett modules.</p></li>
+ <li>
+  <p>I get a documentation system that is fully indexed and automatically locally installed when you install Hackett or any package written in Hackett, and that documentation is automatically integrated with the editor.</p></li>
+ <li>
+  <p>The DrRacket IDE can be used out of the box with Hackett code, it automatically does syntax highlighting and indenting, and it even provides interactive tools for inspecting bindings (something that I demo in my aforementioned talk).</p></li>
+ <li>
+  <p>If you don’t want to use DrRacket, you can use the <a href="https://github.com/greghendershott/racket-mode">racket-mode</a> major mode for Emacs, which uses the same sets of tools that DrRacket uses under the hood, so you get most of the same DrRacket goodies without sacrificing Emacs’s power of customization.</p></li></ol>
+
+<p>Reimplementing all of that in another language would take years of work, and I haven’t even mentioned Racket’s module system and macroexpander, which are the underpinnings of Hackett. GHC’s typechecker is likely roughly as complex as Racket’s macroexpander combined with its module system, but I am not currently implementing GHC’s typechecker, since I do not need all of OutsideIn(X)’s features, just Haskell 98 + some extensions.</p>
+
+<p>In contrast, I truly do need all of the Racket macroexpander to implement Hackett, since the <em>Type Systems as Macros</em> paper uses pretty much every trick the Racket macro system has to offer to implement typechecking as macroexpansion. For those reasons, implementing the Racket macroexpander <strong>alone</strong> in Haskell would likely be monumentally more work than implementing a Hindley-Milner typechecker in Racket, so it doesn’t really make sense to use Haskell for that job.</p>
+
+<h2 id="actually-running-hackett-code">Actually running Hackett code</h2>
+
+<p>Now, it’s worth noting that GHC is much more efficient as a compiler than Racket is, for a whole host of reasons. However, since typechecking and macroexpansion are inherently strictly compile-time phases, it turns out to be totally feasible to run the typechecker/macroexpander in Racket (since in Hackett, the two things are one and the same), then compile the resulting fully-expanded, well-typed code to GHC Core. That could then be handed off to GHC itself and compiled using the full power of the GHC optimizer and compiler toolchain.</p>
+
+<p>This would be no small amount of work, but it seems theoretically possible, so eventually it’s something I’d love to look into. There are various complexities to making it work, but I think it would let me get the best of both worlds without reinventing the wheel, so it’s something I want long-term.</p>
+
+<p>There’s also the question of how “native” Hackett code would be, were it compiled to GHC Core. Would Hackett code be able to use Haskell libraries, and vice versa? My guess is that the answer is “yes, with some glue”. It probably wouldn’t be possible to do it completely seamlessly, because Hackett provides type information at macroexpansion time that likely wouldn’t exist in the same form in GHC. It might be possible to do some incredibly clever bridging to be able to use Haskell libraries in Hackett almost directly, but the inverse might not be true if a library’s interface depends on macros.</p>
+
+<h1 id="how-do-template-haskell-quasiquoters-compete-with-macros">How do Template Haskell quasiquoters compete with macros?</h1>
+
+<p>Quasiquoters have a number of drawbacks, but the two main ones are complexity and lack of composition.</p>
+
+<p>S-expressions happen to be simple, and this means s-expression macros have two lovely properties: they’re easy to write, given good libraries (Racket has <a href="http://docs.racket-lang.org/syntax/stxparse.html"><code>syntax/parse</code></a>), and they’re easy for tools to understand. Quasiquoters force implementors to write their own parsers from raw strings of characters, which is quite a heavy burden, and it usually means those syntaxes are confusing and brittle. To give a good example, consider <a href="http://www.yesodweb.com/book/persistent#persistent_code_generation">persistent’s quasiquoters</a>: they look <em>sort of</em> like Haskell data declarations, but they’re not really, and I honestly have no idea what their actual syntax really is. It feels pretty finicky, though. In contrast, an s-expression based version of the same syntax would basically look just like the usual datatype declaration form, plus perhaps some extra goodies.</p>
+
+<p>Additionally, s-expression macros <em>compose</em>, and this should probably be valued more than anything else. If you’re writing code that doesn’t compose, it’s usually a bad sign. So much of functional programming is about writing small, reusable pieces of code that can be composed together, and macros are no different. Racket’s <code>match</code>, for example, is an expression, and it contains expressions, so <code>match</code> can be nested within itself, as well as other arbitrary macros that produce expressions. Similarly, many Racket macros can be extended, which is possible due to having such uniform syntax.</p>
+
+<p>Making macros “stand out” is an issue of some subjectivity, but in my experience such a fear of macros tends to stem from a familiarity with bad macro systems (which, to be fair, is almost all of them) and poor tooling. I’ve found that, in practice, most of the reasons people want to know “is this a macro??” is because macros are scary black boxes and people want to know which things to be suspicious of.</p>
+
+<p>Really, though, one of the reasons macros are complicated isn’t knowing which things are macros, but it’s knowing <em>which identifiers are uses and which identifiers are bindings</em>, and things like that. Just knowing that something is a macro use doesn’t actually help at all there—the syntax won’t tell you. <a href="http://i.imgur.com/HvYee19.png">Solve that problem with tools that address the problem head on, not by making a syntax that makes macros second-class citizens.</a> One of the reasons I used the phrase “syntactic abstractions” in my previous blog post is because you specifically want them to be <strong>abstractions</strong>. If you have to think of a macro in terms of the thing it expands to then it isn’t a very watertight abstraction. You don’t think about Haskell pattern-matching in terms of what the patterns compile to, you just use them. Macros should be (and can be) just as fluid.</p>
+
+<h1 id="how-can-i-help">How can I help?</h1>
+
+<p>Right now, what I really need is someone who understands type system implementation. You don’t need to be up to date on what’s cutting edge—I’m not implementing anything nearly as complicated as GADTs or dependent types yet—you just need to understand how to implement Haskell 98. If you have that knowledge and you’re interested in helping, even if it just means answering some of my questions, please contact me via email, IRC (the #racket channel on Freenode is a good place for now), or Slack (I’m active in the snek Slack community, <a href="http://snek.jneen.net">which you can sign up for here</a>).</p>
+
+<p>If you aren’t familiar with those things, but you’re still interested in helping out, there’s definitely plenty of work that needs doing. If you want to find somewhere you can pitch in, contacting me via any of the above means is totally fine, and I can point you in the right direction. Even if you just want to be a guinea pig, that’s useful.</p>
+  <footer>
+    <ul class="pager">
+      <li class="previous">
+        <a href="/blog/2017/04/28/lifts-for-free-making-mtl-typeclasses-derivable/">&larr; <em>Lifts for free: making mtl typeclasses derivable</em></a>
+      </li>
+      <li class="next">
+        <a href="/blog/2017/01/02/rascal-a-haskell-with-more-parentheses/"><em>Rascal: a Haskell with more parentheses</em> &rarr;</a>
+      </li>
+    </ul>
+  </footer>
+</article>
+        </div>
+      </section>
+      <footer>
+        <div class="content">
+          <h2 id="copyright-notice">© 2021, Alexis King</h2>
+          <h3>
+            Built with <a href="https://github.com/greghendershott/frog">Frog</a>, the
+            <strong>fr</strong>ozen bl<strong>og</strong> tool.
+          </h3>
+          <h3>
+            Feeds are available via <a href="/feeds/all.atom.xml">Atom</a>
+            or <a href="/feeds/all.rss.xml">RSS</a>.
+          </h3>
+        </div>
+      </footer>
+    </div>
+  </body>
+</html>

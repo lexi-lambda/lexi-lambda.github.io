@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <title>Realizing Hackett, a metaprogrammable Haskell</title>
+    <meta name="description" content="Almost five months ago, I wrote a blog post about my new programming language, Hackett, a fanciful sketch of a programming language from a far-off land with Haskell’s type system and Racket’s macros. At that point in time, I had a little prototype that ba...">
+    <meta name="author"      content="Alexis King">
+    <meta name="keywords"    content="hackett, racket, haskell, programming languages">
+    <meta name="viewport"    content="width=device-width, initial-scale=1.0">
+    <link rel="icon"      href="/favicon.ico">
+    <link rel="canonical" href="http://lexi-lambda.github.io/blog/2017/05/27/realizing-hackett-a-metaprogrammable-haskell/">
+    <link rel="next" href="/blog/2017/04/28/lifts-for-free-making-mtl-typeclasses-derivable/">
+    <link rel="prev" href="/blog/2017/06/29/unit-testing-effectful-haskell-with-monad-mock/">
+    <!-- CSS -->
+    <link rel="stylesheet" type="text/css" href="https://fonts.googleapis.com/css?family=Merriweather+Sans:400,300,300italic,400italic,700,700italic,800,800italic|Merriweather:400,300,300italic,400italic,700,700italic,900,900italic|Fira+Code:300,400,500,600,700">
+    <link rel="stylesheet" type="text/css" href="/css/application.min.css">
+    <link rel="stylesheet" type="text/css" href="/css/pygments.min.css">
+    <!-- Feeds -->
+    <link rel="alternate" type="application/atom+xml"
+          href="/feeds/all.atom.xml" title="Atom Feed">
+    <link rel="alternate" type="application/rss+xml"
+          href="/feeds/all.rss.xml" title="RSS Feed">
+    <!-- JS -->
+    <!-- <script src="/js/application.min.js"></script> -->
+    <script type="text/javascript">
+      (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+      (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+      m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+      })(window,document,'script','//www.google-analytics.com/analytics.js','ga');
+
+      ga('create', 'UA-65250372-1', 'auto');
+      ga('send', 'pageview');
+    </script>
+  </head>
+  <body>
+    <div id="page-content">
+      <!-- Navigation Bar -->
+      <header>
+        <nav role="navigation" class="navigation-bar">
+          <ul class="navigation-items left">
+            <li id="blog-title-header"><a href="/"><h1>Alexis King</h1></a></li>
+          </ul>
+          <ul class="navigation-items center"></ul>
+          <ul class="navigation-items right">
+            <li><a href="/">Home</a></li>
+            <li><a href="/resume.html">About Me</a></li>
+          </ul>
+        </nav>
+      </header>
+      <section role="main">
+        <!-- Main column -->
+        <div class="content" class="col-md-12">
+
+
+
+          <article class="main">
+  <header>
+    <h1 class="title">Realizing Hackett, a metaprogrammable Haskell</h1>
+    <div class='date-and-tags'>
+      <time datetime="2017-05-27T15:30:00">
+        2017-05-27
+      </time>
+      <span style="margin: 0 3px">⦿</span>
+      <span class="tags"><a href="/tags/hackett.html">hackett</a>, <a href="/tags/racket.html">racket</a>, <a href="/tags/haskell.html">haskell</a>, <a href="/tags/programming-languages.html">programming languages</a></span>
+    </div>
+  </header>
+
+<p><a href="/blog/2017/01/02/rascal-a-haskell-with-more-parentheses/">Almost five months ago, I wrote a blog post about my new programming language, Hackett</a>, a fanciful sketch of a programming language from a far-off land with Haskell’s type system and Racket’s macros. At that point in time, I had a little prototype that barely worked, that I barely understood, and was a little bit of a technical dead-end. People saw the post, they got excited, but development sort of stopped.</p>
+
+<p>Then, almost two months ago, I took a second stab at the problem in earnest. I read a lot, I asked a lot of people for help, and eventually I got something sort of working. Suddenly, <a href="https://github.com/lexi-lambda/hackett">Hackett is not only real, it’s working, and you can try it out yourself</a>!</p>
+<!-- more-->
+
+<h1 id="a-first-look-at-hackett">A first look at Hackett</h1>
+
+<p>Hackett is still very new, very experimental, and an enormous work in progress. However, that doesn’t mean it’s useless! Hackett is already a remarkably capable programming language. Let’s take a quick tour.</p>
+
+<p>As Racket law decrees it, every Hackett program must begin with <code>#lang</code>. We can start with the appropriate incantation:</p>
+
+<div class="brush: racket">
+ <div class="source">
+  <pre><span></span><span class="kn">#lang </span><span class="nn">hackett</span>
+</pre></div>
+
+</div>
+
+<p>If you’re using DrRacket or racket-mode with background expansion enabled, then congratulations: the typechecker is online. We can begin by writing a well-typed, albeit boring program:</p>
+
+<div class="brush: racket">
+ <div class="source">
+  <pre><span></span><span class="kn">#lang </span><span class="nn">hackett</span>
+
+<span class="p">(</span><span class="n">main</span> <span class="p">(</span><span class="nb">println</span> <span class="s2">"Hello, world!"</span><span class="p">))</span>
+</pre></div>
+
+</div>
+
+<p>In Hackett, a use of <code>main</code> at the top level indicates that running the module as a program should execute some <code>IO</code> action. In this case, <code>println</code> is a function of type <code>{String -&gt; (IO Unit)}</code>. Just like Haskell, Hackett is pure, and the runtime will figure out how to actually run an <code>IO</code> value. If you run the above program, you will notice that it really does print out <code>Hello, world!</code>, exactly as we would like.</p>
+
+<p>Of course, hello world programs are boring—so imperative! We are functional programmers, and we have our <em>own</em> class of equally boring programs we must write when learning a new language. How about some Fibonacci numbers?</p>
+
+<div class="brush: racket">
+ <div class="source">
+  <pre><span></span><span class="kn">#lang </span><span class="nn">hackett</span>
+
+<span class="p">(</span><span class="n">def</span> <span class="n">fibs</span> <span class="n">:</span> <span class="p">(</span><span class="n">List</span> <span class="n">Integer</span><span class="p">)</span>
+  <span class="p">{</span><span class="mi">0</span> <span class="n">::</span> <span class="mi">1</span> <span class="n">::</span> <span class="p">(</span><span class="n">zip-with</span> <span class="nb">+</span> <span class="n">fibs</span> <span class="p">(</span><span class="n">tail!</span> <span class="n">fibs</span><span class="p">))})</span>
+
+<span class="p">(</span><span class="n">main</span> <span class="p">(</span><span class="nb">println</span> <span class="p">(</span><span class="n">show</span> <span class="p">(</span><span class="nb">take</span> <span class="mi">10</span> <span class="n">fibs</span><span class="p">))))</span>
+</pre></div>
+
+</div>
+
+<p>Again, Hackett is just like Haskell in that it is <em>lazy</em>, so we can construct an infinite list of Fibonacci numbers, and the runtime will happily do nothing at all. When we call <code>take</code>, we realize the first ten numbers in the list, and when you run the program, you should see them printed out, clear as day!</p>
+
+<p>But these programs are boring. Printing strings and laziness may have been novel when you first learned about them, but if you’re reading this blog post, my bet is that you probably <em>aren’t</em> new to programming. How about something more interesting, <strong>like a web server</strong>?</p>
+
+<div class="brush: racket">
+ <div class="source">
+  <pre><span></span><span class="kn">#lang </span><span class="nn">hackett</span>
+
+<span class="p">(</span><span class="k">require</span> <span class="n">hackett/demo/web-server</span><span class="p">)</span>
+
+<span class="p">(</span><span class="n">data</span> <span class="n">Greeting</span> <span class="p">(</span><span class="n">greeting</span> <span class="n">String</span><span class="p">))</span>
+
+<span class="p">(</span><span class="n">instance</span> <span class="p">(</span><span class="n">-&gt;Body</span> <span class="n">Greeting</span><span class="p">)</span>
+  <span class="p">[</span><span class="n">-&gt;body</span> <span class="p">(</span><span class="k">λ</span> <span class="p">[(</span><span class="n">greeting</span> <span class="n">name</span><span class="p">)]</span> <span class="p">{</span><span class="s2">"Hello, "</span> <span class="n">++</span> <span class="n">name</span> <span class="n">++</span> <span class="s2">"!"</span><span class="p">})])</span>
+
+<span class="p">(</span><span class="n">defserver</span> <span class="n">run-server</span>
+  <span class="p">[</span><span class="n">GET</span> <span class="s2">"/"</span>               <span class="k">-&gt;</span> <span class="n">String</span>   <span class="k">=&gt;</span> <span class="s2">"Hello, world!"</span><span class="p">]</span>
+  <span class="p">[</span><span class="n">GET</span> <span class="s2">"greet"</span> <span class="k">-&gt;</span> <span class="n">String</span> <span class="k">-&gt;</span> <span class="n">Greeting</span> <span class="k">=&gt;</span> <span class="n">greeting</span><span class="p">])</span>
+
+<span class="p">(</span><span class="n">main</span> <span class="p">(</span><span class="k">do</span> <span class="p">(</span><span class="nb">println</span> <span class="s2">"Running server on port 8080."</span><span class="p">)</span>
+          <span class="p">(</span><span class="n">run-server</span> <span class="mi">8080</span><span class="p">)))</span>
+</pre></div>
+
+</div>
+
+<br />
+
+<div class="brush: sh">
+ <div class="source">
+  <pre><span></span>$ racket my-server.rkt
+Running server on port <span class="m">8080</span>.
+^Z
+$ <span class="nb">bg</span>
+$ curl <span class="s1">&#39;http://localhost:8080/greet/Alexis&#39;</span>
+Hello, Alexis!
+</pre></div>
+
+</div>
+
+<p><strong>Welcome to Hackett.</strong></p>
+
+<h1 id="what-is-hackett">What is Hackett?</h1>
+
+<p>Excited yet? I hope so. I certainly am.</p>
+
+<p>Before you get a little <em>too</em> excited, however, let me make a small disclaimer: the above program, while quite real, is a demo. It is certainly not a production web framework, and it actually just uses the Racket web server under the hood. It does not handle very many things right now. You cannot use it to build your super awesome webapp, and even if you could, I would not recommend attempting to do so.</p>
+
+<p>All that said, it is a <em>real</em> tech demo, and it shows off the potential for Hackett to do some pretty cool things. While the server implementation is just reusing Racket’s dynamically typed web server, the Hackett interface to it is 100% statically typed, and the above example shows off a host of features:</p>
+
+<ul>
+ <li>
+  <p><strong>Algebraic datatypes.</strong> Hackett has support for basic ADTs, including recursive datatypes (though not yet mutually recursive datatypes).</p></li>
+ <li>
+  <p><strong>Typeclasses.</strong> The demo web server uses a <code>-&gt;Body</code> typeclass to render server responses, and this module implements a <code>-&gt;Body</code> instance for the custom <code>Greeting</code> datatype.</p></li>
+ <li>
+  <p><strong>Macros.</strong> The <code>defserver</code> macro provides a concise, readable, <em>type safe</em> way to define a simple, RESTful web server. It defines two endpoints, a homepage and a greeting, and the latter parses a segment from the URL.</p></li>
+ <li>
+  <p><strong>Static typechecking.</strong> Obviously. If you try and change the homepage endpoint to produce a number instead of a string, you will get a type error! Alternatively, try removing the <code>-&gt;Body</code> instance and see what happens.</p></li>
+ <li>
+  <p><strong>Infix operators.</strong> In Hackett, <code>{</code> curly braces <code>}</code> enter <em>infix mode</em>, which permits arbitrary infix operators. Most Lisps have variadic functions, so infix operators are not strictly necessary, but Hackett only supports curried, single-argument functions, so infix operators are some especially sweet sugar.</p></li>
+ <li>
+  <p><strong>Pure, monadic I/O.</strong> The <code>println</code> and <code>run-server</code> functions both produce <code>(IO Unit)</code>, and <code>IO</code> is a monad. <code>do</code> notation is provided as a macro, and it works with any type that implements the <code>Monad</code> typeclass.</p></li></ul>
+
+<p>All these features are already implemented, and they really work! Of course, you might look at this list and be a little confused: sure, there are macros, but all these other things are firmly Haskellisms. If you thought that, you’d be quite right! <strong>Hackett is much closer to Haskell than Racket, even though it is syntactically a Lisp.</strong> Keep this guiding principal in mind as you read this blog post or explore Hackett. Where Haskell and Racket conflict, Hackett usually prefers Haskell.</p>
+
+<p>For a bit more information about what Hackett is and what it aims to be, <a href="/blog/2017/01/02/rascal-a-haskell-with-more-parentheses/">check out my blog post from a few months ago</a> from back when Hackett was called Rascal. I won’t reiterate everything I said there, but I do want to give a bit of a status update, explain what I’ve been working on, and hopefully give you some idea about where Hackett is going.</p>
+
+<h1 id="the-story-so-far-and-getting-to-hackett-01">The story so far, and getting to Hackett 0.1</h1>
+
+<p>In September of 2016, I attended <a href="http://con.racket-lang.org/2016/">(sixth RacketCon)</a>, where I saw a <a href="https://www.youtube.com/watch?v=j5Hauz6cewM">pretty incredible and extremely exciting talk</a> about implementing type systems as macros. Finally, I could realize my dream of having an elegant Lisp with a safe, reliable macro system and a powerful, expressive type system! Unfortunately, reality ensued, and I remembered I didn’t actually know any type theory.</p>
+
+<p>Therefore, in October, I started to learn about type systems, and I began to read through Pierce’s Types and Programming Languages, then tried to learn the things I would need to understand Haskell’s type system. I learned about Hindley-Milner and basic typeclasses, and I tried to apply these things to the Type Systems as Macros approach. Throughout October, I hacked and I hacked, and by the end of the month, I stood back and admired my handiwork!</p>
+
+<p>…it <em>sort of</em> worked?</p>
+
+<p>The trouble was that I found myself stuck. I wasn’t sure how to proceed. My language had bugs, programs sometimes did things I didn’t understand, the typechecker was clearly unsound, and there didn’t seem to be an obvious path forward. Other things in my life became distracting or difficult, and I didn’t have the energy to work on it anymore, so I stopped. I put Hackett (then Rascal) on the shelf for a couple months, only to finally return to it in late December.</p>
+
+<p>At the beginning of January, I decided it would be helpful to be public about what I was working on, so I wrote a blog post! Feedback was positive, overwhelmingly so, and while it was certainly encouraging, I suddenly felt nervous about expectations I had not realized I was setting. Could I really build this? Did I have the knowledge or the time? At that point, I didn’t really, so work stalled.</p>
+
+<p>Fortunately, in early April, some things started to become clear. I took another look at Hackett, and I knew I needed to reimplement it from the ground up. I also knew that I needed a different technique, but this time, I knew a bit more about where to find it. I got some help from <a href="http://www.ccs.neu.edu/home/samth/">Sam Tobin-Hochstadt</a> and put together <a href="https://gist.github.com/lexi-lambda/045ba782c8a0d915bd8abf97167d3bb5">an implementation of Pierce and Turner’s Local Type Inference</a>. Unfortunately, it didn’t really provide the amount of type inference I was looking for, but fortunately, implementing it helped me figure out how to understand the rather more complicated (though very impressive) <a href="http://www.cs.cmu.edu/~joshuad/papers/bidir/">Complete and Easy Bidirectional Typechecking for Higher-Rank Polymorphism</a>. After that, things just sort of started falling into place:</p>
+
+<ul>
+ <li>
+  <p>First, I <a href="https://github.com/lexi-lambda/higher-rank">implemented the Complete and Easy paper in Haskell</a>, including building a little parser and interpreter. That helped me actually understand the paper, and Haskell really is a rather wonderful language for doing such a thing.</p></li>
+ <li>
+  <p>Three days later, I <a href="https://github.com/lexi-lambda/racket-higher-rank">ported the Haskell implementation to Racket</a>, using (and somewhat abusing) the Type Systems as Macros techniques. It wasn’t the prettiest, but it seemed to work, and that was rather encouraging.</p></li>
+ <li>
+  <p>After that, however, I got a little stuck again, as I wasn’t sure how to generalize what I had. I was also incredibly busy with my day job, and I wasn’t able to really make progress for a few weeks. In early May, however, I decided to <a href="https://twitter.com/lexi_lambda/status/865026650487967744">take a vacation</a> for a week, and with some time to focus, I <a href="https://github.com/lexi-lambda/higher-rank/tree/algebraic">souped up the Haskell implementation with products and sums</a>. This was progress!</p></li>
+ <li>
+  <p>The <em>following day</em> I managed to make <a href="https://github.com/lexi-lambda/racket-higher-rank/tree/type-constructors">similar changes to the Racket implementation</a>, but rather than add anonymous products and sums, I added arbitrary type constructors.</p></li>
+ <li>
+  <p>A couple days later and with more than a bit of help from <a href="http://functorial.com">Phil Freeman</a>, I <a href="https://github.com/lexi-lambda/hackett/commit/1fd7fc905b93f68e39b9d01fedc4fb52aa44c4c4">rebranded the Racket implementation as Hackett, Mk II</a>, and I started working towards turning it into a real programming language.</p></li></ul>
+
+<p><em>Less than three weeks later</em>, and I have a programming language with everything from laziness and typeclasses to a tiny, proof-of-concept web server with <a href="https://twitter.com/lexi_lambda/status/867617563206758400">editor support</a>. The future of Hackett looks bright, and though there’s a <em>lot</em> of work left before I will be even remotely satisfied with it, I am excited and reassured that it already seems to be bearing some fruit.</p>
+
+<p>So what’s left? Is Hackett ready for an initial release? Can you start writing programs in it today? Well, unfortunately, the answer is mostly <strong>no</strong>, at least if you want those programs to be at all reliable in a day or two. If everything looks so cheery, though, what’s left? What is Hackett still missing?</p>
+
+<h2 id="what-hackett-still-isnt">What Hackett still <em>isn’t</em></h2>
+
+<p>I have a laundry list of features I want for Hackett. I want GADTs, indexed type families, newtype deriving, and a compiler that can target multiple backends. These things, however, are not essential. You can probably imagine writing useful software without any of them. Before I can try to tackle those, I first need to tackle some of the bits of the foundation that simply don’t exist yet (or have at least been badly neglected).</p>
+
+<p>Fortunately, these things are not insurmountable, nor are they necessarily especially hard. They’re things like default class methods, static detection and prevention of orphan instances, exhaustiveness checking for pattern-matching, and a real kind system. That’s right—right now, Hackett’s type system is effectively dynamically typed, and even though you can write a higher-kinded type, there is no such thing as a “kind error”.</p>
+
+<p>Other things are simply necessary quality of life improvements before Hackett can become truly usable. Type errors are currently rather atrocious, though they could certainly be worse. Additionally, typechecking currently just halts whenever it encounters a type error, and it makes no attempt to generate more than one type error at a time. Derivation of simple instances like <code>Show</code> and <code>Eq</code> is important, and it will also likely pave the way for a more general form of typeclass deriving (since it can most certainly be implemented via macros), so it’s uncharted territory that still needs to be explored.</p>
+
+<p>Bits of plumbing are still exposed in places, whether it’s unexpected behavior when interoperating with Racket or errors sometimes reported in terms of internal forms. Local bindings are, if you can believe it, still entirely unimplemented, so <code>let</code> and <code>letrec</code> need to be written up. The standard library needs fleshing out, and certain bits of code need to be cleaned up and slotted into the right place.</p>
+
+<p>Oh, and of course, <strong>the whole thing needs to be documented</strong>. That in and of itself is probably a pretty significant project, especially since there’s a good chance I’ll want to figure out how to best make use of Scribble for a language that’s a little bit different from Racket.</p>
+
+<p>All in all, there’s a lot of work to be done! I am eager to make it happen, but I also work a full-time job, and I don’t have it in me to continue at the pace I’ve been working at for the past couple of weeks. Still, if you’re interested in the project, stay tuned and keep an eye on it—if all goes as planned, I hope to make it truly useful before too long.</p>
+
+<h1 id="answering-some-questions">Answering some questions</h1>
+
+<p>It’s possible that this blog post does not seem like much; after all, it’s not terribly long. However, if you’re anything like me, there’s a good chance you are interested enough to have some questions! Obviously, I cannot anticipate all your questions and answer them here in advance, but I will try my best.</p>
+
+<h2 id="can-i-try-hackett">Can I try Hackett?</h2>
+
+<p>Yes! With the caveat that it’s alpha software in every sense of the word: undocumented, not especially user friendly, and completely unstable. However, if you <em>do</em> want to give it a try, it isn’t difficult: just install Racket, then run <code>raco pkg install hackett</code>. Open DrRacket and write <code>#lang hackett</code> at the top of the module, then start playing around.</p>
+
+<p>Also, note that the demo web server used in the example at the top of this blog post is <em>not</em> included when you install the <code>hackett</code> package. If you want to try that out, you’ll have to run <code>raco pkg install hackett-demo</code> to install the demo package as well.</p>
+
+<h2 id="are-there-any-examples-of-hackett-code">Are there any examples of Hackett code?</h2>
+
+<p>Unfortunately, not a lot right now, aside from the tiny examples in this blog post. However, if you are already familiar with Haskell, the syntax likely won’t be hard to pick up. Reading the Hackett source code is not especially recommended, given that it is filled with implementation details. However, if you are interested, reading the module where most of the prelude is defined isn’t so bad. You can <a href="https://github.com/lexi-lambda/hackett/blob/6ceeac05e3d2a4b2dacd39163744baf239cf65a4/hackett-lib/hackett/private/prim/base.rkt">find it on GitHub here</a>, or you can open the <code>hackett/private/prim/base</code> module on a local installation.</p>
+
+<h2 id="how-can-i-learn-more--ask-questions-about-hackett">How can I learn more / ask questions about Hackett?</h2>
+
+<p>Feel free to ping me and ask me questions! I may not always be able to get back to you immediately, but if you hang around, I will eventually send you a response. The best ways to contact me are via the #racket IRC channel on Freenode, the snek Slack community (<a href="http://snek.jneen.net">which you can sign up for here</a>), sending me <a href="https://twitter.com/lexi_lambda">a DM on Twitter</a>, opening <a href="https://github.com/lexi-lambda/hackett/issues">an issue on the GitHub repo</a>, or even just <a href="mailto:lexi.lambda@gmail.com">sending me an email</a> (though I’m usually a bit slower to respond to the latter).</p>
+
+<h2 id="how-can-i-help">How can I help?</h2>
+
+<p>Probably the easiest way to help out is to try Hackett for yourself and <a href="https://github.com/lexi-lambda/hackett/issues">report any bugs or infelicities you run into</a>. Of course, many issues right now are known, there’s just so much to do that I haven’t had the chance to clean everything up. For that reason, the most effective way to contribute is probably to pick an existing issue and try and implement it yourself, but I wouldn’t be surprised if most people found the existing implementation a little intimidating.</p>
+
+<p>If you <em>are</em> interested in helping out, I’d be happy to give you some pointers and answer some questions, since it would be extremely nice to have some help. Please feel free to contact me using any of the methods mentioned in the previous section, and I’ll try and help you find something you could work on.</p>
+
+<h2 id="how-does-hackett-compare-to-x--why-doesnt-hackett-support-y">How does Hackett compare to <em>X</em> / why doesn’t Hackett support <em>Y</em>?</h2>
+
+<p>These tend to be complex questions, and I don’t always have comprehensive answers for them, especially since the language is evolving so quickly. Still, if you want to ask me about this, feel free to just send the question to me directly. In my experience, it’s usually better to have a conversation about this sort of thing rather than just answering in one big comparison, since there’s usually a fair amount of nuance.</p>
+
+<h2 id="when-will-hackett-be-ready-for-me-to-use">When will Hackett be ready for me to use?</h2>
+
+<p>I don’t know.</p>
+
+<p>Obviously, there is a lot left to implement, that is certainly true, but there’s more to it than that. If all goes well, I don’t see any reason why Hackett can’t be early beta quality by the end of this year, even if it doesn’t support all of the goodies necessary to achieve perfection (which, of course, it never really can).</p>
+
+<p>However, there are other things to consider, too. The Racket package system is currently flawed in ways that make rapidly iterating on Hackett hard, since it is extremely difficult (if not impossible) to make backwards-incompatible changes without potentially breaking someone’s program (even if they don’t update anything about their dependencies)! This is a solvable problem, but it would take some work modifying various elements of the package system and build tools, so that might need to get done before I can recommend Hackett in good faith.</p>
+
+<h1 id="appendix">Appendix</h1>
+
+<p>It would be unfair not to mention all the people that have made Hackett possible. I cannot list them all here, but I want to give special thanks to <a href="http://www.ccs.neu.edu/home/stchang/">Stephen Chang</a>, <a href="http://www.cs.ubc.ca/~joshdunf/">Joshua Dunfield</a>, <a href="http://eecs.northwestern.edu/~robby/">Robby Findler</a>, <a href="http://www.cs.utah.edu/~mflatt/">Matthew Flatt</a>, <a href="http://functorial.com">Phil Freeman</a>, <a href="http://www.ccs.neu.edu/home/types/">Ben Greenman</a>, <a href="https://github.com/AlexKnauth">Alex Knauth</a>, <a href="http://www.cl.cam.ac.uk/~nk480/">Neelakantan Krishnaswami</a>, and <a href="http://www.ccs.neu.edu/home/samth/">Sam Tobin-Hochstadt</a>. I’d also like to thank everyone involved in the Racket and Haskell projects as a whole, as well as everyone who has expressed interest and encouragement about what I’ve been working on.</p>
+
+<p>As a final point, just for fun, I thought I’d keep track of all the albums I’ve been listening to while working on Hackett, just in the past few weeks. It is <a href="/blog/2017/01/05/rascal-is-now-hackett-plus-some-answers-to-questions/#whats-in-a-name">on theme with the name</a>, after all. This list is not completely exhaustive, as I’m sure some slipped through the cracks, but you can thank the following artists for helping me power through a few of the hills in Hackett’s implementation:</p>
+
+<ul>
+ <li>The Beach Boys — Pet Sounds</li>
+ <li>Boards of Canada — Music Has The Right To Children, Geogaddi</li>
+ <li>Bruce Springsteen — Born to Run</li>
+ <li>King Crimson — In the Court of the Crimson King, Larks’ Tongues in Aspic, Starless and Bible Black, Red, Discipline</li>
+ <li>Genesis — Nursery Cryme, Foxtrot, Selling England by the Pound, The Lamb Lies Down on Broadway, A Trick of the Tail</li>
+ <li>Mahavishnu Orchestra — Birds of Fire</li>
+ <li>Metric — Fantasies, Synthetica, Pagans in Vegas</li>
+ <li>Muse — Origin of Symmetry, Absolution, The Resistance</li>
+ <li>Peter Gabriel — Peter Gabriel I, II, III, IV / Security, Us, Up</li>
+ <li>Pink Floyd — Wish You Were Here</li>
+ <li>Supertramp — Breakfast In America</li>
+ <li>The Protomen — The Protomen, Act II: The Father of Death</li>
+ <li>Talking Heads — Talking Heads: 77, More Songs About Buildings and Food, Fear of Music, Remain in Light</li>
+ <li>Yes — Fragile, Relayer, Going For The One</li></ul>
+
+<p>And of course, <em>Voyage of the Acolyte</em>, by <strong>Steve Hackett</strong>.</p>
+  <footer>
+    <ul class="pager">
+      <li class="previous">
+        <a href="/blog/2017/06/29/unit-testing-effectful-haskell-with-monad-mock/">&larr; <em>Unit testing effectful Haskell with monad-mock</em></a>
+      </li>
+      <li class="next">
+        <a href="/blog/2017/04/28/lifts-for-free-making-mtl-typeclasses-derivable/"><em>Lifts for free: making mtl typeclasses derivable</em> &rarr;</a>
+      </li>
+    </ul>
+  </footer>
+</article>
+        </div>
+      </section>
+      <footer>
+        <div class="content">
+          <h2 id="copyright-notice">© 2021, Alexis King</h2>
+          <h3>
+            Built with <a href="https://github.com/greghendershott/frog">Frog</a>, the
+            <strong>fr</strong>ozen bl<strong>og</strong> tool.
+          </h3>
+          <h3>
+            Feeds are available via <a href="/feeds/all.atom.xml">Atom</a>
+            or <a href="/feeds/all.rss.xml">RSS</a>.
+          </h3>
+        </div>
+      </footer>
+    </div>
+  </body>
+</html>

@@ -1,0 +1,184 @@
+td.code .source, .source pre {
+  /* Comment */
+  /* Keyword */
+  /* Operator */
+  /* Comment.Preproc */
+  /* Comment.Special */
+  /* Generic.Deleted */
+  /* Generic.Emph */
+  /* Generic.Error */
+  /* Generic.Heading */
+  /* Generic.Inserted */
+  /* Generic.Output */
+  /* Generic.Prompt */
+  /* Generic.Strong */
+  /* Generic.Subheading */
+  /* Generic.Traceback */
+  /* Keyword.Declaration */
+  /* Keyword.Namespace */
+  /* Keyword.Pseudo */
+  /* Keyword.Reserved */
+  /* Keyword.Type, Keyword.Constant, Name.Class */
+  /* Literal.Number */
+  /* Literal.String */
+  /* Name.Attribute */
+  /* Name.Builtin */
+  /* Name.Class */
+  /* Name.Constant */
+  /* Name.Decorator */
+  /* Name.Entity */
+  /* Name.Exception */
+  /* Name.Function */
+  /* Name.Label */
+  /* Name.Namespace */
+  /* Name.Tag */
+  /* Name.Variable */
+  /* Operator.Word */
+  /* Text.Whitespace */
+  /* Literal.Number.Float */
+  /* Literal.Number.Hex */
+  /* Literal.Number.Integer */
+  /* Literal.Number.Oct */
+  /* Literal.String.Backtick */
+  /* Literal.String.Char */
+  /* Literal.String.Doc */
+  /* Literal.String.Double */
+  /* Literal.String.Escape */
+  /* Literal.String.Heredoc */
+  /* Literal.String.Interpol */
+  /* Literal.String.Other */
+  /* Literal.String.Regex */
+  /* Literal.String.Single */
+  /* Literal.String.Symbol */
+  /* Name.Builtin.Pseudo */
+  /* Name.Variable.Class */
+  /* Name.Variable.Global */
+  /* Name.Variable.Instance */
+  /* Literal.Number.Integer.Long */ }
+  td.code .source .c, td.code .source .cm, td.code .source .c1, .source pre .c, .source pre .cm, .source pre .c1 {
+    color: #9e5555; }
+  td.code .source .k, .source pre .k {
+    color: #6d1717;
+    font-weight: 400; }
+  td.code .source .o, .source pre .o {
+    color: #666666; }
+  td.code .source .cp, .source pre .cp {
+    color: #BC7A00; }
+  td.code .source .cs, .source pre .cs {
+    color: #408080;
+    font-style: italic; }
+  td.code .source .gd, .source pre .gd {
+    color: #A00000; }
+  td.code .source .ge, .source pre .ge {
+    font-style: italic; }
+  td.code .source .gr, .source pre .gr {
+    color: #FF0000; }
+  td.code .source .gh, .source pre .gh {
+    color: #000080;
+    font-weight: 500; }
+  td.code .source .gi, .source pre .gi {
+    color: #00A000; }
+  td.code .source .go, .source pre .go {
+    color: #808080; }
+  td.code .source .gp, .source pre .gp {
+    color: #000080;
+    font-weight: 500; }
+  td.code .source .gs, .source pre .gs {
+    font-weight: 500; }
+  td.code .source .gu, .source pre .gu {
+    color: #800080;
+    font-weight: 500; }
+  td.code .source .gt, .source pre .gt {
+    color: #0040D0; }
+  td.code .source .kd, .source pre .kd {
+    color: #ab2626; }
+  td.code .source .kn, .source pre .kn {
+    color: #6d1717;
+    font-weight: 500; }
+  td.code .source .kp, .source pre .kp {
+    color: #008000; }
+  td.code .source .kr, .source pre .kr {
+    color: #A10327;
+    font-weight: 500; }
+  td.code .source .kt, td.code .source .kc, td.code .source .nc, .source pre .kt, .source pre .kc, .source pre .nc {
+    color: #B00040; }
+  td.code .source .m, .source pre .m {
+    color: #666666; }
+  td.code .source .s, .source pre .s {
+    color: #BA2121; }
+  td.code .source .na, .source pre .na {
+    color: #960037; }
+  td.code .source .nb, .source pre .nb {
+    font-weight: 400; }
+  td.code .source .nc, .source pre .nc {
+    font-weight: 400; }
+  td.code .source .no, .source pre .no {
+    color: #880000; }
+  td.code .source .nd, .source pre .nd {
+    color: #AA22FF; }
+  td.code .source .ni, .source pre .ni {
+    color: #999999;
+    font-weight: 500; }
+  td.code .source .ne, .source pre .ne {
+    color: #D2413A;
+    font-weight: 500; }
+  td.code .source .nf, .source pre .nf {
+    color: #960037; }
+  td.code .source .nl, .source pre .nl {
+    color: #A0A000; }
+  td.code .source .nn, .source pre .nn {
+    color: #6d1717;
+    font-weight: 500; }
+  td.code .source .nt, .source pre .nt {
+    color: #008000;
+    font-weight: 500; }
+  td.code .source .nv, .source pre .nv {
+    color: #1c7805; }
+  td.code .source .ow, .source pre .ow {
+    color: #666666;
+    font-weight: 500; }
+  td.code .source .w, .source pre .w {
+    color: #bbbbbb; }
+  td.code .source .mf, .source pre .mf {
+    color: #666666; }
+  td.code .source .mh, .source pre .mh {
+    color: #666666; }
+  td.code .source .mi, .source pre .mi {
+    color: #666666; }
+  td.code .source .mo, .source pre .mo {
+    color: #666666; }
+  td.code .source .sb, .source pre .sb {
+    color: #BA2121; }
+  td.code .source .sc, .source pre .sc {
+    color: #BA2121; }
+  td.code .source .sd, .source pre .sd {
+    color: #BA2121;
+    font-style: italic; }
+  td.code .source .s2, .source pre .s2 {
+    color: #BA2121; }
+  td.code .source .se, .source pre .se {
+    color: #BA2121;
+    font-weight: 400; }
+  td.code .source .sh, .source pre .sh {
+    color: #BA2121; }
+  td.code .source .si, .source pre .si {
+    color: #BA2121;
+    font-weight: 400; }
+  td.code .source .sx, .source pre .sx {
+    color: #008000; }
+  td.code .source .sr, .source pre .sr {
+    color: #BB6688; }
+  td.code .source .s1, .source pre .s1 {
+    color: #BA2121; }
+  td.code .source .ss, .source pre .ss {
+    color: #19177C; }
+  td.code .source .bp, .source pre .bp {
+    color: #008000; }
+  td.code .source .vc, .source pre .vc {
+    color: #19177C; }
+  td.code .source .vg, .source pre .vg {
+    color: #19177C; }
+  td.code .source .vi, .source pre .vi {
+    color: #19177C; }
+  td.code .source .il, .source pre .il {
+    color: #666666; }

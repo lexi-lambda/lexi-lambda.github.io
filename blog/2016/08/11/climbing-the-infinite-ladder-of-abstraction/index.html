@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <title>Climbing the infinite ladder of abstraction</title>
+    <meta name="description" content="I started programming in elementary school.  When I was young, I was fascinated by the idea of automation. I loathed doing the same repetitive task over and over again, and I always yearned for a way to solve the general problem. When I learned about prog...">
+    <meta name="author"      content="Alexis King">
+    <meta name="keywords"    content="programming languages, racket, haskell">
+    <meta name="viewport"    content="width=device-width, initial-scale=1.0">
+    <link rel="icon"      href="/favicon.ico">
+    <link rel="canonical" href="http://lexi-lambda.github.io/blog/2016/08/11/climbing-the-infinite-ladder-of-abstraction/">
+    <link rel="next" href="/blog/2016/06/12/four-months-with-haskell/">
+    <link rel="prev" href="/blog/2016/08/24/understanding-the-npm-dependency-model/">
+    <!-- CSS -->
+    <link rel="stylesheet" type="text/css" href="https://fonts.googleapis.com/css?family=Merriweather+Sans:400,300,300italic,400italic,700,700italic,800,800italic|Merriweather:400,300,300italic,400italic,700,700italic,900,900italic|Fira+Code:300,400,500,600,700">
+    <link rel="stylesheet" type="text/css" href="/css/application.min.css">
+    <link rel="stylesheet" type="text/css" href="/css/pygments.min.css">
+    <!-- Feeds -->
+    <link rel="alternate" type="application/atom+xml"
+          href="/feeds/all.atom.xml" title="Atom Feed">
+    <link rel="alternate" type="application/rss+xml"
+          href="/feeds/all.rss.xml" title="RSS Feed">
+    <!-- JS -->
+    <!-- <script src="/js/application.min.js"></script> -->
+    <script type="text/javascript">
+      (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+      (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+      m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+      })(window,document,'script','//www.google-analytics.com/analytics.js','ga');
+
+      ga('create', 'UA-65250372-1', 'auto');
+      ga('send', 'pageview');
+    </script>
+  </head>
+  <body>
+    <div id="page-content">
+      <!-- Navigation Bar -->
+      <header>
+        <nav role="navigation" class="navigation-bar">
+          <ul class="navigation-items left">
+            <li id="blog-title-header"><a href="/"><h1>Alexis King</h1></a></li>
+          </ul>
+          <ul class="navigation-items center"></ul>
+          <ul class="navigation-items right">
+            <li><a href="/">Home</a></li>
+            <li><a href="/resume.html">About Me</a></li>
+          </ul>
+        </nav>
+      </header>
+      <section role="main">
+        <!-- Main column -->
+        <div class="content" class="col-md-12">
+
+
+
+          <article class="main">
+  <header>
+    <h1 class="title">Climbing the infinite ladder of abstraction</h1>
+    <div class='date-and-tags'>
+      <time datetime="2016-08-11T18:03:48">
+        2016-08-11
+      </time>
+      <span style="margin: 0 3px">⦿</span>
+      <span class="tags"><a href="/tags/programming-languages.html">programming languages</a>, <a href="/tags/racket.html">racket</a>, <a href="/tags/haskell.html">haskell</a></span>
+    </div>
+  </header>
+
+<p>I started programming in elementary school.</p>
+
+<p>When I was young, I was fascinated by the idea of automation. I loathed doing the same repetitive task over and over again, and I always yearned for a way to <a href="https://xkcd.com/974/">solve the general problem</a>. When I learned about programming, I was immediately hooked: it was <em>so easy</em> to turn repetitive tasks into automated pipelines that would free me from ever having to do the same dull, frustrating exercise ever again.</p>
+
+<p>Of course, one of the first things I found out once I’d started was that nothing is ever quite so simple. Before long, my solutions to eliminate repetition grew repetitive, and it became clear I spent a lot of time typing out the same things, over and over again, creating the very problem I had initially set out to destroy. It was through this that I grew interested in functions, classes, and other repetition-reducing aids, and soon enough, I discovered the wonderful world of <strong>abstraction</strong>.</p>
+<!-- more-->
+
+<h1 id="the-brick-wall-of-inexpressiveness">The brick wall of inexpressiveness</h1>
+
+<p>When I started programming, I was mostly playing with ActionScript and Java, just tinkering with things and seeing what I could come up with. I had quite a lot of fun, and the joy of solving problems hooked me almost immediately, but I also ran into frustrations pretty quickly. Specifically, I started writing a lot of code that looked like this:</p>
+
+<div class="brush: java">
+ <div class="source">
+  <pre><span></span><span class="kd">public</span> <span class="n">String</span> <span class="nf">getName</span><span class="o">()</span> <span class="o">{</span>
+  <span class="k">return</span> <span class="k">this</span><span class="o">.</span><span class="na">name</span><span class="o">;</span>
+<span class="o">}</span>
+
+<span class="kd">public</span> <span class="kt">void</span> <span class="nf">setName</span><span class="o">(</span><span class="n">String</span> <span class="n">name</span><span class="o">)</span> <span class="o">{</span>
+  <span class="k">this</span><span class="o">.</span><span class="na">name</span> <span class="o">=</span> <span class="n">name</span><span class="o">;</span>
+<span class="o">}</span>
+</pre></div>
+
+</div>
+
+<p>This is a bit of a cheap example, given that Java getters and setters are something of a programming language punching bag at this point, but I really did write them, and I really did get frustrated by them! I learned object-oriented design patterns, and I pored over books, forum threads, blog posts, and Stack Overflow questions about how to structure code to prevent spaghetti, but no matter how hard I tried, I kept having to type things that looked suspiciously similar to each other.</p>
+
+<p>It was really quite frustrating, because no matter how I approached the problem, I ended up with a boilerplate-heavy mess. The <em>whole reason</em> I got started programming was to avoid this sort of thing, so what could I do? Well, it became increasingly obvious to me that Java had to go, and I needed to try something else. I started learning two very different programming languages, JavaScript and Objective-C, and I liked them both, for different reasons.</p>
+
+<p>When I learned JavaScript, I discovered the closure, the first-class function, and I was entranced by it. Through jQuery, I learned of its power to design APIs that could be fun to use, dropping the boring, “heavy” feeling that Java carried around everywhere. With Objective-C, on the other hand, I learned about the power of a more dynamic object system, something with interesting syntax and the ability to handle “message passing” at a far higher level than Java ever could.</p>
+
+<p>Both of these languages were flawed, as all languages are, but they opened my mind to the idea that <em>programming languages</em> could drastically influence the way I thought about problem solving, and they set me on a quest to find the programming language that would eliminate boilerplate once and for all.</p>
+
+<h1 id="discovering-lisp">Discovering Lisp</h1>
+
+<p>Over the next few years, I grew to appreciate JavaScript’s small, simple core, despite rather disliking its object system and poor faculties for user-friendly data modeling. I pored over its history, and I found out that its design was heavily influenced by an obscure little language called Scheme, as well as an even more obscure language called Self, and a part of me started to wonder what it would be like to incorporate those languages’ ideas without some of the compromises JavaScript had made.</p>
+
+<p>This idea lingered in the back of my head for a couple years, and while I tried to play with Scheme a couple times, it was simply too inaccessible for me. I was used to languages with powerful, easy to use IDEs, and when I found myself with nothing more than a command-line executable and rather scarce documentation, I was at a loss for how to begin. Even if I could do math in the REPL, where could I go from there? I’d started programming by building games, then websites. What could I possibly do with Scheme?</p>
+
+<p>The language (or rather, its lack of an ecosystem) proved too intimidating for me at that young age, but the idea of Lisp’s homoiconicity stuck with me. Eventually, I started to design my very own programming language, a <a href="https://github.com/lexi-lambda/libsol">highly dynamic Lisp with a prototypal object system called Sol</a>. I worked on it for about a year, and when I was done with it, it had a not-too-shabby complement of features: it had lambdas, macros, a fully-featured object model, and a CommonJS-esque module system, complete with the ability to dynamically import arbitrary C extensions. It was by far the largest project I’d ever worked on, and when I was done, I was pretty pleased.</p>
+
+<p>Unfortunately, it was also abysmally slow.</p>
+
+<p>I turned to a local college to find some people who could give me feedback and maybe point me in the right direction, and someone told me about another obscure programming language called <a href="http://racket-lang.org">Racket</a>. At about the same time, someone pointed me to a totally different language called <a href="https://www.haskell.org">Haskell</a>. This was uncharted territory for me, and for a while, I didn’t really explore either of those languages further. Eventually, though, I dove into them in earnest, and what I found has dramatically altered my perspective on programming since then.</p>
+
+<h1 id="a-journey-into-complexity">A journey into complexity</h1>
+
+<p>Fast forward about three years, and today, I am employed writing Haskell, and I spend most of my free time writing Racket. These languages left a mark on me, and while I’ve learned <em>so much more</em> since then, I find myself continually bucking the mainstream and coming back to functional programming, hygienic macros, and possibly the most powerful type system in existence in a production-ready programming language.</p>
+
+<p>I’ve also started realizing something else, though: <strong>the languages I’ve settled into are <em>really complicated</em>.</strong></p>
+
+<p>When I started programming, I thought about things like numbers, text, and shapes on a screen. Before long, I learned about functions, then classes, then message-passing and lambdas. I dove into macros and typeclasses, and now I speak in functors and monads, sets of scopes and internal definition contexts, and parser combinators and domain specific languages.</p>
+
+<p>Why?</p>
+
+<p>Sometimes I talk to fellow programmers, and they are horrified by the types of terms I fling around. “Why would you ever need something called a ‘monad’?” they ask, completely perplexed. “Macros are confusing,” they argue. “Being explicit is better.”</p>
+
+<p>Obviously, I disagree, but why? What have I given up? If my fellow programmers cannot understand what I’m writing, is it actually worth it?</p>
+
+<p>I’ve searched for years to find a programming language that will eliminate boilerplate, that will allow me to express my ideas succinctly and cleanly, that will let me turn hard problems into trivial ones, and I’ve discovered two completely different approaches to tackling those issues. Racket has macros, and Haskell has its fancy type system. Both of these things are lightyears ahead of where I was nearly a decade ago, writing dozens of lines of repetitive Java that ultimately did very little, but I’m still dealing with the same problems.</p>
+
+<p>Racket knows too little about my program—it can’t figure out what I mean based on the type of thing I’m operating on because it is (mostly) dynamically typed. I <em>still</em> have to clarify myself and write things that feel redundant because the computer isn’t smart enough to figure out the “obvious”. Similarly, Haskell is too limiting—the compiler cannot deduce constraints I can solve in my head in seconds, and its syntax is not extensible like Racket’s is. Every day, I peer into piles upon piles of monadic computation, and really, what have I gained?</p>
+
+<h2 id="improvement-but-never-mastery">Improvement, but never mastery</h2>
+
+<p>Like almost anything in life, programming is not really a perfectable art. There’s always some unlearned skill or undiscovered technique, and part of this potential for perpetual self-improvement is one of the things that I find so attractive about the field. That said, I this it is reasonable to say that certain languages have higher ceilings than others.</p>
+
+<p>For example I am pretty confident that I <em>get</em> JavaScript. The language has lots of nooks and crannies that I don’t completely understand, but I feel pretty confident that I understand its semantics well enough to be able to grasp any piece of JavaScript code without too much incredulity. Now, that’s not to say that JavaScript is a simplistic language—far from it—but most of the ways I improve my JavaScripting abilities are learning new techniques <em>within</em> the language, not entirely new linguistic constructs.</p>
+
+<p>On the other hand, languages like Haskell and Racket tend to blur the line. I feel like I have a good grasp of Haskell’s core, but do I have a good intuition for laziness? Do I completely grok type families? What about <code>TypeInType</code>? Ultimately, I have to come to the conclusion that I do not fully understand Haskell, much less a lot of the advanced category theory that composes some of its most powerful libraries. Racket manages to blur the line between language and library even further, and while I consider myself a decent Racketeer, I absolutely do <em>not</em> have a good grasp on all the intricacies of Racket’s macro system.</p>
+
+<p>This is especially obvious to me at work, given that I write Haskell in a team setting. Just like back when I was writing Java, I end up with solutions that don’t satisfy me, and I reach for increasingly powerful constructs to help alleviate my qualms. Sometimes, I find myself cracking out <code>DataKinds</code>, and it might even help my problem, but there’s a cost: my coworkers are sometimes confused.</p>
+
+<p>Every time I climb to the next rung on the ladder of abstraction, those only a couple rungs below me (even if we’re all hundreds of rungs up!) find themselves perplexed. In the worst case, people may even blame their confusion on their own inadequacy or lack of skill. This is <em>terrible</em>, especially when I know that, by the time they’ve caught up, I’ll be off playing with some new toy: comonads or type families or classy lenses. The cycle continues, and nobody is ever truly satisfied—I always want to find a new abstraction that will make things simpler, and those just a couple steps behind me struggle to keep up.</p>
+
+<p>Of course, I experience it from the opposite perspective just as often: I delve into Edward Kmett’s fancier libraries or Phil Freeman’s blog posts about category theory, and I recognize that I am rather lost. Sometimes, I find myself understanding things, but just as often, I cannot wrap my head around the concepts being discussed. I may figure them out eventually, sure, but by then everyone else has moved on to even <em>more</em> advanced things, and still, none of them truly solve my problems.</p>
+
+<h1 id="ultimately-it-all-has-at-least-a-little-value">Ultimately, it all has (at least a little) value</h1>
+
+<p>It would be nice to think about all that and say, well, “Let’s finally break the cycle. Let’s stop deluding ourselves into thinking our solutions to our self-made problems are actually solving anything.” It would be great if I could tell myself that, but I unfortunately really can’t.</p>
+
+<p>The scariest part of all is that I think it’s completely worthwhile.</p>
+
+<p>So much of these more and more complicated abstractions are trying to do the same basic thing: come up with a better way of modeling the problem. In some sense, that’s all programming really is, modeling a domain in a way that can be leveraged by a digital computer. Our increasingly complicated DSLs <em>seem</em> unnecessarily complicated, they <em>seem</em> increasingly removed from reality, but that’s only because we’re getting better at creating languages that are closer to our domains without the baggage of preconceptions that came before us.</p>
+
+<p>The downside is that, without an understanding of those preconceptions, a lot of what we come up with seems like patent gibberish to those unaware of our languages’ history.</p>
+
+<p>Most programmers, even those who have never seen BASIC before, can figure out what this snippet does:</p>
+
+<div class="brush: BASIC">
+ <div class="source">
+  <pre><span></span><span class="nl">10</span><span class="w"> </span><span class="kr">INPUT</span><span class="w"> </span><span class="s2">"What is your name: "</span><span class="p">;</span><span class="w"> </span><span class="vg">U$</span>
+<span class="nl">20</span><span class="w"> </span><span class="kr">PRINT</span><span class="w"> </span><span class="s2">"Hello "</span><span class="p">;</span><span class="w"> </span><span class="vg">U$</span>
+</pre></div>
+
+</div>
+
+<p>On the other hand, very few would probably understand this one:</p>
+
+<div class="brush: haskell">
+ <div class="source">
+  <pre><span></span><span class="c1">-- | A class for categories.</span>
+<span class="c1">--   id and (.) must form a monoid.</span>
+<span class="kr">class</span> <span class="kt">Category</span> <span class="n">cat</span> <span class="kr">where</span>
+    <span class="c1">-- | the identity morphism</span>
+    <span class="n">id</span> <span class="ow">::</span> <span class="n">cat</span> <span class="n">a</span> <span class="n">a</span>
+
+    <span class="c1">-- | morphism composition</span>
+    <span class="p">(</span><span class="o">.</span><span class="p">)</span> <span class="ow">::</span> <span class="n">cat</span> <span class="n">b</span> <span class="n">c</span> <span class="ow">-&gt;</span> <span class="n">cat</span> <span class="n">a</span> <span class="n">b</span> <span class="ow">-&gt;</span> <span class="n">cat</span> <span class="n">a</span> <span class="n">c</span>
+</pre></div>
+
+</div>
+
+<p>Yet very few new programs are being written in BASIC, and lots are being written in Haskell.</p>
+
+<p>Even one of the most popular, fastest-growing programming languages in the world, JavaScript, a language considered relatively accessible compared to things like Haskell, would likely be incomprehensible to a programmer not familiar with its syntax:</p>
+
+<div class="brush: js">
+ <div class="source">
+  <pre><span></span><span class="kr">export</span> <span class="kr">const</span> <span class="nx">composeWithProps</span> <span class="o">=</span> <span class="nx">curry</span><span class="p">((</span><span class="nx">a</span><span class="p">,</span> <span class="nx">parentProps</span><span class="p">,</span> <span class="nx">b</span><span class="p">)</span> <span class="p">=&gt;</span> <span class="p">{</span>
+  <span class="kr">const</span> <span class="nx">composed</span> <span class="o">=</span> <span class="nx">childProps</span> <span class="p">=&gt;</span>
+    <span class="nx">createElement</span><span class="p">(</span><span class="nx">a</span><span class="p">,</span> <span class="nx">parentProps</span><span class="p">,</span> <span class="nx">createElement</span><span class="p">(</span><span class="nx">b</span><span class="p">,</span> <span class="nx">omit</span><span class="p">([</span><span class="s1">&#39;children&#39;</span><span class="p">],</span> <span class="nx">childProps</span><span class="p">),</span> <span class="nx">childProps</span><span class="p">.</span><span class="nx">children</span><span class="p">));</span>
+  <span class="c1">// give the composed component a pretty display name for debugging</span>
+  <span class="nx">composed</span><span class="p">.</span><span class="nx">displayName</span> <span class="o">=</span> <span class="sb">`Composed(</span><span class="si">${</span><span class="nx">getDisplayName</span><span class="p">(</span><span class="nx">a</span><span class="p">)</span><span class="si">}</span><span class="sb">, </span><span class="si">${</span><span class="nx">getDisplayName</span><span class="p">(</span><span class="nx">b</span><span class="p">)</span><span class="si">}</span><span class="sb">)`</span><span class="p">;</span>
+  <span class="k">return</span> <span class="nx">composed</span><span class="p">;</span>
+<span class="p">});</span>
+</pre></div>
+
+</div>
+
+<p>Moving towards increasingly specialized syntaxes is not inherently bad—it can often be indicative of a more streamlined, domain-specific way of thinking—but while it may dramatically increase the productivity of a seasoned programmer, it can be nothing short of baffling to a newcomer.</p>
+
+<p>That, specifically, is the crux of my fear: are we always aware of who we are optimizing for? I do not have a moral problem with writing code to optimize concision for seasoned programmers; after all, brevity is one of the primary ways code is made more readable (verbosity is the enemy of understanding). However, when that concision comes at the cost of beginners’ understanding, the picture becomes a bit more grey. It is not wrong to write things that are highly optimized for one’s own knowledge and understanding, and establishing a group of such people can make for an <em>extremely</em> productive team. It’s just also important to understand that others will likely be confused, and without being willing to invest the time and money into education, smart, diligent people will still fail to grasp the concepts, and they will likely be wholly uninterested in them.</p>
+
+<h2 id="reactionary-anti-intellectualism-and-the-search-for-moderation">Reactionary anti-intellectualism and the search for moderation</h2>
+
+<p>I have noticed lately that people close to my circles have started regularly slinging insults at people who work in highly specialized notation. Math, including things like category and type theory, has become an especially acceptable punching bag. <a href="https://twitter.com/lexi_lambda/status/763111451691134976">I recently tweeted a picture of some rather dense mathematics from a paper I’d read</a>, and I was frankly disturbed at some of the vitriolic responses. Academia is sometimes described as “masturbatory”, and honestly, that is both offensive and hypocritical.</p>
+
+<p>Mathematical notation is not perfect, no more than dense Haskell, heavily metaprogrammed Ruby, or IIFE-packed JavaScript. Still, it serves a purpose, and sometimes spelling things out is neither practically feasible nor a theoretical improvement. Programmers would not take kindly to being asked to write all their code out as prose, nor would they like being told that using higher-order functions like <code>map</code> should be banned because they are too confusing and not immediately self-explanatory.</p>
+
+<p>I am glad that people are focusing on usability and accessibility more than ever, and I think that’s one of the areas I’m the most interested in. I want to get the best of both worlds: I aim to write code in a highly concise, precise style, but I try and produce intuitive interfaces with human-readable errors upon failure. To me, a user-hostile yet technically functional library is a buggy one, and I would happily file a bug report about a confusing API or error message.</p>
+
+<p>Abstraction is what seems to make programming possible, and indeed, it’s what makes most modern <em>technology</em> possible. It’s what allows people to drive a car without knowing how an internal combustion engine works, and it’s what allows people to browse the web without having a deep understanding of internet protocol. In programming, abstraction serves a similar purpose. Of course, just like all tools, abstractions can have rather different goals: the average user will not pick up Photoshop in a day, but a power user is not going to be satisfied with Paint.</p>
+
+<p>Programmers are professionals, and we work in a technical domain. I am absolutely of the belief that programming, like any other field, is not always about what comes easiest: sometimes it’s important to sit down and study for a while to grok a particularly complicated concept, and other times, it’s simply important to learn by trying, failing, and asking questions. I strive to find that blend of accessible, concise, and robust, and just like everything else, that target shifts depending on the situation and people I’m working with.</p>
+
+<p>I honestly don’t know if Racket and Haskell are worth their costs in complexity. At the end of the day, maybe what really matters is writing simple, consistent things that other people can understand. I really hope that there is a place for more powerful languages within a team, but there’s something to be said about which languages tend to get the most popular.</p>
+
+<p>Ultimately, though, I am just trying to be aware of the tradeoffs I’m making, the benefits I’m getting, and the impact on those I’m working with. I will continue to search for abstractions that can better fit my needs, and I am sure I will keep on climbing the ladder of abstraction for years to come—I just really hope I’m not wasting my time.</p>
+  <footer>
+    <ul class="pager">
+      <li class="previous">
+        <a href="/blog/2016/08/24/understanding-the-npm-dependency-model/">&larr; <em>Understanding the npm dependency model</em></a>
+      </li>
+      <li class="next">
+        <a href="/blog/2016/06/12/four-months-with-haskell/"><em>Four months with Haskell</em> &rarr;</a>
+      </li>
+    </ul>
+  </footer>
+</article>
+        </div>
+      </section>
+      <footer>
+        <div class="content">
+          <h2 id="copyright-notice">© 2021, Alexis King</h2>
+          <h3>
+            Built with <a href="https://github.com/greghendershott/frog">Frog</a>, the
+            <strong>fr</strong>ozen bl<strong>og</strong> tool.
+          </h3>
+          <h3>
+            Feeds are available via <a href="/feeds/all.atom.xml">Atom</a>
+            or <a href="/feeds/all.rss.xml">RSS</a>.
+          </h3>
+        </div>
+      </footer>
+    </div>
+  </body>
+</html>

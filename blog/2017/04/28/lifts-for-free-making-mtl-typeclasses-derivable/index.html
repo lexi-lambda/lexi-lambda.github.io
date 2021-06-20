@@ -1,0 +1,645 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <title>Lifts for free: making mtl typeclasses derivable</title>
+    <meta name="description" content="Perhaps the most important abstraction a Haskell programmer must understand to effectively write modern Haskell code, beyond the level of the monad, is the _monad transformer_, a way to compose monads together in a limited fashion. One frustrating downsid...">
+    <meta name="author"      content="Alexis King">
+    <meta name="keywords"    content="haskell">
+    <meta name="viewport"    content="width=device-width, initial-scale=1.0">
+    <link rel="icon"      href="/favicon.ico">
+    <link rel="canonical" href="http://lexi-lambda.github.io/blog/2017/04/28/lifts-for-free-making-mtl-typeclasses-derivable/">
+    <link rel="next" href="/blog/2017/01/05/rascal-is-now-hackett-plus-some-answers-to-questions/">
+    <link rel="prev" href="/blog/2017/05/27/realizing-hackett-a-metaprogrammable-haskell/">
+    <!-- CSS -->
+    <link rel="stylesheet" type="text/css" href="https://fonts.googleapis.com/css?family=Merriweather+Sans:400,300,300italic,400italic,700,700italic,800,800italic|Merriweather:400,300,300italic,400italic,700,700italic,900,900italic|Fira+Code:300,400,500,600,700">
+    <link rel="stylesheet" type="text/css" href="/css/application.min.css">
+    <link rel="stylesheet" type="text/css" href="/css/pygments.min.css">
+    <!-- Feeds -->
+    <link rel="alternate" type="application/atom+xml"
+          href="/feeds/all.atom.xml" title="Atom Feed">
+    <link rel="alternate" type="application/rss+xml"
+          href="/feeds/all.rss.xml" title="RSS Feed">
+    <!-- JS -->
+    <!-- <script src="/js/application.min.js"></script> -->
+    <script type="text/javascript">
+      (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+      (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+      m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+      })(window,document,'script','//www.google-analytics.com/analytics.js','ga');
+
+      ga('create', 'UA-65250372-1', 'auto');
+      ga('send', 'pageview');
+    </script>
+  </head>
+  <body>
+    <div id="page-content">
+      <!-- Navigation Bar -->
+      <header>
+        <nav role="navigation" class="navigation-bar">
+          <ul class="navigation-items left">
+            <li id="blog-title-header"><a href="/"><h1>Alexis King</h1></a></li>
+          </ul>
+          <ul class="navigation-items center"></ul>
+          <ul class="navigation-items right">
+            <li><a href="/">Home</a></li>
+            <li><a href="/resume.html">About Me</a></li>
+          </ul>
+        </nav>
+      </header>
+      <section role="main">
+        <!-- Main column -->
+        <div class="content" class="col-md-12">
+
+
+
+          <article class="main">
+  <header>
+    <h1 class="title">Lifts for free: making mtl typeclasses derivable</h1>
+    <div class='date-and-tags'>
+      <time datetime="2017-04-28T00:13:19">
+        2017-04-28
+      </time>
+      <span style="margin: 0 3px">⦿</span>
+      <span class="tags"><a href="/tags/haskell.html">haskell</a></span>
+    </div>
+  </header>
+
+<p>Perhaps the most important abstraction a Haskell programmer must understand to effectively write modern Haskell code, beyond the level of the monad, is the <em>monad transformer</em>, a way to compose monads together in a limited fashion. One frustrating downside to monad transformers is a proliferation of <code>lift</code>s, which explicitly indicate which monad in a transformer “stack” a particular computation should run in. Fortunately, the venerable <a href="https://hackage.haskell.org/package/mtl">mtl</a> provides typeclasses that make this lifting mostly automatic, using typeclass machinery to insert <code>lift</code> where appropriate.</p>
+
+<p>Less fortunately, the mtl approach does not actually eliminate <code>lift</code> entirely, it simply moves it from use sites to instances. This requires a small zoo of extraordinarily boilerplate-y instances, most of which simply implement each typeclass method using <code>lift</code>. While we cannot eliminate the instances entirely without somewhat dangerous techniques like <a href="https://downloads.haskell.org/~ghc/8.0.2/docs/html/users_guide/glasgow_exts.html#overlapping-instances">overlapping instances</a>, we <em>can</em> automatically derive them using features of modern GHC, eliminating the truly unnecessary boilerplate.</p>
+<!-- more-->
+
+<h1 id="the-problem-with-mtl-style-typeclasses">The problem with mtl-style typeclasses</h1>
+
+<p>To understand what problem it is exactly that we’re trying to solve, we first need to take a look at an actual mtl-style typeclass. I am going to start with an mtl-<em>style</em> typeclass, rather than an actual typeclass in the mtl, due to slight complications with mtl’s actual typeclasses that we’ll get into later. Instead, let’s start with a somewhat boring typeclass, which we’ll call <code>MonadExit</code>:</p>
+
+<div class="brush: haskell">
+ <div class="source">
+  <pre><span></span><span class="kr">import</span> <span class="nn">System.Exit</span> <span class="p">(</span><span class="kt">ExitCode</span><span class="p">)</span>
+
+<span class="kr">class</span> <span class="kt">Monad</span> <span class="n">m</span> <span class="ow">=&gt;</span> <span class="kt">MonadExit</span> <span class="n">m</span> <span class="kr">where</span>
+  <span class="n">exitWith</span> <span class="ow">::</span> <span class="kt">ExitCode</span> <span class="ow">-&gt;</span> <span class="n">m</span> <span class="nb">()</span>
+</pre></div>
+
+</div>
+
+<p>This is a simple typeclass that abstracts over the concept of early exit, given an exit code. The most obvious implementation of this typeclass is over <code>IO</code>, which will actually exit the program:</p>
+
+<div class="brush: haskell">
+ <div class="source">
+  <pre><span></span><span class="kr">import</span> <span class="k">qualified</span> <span class="nn">System.Exit</span> <span class="k">as</span> <span class="n">IO</span> <span class="p">(</span><span class="n">exitWith</span><span class="p">)</span>
+
+<span class="kr">instance</span> <span class="kt">MonadExit</span> <span class="kt">IO</span> <span class="kr">where</span>
+  <span class="n">exitWith</span> <span class="ow">=</span> <span class="kt">IO</span><span class="o">.</span><span class="n">exitWith</span>
+</pre></div>
+
+</div>
+
+<p>One of the cool things about these typeclasses, though, is that we don’t have to have just one implementation. We could also write a pure implementation of <code>MonadExit</code>, which would simply short-circuit the current computation and return the <code>ExitCode</code>:</p>
+
+<div class="brush: haskell">
+ <div class="source">
+  <pre><span></span><span class="kr">instance</span> <span class="kt">MonadExit</span> <span class="p">(</span><span class="kt">Either</span> <span class="kt">ExitCode</span><span class="p">)</span> <span class="kr">where</span>
+  <span class="n">exitWith</span> <span class="ow">=</span> <span class="kt">Left</span>
+</pre></div>
+
+</div>
+
+<p>Instead of simply having an instance on a concrete monad, though, we probably want to be able to use this in a larger monad stack, so we can define an <code>ExitT</code> monad transformer that can be inserted into any monad transformer stack:</p>
+
+<div class="brush: haskell">
+ <div class="source">
+  <pre><span></span><span class="cm">{-# LANGUAGE GeneralizedNewtypeDeriving #-}</span>
+
+<span class="kr">import</span> <span class="nn">Control.Monad.Except</span> <span class="p">(</span><span class="kt">ExceptT</span><span class="p">,</span> <span class="nf">runExceptT</span><span class="p">,</span> <span class="nf">throwError</span><span class="p">)</span>
+<span class="kr">import</span> <span class="nn">Control.Monad.Trans</span> <span class="p">(</span><span class="kt">MonadTrans</span><span class="p">)</span>
+
+<span class="kr">newtype</span> <span class="kt">ExitT</span> <span class="n">m</span> <span class="n">a</span> <span class="ow">=</span> <span class="kt">ExitT</span> <span class="p">(</span><span class="kt">ExceptT</span> <span class="kt">ExitCode</span> <span class="n">m</span> <span class="n">a</span><span class="p">)</span>
+  <span class="kr">deriving</span> <span class="p">(</span><span class="kt">Functor</span><span class="p">,</span> <span class="kt">Applicative</span><span class="p">,</span> <span class="kt">Monad</span><span class="p">,</span> <span class="kt">MonadTrans</span><span class="p">)</span>
+
+<span class="nf">runExitT</span> <span class="ow">::</span> <span class="kt">ExitT</span> <span class="n">m</span> <span class="n">a</span> <span class="ow">-&gt;</span> <span class="n">m</span> <span class="p">(</span><span class="kt">Either</span> <span class="kt">ExitCode</span> <span class="n">a</span><span class="p">)</span>
+<span class="nf">runExitT</span> <span class="p">(</span><span class="kt">ExitT</span> <span class="n">x</span><span class="p">)</span> <span class="ow">=</span> <span class="n">runExceptT</span> <span class="n">x</span>
+
+<span class="kr">instance</span> <span class="kt">Monad</span> <span class="n">m</span> <span class="ow">=&gt;</span> <span class="kt">MonadExit</span> <span class="p">(</span><span class="kt">ExitT</span> <span class="n">m</span><span class="p">)</span> <span class="kr">where</span>
+  <span class="n">exitWith</span> <span class="ow">=</span> <span class="kt">ExitT</span> <span class="o">.</span> <span class="n">throwError</span>
+</pre></div>
+
+</div>
+
+<p>With this in place, we can write actual programs using our <code>ExitT</code> monad transformer:</p>
+
+<div class="brush: haskell">
+ <div class="source">
+  <pre><span></span><span class="nf">ghci</span><span class="o">&gt;</span> <span class="n">runExitT</span> <span class="o">$</span> <span class="kr">do</span>
+        <span class="n">lift</span> <span class="o">$</span> <span class="n">putStrLn</span> <span class="s">"hello"</span>
+        <span class="n">exitWith</span> <span class="p">(</span><span class="kt">ExitFailure</span> <span class="mi">1</span><span class="p">)</span>
+        <span class="n">lift</span> <span class="o">$</span> <span class="n">putStrLn</span> <span class="s">"world"</span>
+<span class="nf">hello</span>
+<span class="kt">Left</span> <span class="p">(</span><span class="kt">ExitFailure</span> <span class="mi">1</span><span class="p">)</span>
+</pre></div>
+
+</div>
+
+<p>This is pretty cool! Unfortunately, experienced readers will see the rather large problem with what we have so far. Specifically, it won’t actually work if we try and wrap <code>ExitT</code> in another monad transformer:</p>
+
+<div class="brush: haskell">
+ <div class="source">
+  <pre><span></span><span class="nf">ghci</span><span class="o">&gt;</span> <span class="n">logIn</span> <span class="n">password</span> <span class="ow">=</span> <span class="n">runExitT</span> <span class="o">$</span> <span class="n">flip</span> <span class="n">runReaderT</span> <span class="n">password</span> <span class="o">$</span> <span class="kr">do</span>
+        <span class="n">password</span> <span class="ow">&lt;-</span> <span class="n">ask</span>
+        <span class="n">unless</span> <span class="p">(</span><span class="n">password</span> <span class="o">==</span> <span class="s">"password1234"</span><span class="p">)</span> <span class="o">$</span> <span class="c1">-- super secure password</span>
+          <span class="n">exitWith</span> <span class="p">(</span><span class="kt">ExitFailure</span> <span class="mi">1</span><span class="p">)</span>
+        <span class="n">return</span> <span class="s">"access granted"</span>
+
+<span class="nf">ghci</span><span class="o">&gt;</span> <span class="n">logIn</span> <span class="s">"not the right password"</span>
+<span class="o">&lt;</span><span class="n">interactive</span><span class="o">&gt;:</span> <span class="ne">error</span><span class="kt">:</span>
+    <span class="err">•</span> <span class="kt">No</span> <span class="kr">instance</span> <span class="n">for</span> <span class="p">(</span><span class="kt">MonadExit</span> <span class="p">(</span><span class="kt">ReaderT</span> <span class="p">[</span><span class="kt">Char</span><span class="p">]</span> <span class="p">(</span><span class="kt">ExitT</span> <span class="n">m0</span><span class="p">)))</span>
+        <span class="n">arising</span> <span class="n">from</span> <span class="n">a</span> <span class="n">use</span> <span class="kr">of</span> <span class="err">‘</span><span class="n">it</span><span class="err">’</span>
+    <span class="err">•</span> <span class="kt">In</span> <span class="n">a</span> <span class="n">stmt</span> <span class="kr">of</span> <span class="n">an</span> <span class="n">interactive</span> <span class="kt">GHCi</span> <span class="n">command</span><span class="kt">:</span> <span class="n">print</span> <span class="n">it</span>
+</pre></div>
+
+</div>
+
+<p>The error message is relatively self-explanatory if you are familiar with mtl error messages: there is no <code>MonadExit</code> instance for <code>ReaderT</code>. This makes sense, since we only defined a <code>MonadExit</code> instance for <em><code>ExitT</code></em>, nothing else. Fortunately, the instance for <code>ReaderT</code> is completely trivial, since we just need to use <code>lift</code> to delegate to the next monad in the stack:</p>
+
+<div class="brush: haskell">
+ <div class="source">
+  <pre><span></span><span class="kr">instance</span> <span class="kt">MonadExit</span> <span class="n">m</span> <span class="ow">=&gt;</span> <span class="kt">MonadExit</span> <span class="p">(</span><span class="kt">ReaderT</span> <span class="n">r</span> <span class="n">m</span><span class="p">)</span> <span class="kr">where</span>
+  <span class="n">exitWith</span> <span class="ow">=</span> <span class="n">lift</span> <span class="o">.</span> <span class="n">exitWith</span>
+</pre></div>
+
+</div>
+
+<p>Now that the delegating instance is set up, we can actually use our <code>logIn</code> function:</p>
+
+<div class="brush: haskell">
+ <div class="source">
+  <pre><span></span><span class="nf">ghci</span><span class="o">&gt;</span> <span class="n">logIn</span> <span class="s">"not the right password"</span>
+<span class="kt">Left</span> <span class="p">(</span><span class="kt">ExitFailure</span> <span class="mi">1</span><span class="p">)</span>
+<span class="nf">ghci</span><span class="o">&gt;</span> <span class="n">logIn</span> <span class="s">"password1234"</span>
+<span class="kt">Right</span> <span class="s">"access granted"</span>
+</pre></div>
+
+</div>
+
+<h2 id="an-embarrassment-of-instances">An embarrassment of instances</h2>
+
+<p>We’ve managed to make our program work properly now, but we’ve still only defined the delegating instance for <code>ReaderT</code>. What if someone wants to use <code>ExitT</code> with <code>WriterT</code>? Or <code>StateT</code>? Or any of <code>ExceptT</code>, <code>RWST</code>, or <code>ContT</code>? Well, we have to define instances for each and every one of them, and as it turns out, the instances are all identical!</p>
+
+<div class="brush: haskell">
+ <div class="source">
+  <pre><span></span><span class="kr">instance</span> <span class="p">(</span><span class="kt">MonadExit</span> <span class="n">m</span><span class="p">,</span> <span class="kt">Monoid</span> <span class="n">w</span><span class="p">)</span> <span class="ow">=&gt;</span> <span class="kt">MonadExit</span> <span class="p">(</span><span class="kt">WriterT</span> <span class="n">w</span> <span class="n">m</span><span class="p">)</span> <span class="kr">where</span>
+  <span class="n">exitWith</span> <span class="ow">=</span> <span class="n">lift</span> <span class="o">.</span> <span class="n">exitWith</span>
+
+<span class="kr">instance</span> <span class="kt">MonadExit</span> <span class="n">m</span> <span class="ow">=&gt;</span> <span class="kt">MonadExit</span> <span class="p">(</span><span class="kt">StateT</span> <span class="n">s</span> <span class="n">m</span><span class="p">)</span> <span class="kr">where</span>
+  <span class="n">exitWith</span> <span class="ow">=</span> <span class="n">lift</span> <span class="o">.</span> <span class="n">exitWith</span>
+
+<span class="kr">instance</span> <span class="p">(</span><span class="kt">MonadExit</span> <span class="n">m</span><span class="p">,</span> <span class="kt">Monoid</span> <span class="n">w</span><span class="p">)</span> <span class="ow">=&gt;</span> <span class="kt">MonadExit</span> <span class="p">(</span><span class="kt">RWST</span> <span class="n">r</span> <span class="n">w</span> <span class="n">s</span> <span class="n">m</span><span class="p">)</span> <span class="kr">where</span>
+  <span class="n">exitWith</span> <span class="ow">=</span> <span class="n">lift</span> <span class="o">.</span> <span class="n">exitWith</span>
+
+<span class="kr">instance</span> <span class="kt">MonadExit</span> <span class="n">m</span> <span class="ow">=&gt;</span> <span class="kt">MonadExit</span> <span class="p">(</span><span class="kt">ExceptT</span> <span class="n">e</span> <span class="n">m</span><span class="p">)</span> <span class="kr">where</span>
+  <span class="n">exitWith</span> <span class="ow">=</span> <span class="n">lift</span> <span class="o">.</span> <span class="n">exitWith</span>
+
+<span class="kr">instance</span> <span class="kt">MonadExit</span> <span class="n">m</span> <span class="ow">=&gt;</span> <span class="kt">MonadExit</span> <span class="p">(</span><span class="kt">ContT</span> <span class="n">r</span> <span class="n">m</span><span class="p">)</span> <span class="kr">where</span>
+  <span class="n">exitWith</span> <span class="ow">=</span> <span class="n">lift</span> <span class="o">.</span> <span class="n">exitWith</span>
+</pre></div>
+
+</div>
+
+<p>This is bad enough on its own, but this is actually the <em>simplest</em> case: a typeclass with a single method which is trivially lifted through any other monad transformer. Another thing we’ve glossed over is actually defining all the delegating instances for the <em>other</em> mtl typeclasses on <code>ExitT</code> itself. Fortunately, we can derive these ones with <code>GeneralizedNewtypeDeriving</code>, since <code>ExceptT</code> has already done most of the work for us:</p>
+
+<div class="brush: haskell">
+ <div class="source">
+  <pre><span></span><span class="kr">newtype</span> <span class="kt">ExitT</span> <span class="n">m</span> <span class="n">a</span> <span class="ow">=</span> <span class="kt">ExitT</span> <span class="p">(</span><span class="kt">ExceptT</span> <span class="kt">ExitCode</span> <span class="n">m</span> <span class="n">a</span><span class="p">)</span>
+  <span class="kr">deriving</span> <span class="p">(</span> <span class="kt">Functor</span><span class="p">,</span> <span class="kt">Applicative</span><span class="p">,</span> <span class="kt">Monad</span><span class="p">,</span> <span class="kt">MonadIO</span> <span class="c1">-- base</span>
+           <span class="p">,</span> <span class="kt">MonadBase</span> <span class="kt">IO</span> <span class="c1">-- transformers-base</span>
+           <span class="p">,</span> <span class="kt">MonadTrans</span><span class="p">,</span> <span class="kt">MonadReader</span> <span class="n">r</span><span class="p">,</span> <span class="kt">MonadWriter</span> <span class="n">w</span><span class="p">,</span> <span class="kt">MonadState</span> <span class="n">s</span> <span class="c1">-- mtl</span>
+           <span class="p">,</span> <span class="kt">MonadThrow</span><span class="p">,</span> <span class="kt">MonadCatch</span><span class="p">,</span> <span class="kt">MonadMask</span> <span class="c1">-- exceptions</span>
+           <span class="p">,</span> <span class="kt">MonadTransControl</span><span class="p">,</span> <span class="kt">MonadBaseControl</span> <span class="kt">IO</span> <span class="c1">-- monad-control</span>
+           <span class="p">)</span>
+</pre></div>
+
+</div>
+
+<p>Unfortunately, we have to write the <code>MonadError</code> instance manually if we want it, since we don’t want to pick up the instance from <code>ExceptT</code>, but rather wish to defer to the underlying monad. This means writing some truly horrid delegation code:</p>
+
+<div class="brush: haskell">
+ <div class="source">
+  <pre><span></span><span class="kr">instance</span> <span class="kt">MonadError</span> <span class="n">e</span> <span class="n">m</span> <span class="ow">=&gt;</span> <span class="kt">MonadError</span> <span class="n">e</span> <span class="p">(</span><span class="kt">ExitT</span> <span class="n">m</span><span class="p">)</span> <span class="kr">where</span>
+  <span class="n">throwError</span> <span class="ow">=</span> <span class="n">lift</span> <span class="o">.</span> <span class="n">throwError</span>
+
+  <span class="n">catchError</span> <span class="p">(</span><span class="kt">ExitT</span> <span class="n">x</span><span class="p">)</span> <span class="n">f</span> <span class="ow">=</span> <span class="kt">ExitT</span> <span class="o">.</span> <span class="kt">ExceptT</span> <span class="o">$</span> <span class="n">catchError</span> <span class="p">(</span><span class="n">runExceptT</span> <span class="n">x</span><span class="p">)</span> <span class="o">$</span> <span class="nf">\</span><span class="n">e</span> <span class="ow">-&gt;</span>
+    <span class="kr">let</span> <span class="p">(</span><span class="kt">ExitT</span> <span class="n">x&#39;</span><span class="p">)</span> <span class="ow">=</span> <span class="n">f</span> <span class="n">e</span> <span class="kr">in</span> <span class="n">runExceptT</span> <span class="n">x&#39;</span>
+</pre></div>
+
+</div>
+
+<p>(Notably, this is so awful because <code>catchError</code> is more complex than the simple <code>exitWith</code> method we’ve studied so far, which is why we’re starting with a simpler typeclass. We’ll get more into this later, as promised.)</p>
+
+<p>This huge number of instances is sometimes referred to as the “n<sup>2</sup> instances” problem, since it requires every monad transformer have an instance of every single mtl-style typeclass. Fortunately, in practice, this proliferation is often less horrible than it might seem, mostly because deriving helps a lot. However, remember that if <code>ExitT</code> <em>weren’t</em> a simple wrapper around an existing monad transformer, we wouldn’t be able to derive the instances at all! Instead, we’d have to write them all out by hand, just like we did with all the <code>MonadExit</code> instances.</p>
+
+<p>It’s a shame that these typeclass instances can’t be derived in a more general way, allowing derivation for arbitrary monad transformers instead of simply requiring the newtype deriving machinery. As it turns out, with clever use of modern GHC features, we actually <strong>can</strong>. It’s not even all that hard.</p>
+
+<h1 id="default-instances-with-default-signatures">Default instances with default signatures</h1>
+
+<p>It’s not hard to see that our <code>MonadExit</code> instances are all exactly the same: just <code>lift . exitWith</code>. Why is that, though? Well, every instance is an instance on a monad transformer over a monad that is already an instance of <code>MonadExit</code>. In fact, we can express this in a type signature, and we can extract <code>lift . exitWith</code> into a separate function:</p>
+
+<div class="brush: haskell">
+ <div class="source">
+  <pre><span></span><span class="nf">defaultExitWith</span> <span class="ow">::</span> <span class="p">(</span><span class="kt">MonadTrans</span> <span class="n">t</span><span class="p">,</span> <span class="kt">MonadExit</span> <span class="n">m</span><span class="p">)</span> <span class="ow">=&gt;</span> <span class="kt">ExitCode</span> <span class="ow">-&gt;</span> <span class="n">t</span> <span class="n">m</span> <span class="nb">()</span>
+<span class="nf">defaultExitWith</span> <span class="ow">=</span> <span class="n">lift</span> <span class="o">.</span> <span class="n">exitWith</span>
+</pre></div>
+
+</div>
+
+<p>However, writing <code>defaultExitWith</code> really isn’t any easier than writing <code>lift . exitWith</code>, so this deduplication doesn’t really buy us anything. However, it <em>does</em> indicate that we could write a default implementation of <code>exitWith</code> if we could require just a little bit more from the implementing type. With <a href="https://downloads.haskell.org/~ghc/8.0.2/docs/html/users_guide/glasgow_exts.html#default-method-signatures">GHC’s <code>DefaultSignatures</code> extension</a>, we can do precisely that.</p>
+
+<p>The idea is that we can write a separate type signature for a default implementation of <code>exitWith</code>, which can be more specific than the type signature for <code>exitWith</code> in general. This allows us to use our <code>defaultExitWith</code> implementation more or less directly:</p>
+
+<div class="brush: haskell">
+ <div class="source">
+  <pre><span></span><span class="cm">{-# LANGUAGE DefaultSignatures #-}</span>
+
+<span class="kr">class</span> <span class="kt">Monad</span> <span class="n">m</span> <span class="ow">=&gt;</span> <span class="kt">MonadExit</span> <span class="n">m</span> <span class="kr">where</span>
+  <span class="n">exitWith</span> <span class="ow">::</span> <span class="kt">ExitCode</span> <span class="ow">-&gt;</span> <span class="n">m</span> <span class="nb">()</span>
+
+  <span class="kr">default</span> <span class="n">exitWith</span> <span class="ow">::</span> <span class="p">(</span><span class="kt">MonadTrans</span> <span class="n">t</span><span class="p">,</span> <span class="kt">MonadExit</span> <span class="n">m1</span><span class="p">)</span> <span class="ow">=&gt;</span> <span class="kt">ExitCode</span> <span class="ow">-&gt;</span> <span class="n">t</span> <span class="n">m1</span> <span class="nb">()</span>
+  <span class="n">exitWith</span> <span class="ow">=</span> <span class="n">lift</span> <span class="o">.</span> <span class="n">exitWith</span>
+</pre></div>
+
+</div>
+
+<p>We have to use <code>m1</code> instead of <code>m</code>, since type variables in the instance head are always scoped, and the names would conflict. However, this creates another problem, since our specialized type signature replaces <code>m</code> with <code>t m1</code>, which won’t quite work (as GHC can’t automatically figure out they should be the same). Instead, we can use <code>m</code> in the type signature, then just add a type equality constraint ensuring that <code>m</code> and <code>t m1</code> must be the same type:</p>
+
+<div class="brush: haskell">
+ <div class="source">
+  <pre><span></span><span class="kr">class</span> <span class="kt">Monad</span> <span class="n">m</span> <span class="ow">=&gt;</span> <span class="kt">MonadExit</span> <span class="n">m</span> <span class="kr">where</span>
+  <span class="n">exitWith</span> <span class="ow">::</span> <span class="kt">ExitCode</span> <span class="ow">-&gt;</span> <span class="n">m</span> <span class="nb">()</span>
+
+  <span class="kr">default</span> <span class="n">exitWith</span> <span class="ow">::</span> <span class="p">(</span><span class="kt">MonadTrans</span> <span class="n">t</span><span class="p">,</span> <span class="kt">MonadExit</span> <span class="n">m1</span><span class="p">,</span> <span class="n">m</span> <span class="o">~</span> <span class="n">t</span> <span class="n">m1</span><span class="p">)</span> <span class="ow">=&gt;</span> <span class="kt">ExitCode</span> <span class="ow">-&gt;</span> <span class="n">m</span> <span class="nb">()</span>
+  <span class="n">exitWith</span> <span class="ow">=</span> <span class="n">lift</span> <span class="o">.</span> <span class="n">exitWith</span>
+</pre></div>
+
+</div>
+
+<p>Now we can write all of our simple instances without even needing to write a real implementation! All of the instance bodies can be empty:</p>
+
+<div class="brush: haskell">
+ <div class="source">
+  <pre><span></span><span class="kr">instance</span> <span class="kt">MonadExit</span> <span class="n">m</span> <span class="ow">=&gt;</span> <span class="kt">MonadExit</span> <span class="p">(</span><span class="kt">ReaderT</span> <span class="n">r</span> <span class="n">m</span><span class="p">)</span>
+<span class="kr">instance</span> <span class="p">(</span><span class="kt">MonadExit</span> <span class="n">m</span><span class="p">,</span> <span class="kt">Monoid</span> <span class="n">w</span><span class="p">)</span> <span class="ow">=&gt;</span> <span class="kt">MonadExit</span> <span class="p">(</span><span class="kt">WriterT</span> <span class="n">w</span> <span class="n">m</span><span class="p">)</span>
+<span class="kr">instance</span> <span class="kt">MonadExit</span> <span class="n">m</span> <span class="ow">=&gt;</span> <span class="kt">MonadExit</span> <span class="p">(</span><span class="kt">StateT</span> <span class="n">s</span> <span class="n">m</span><span class="p">)</span>
+<span class="kr">instance</span> <span class="p">(</span><span class="kt">MonadExit</span> <span class="n">m</span><span class="p">,</span> <span class="kt">Monoid</span> <span class="n">w</span><span class="p">)</span> <span class="ow">=&gt;</span> <span class="kt">MonadExit</span> <span class="p">(</span><span class="kt">RWST</span> <span class="n">r</span> <span class="n">w</span> <span class="n">s</span> <span class="n">m</span><span class="p">)</span>
+<span class="kr">instance</span> <span class="kt">MonadExit</span> <span class="n">m</span> <span class="ow">=&gt;</span> <span class="kt">MonadExit</span> <span class="p">(</span><span class="kt">ExceptT</span> <span class="n">e</span> <span class="n">m</span><span class="p">)</span>
+<span class="kr">instance</span> <span class="kt">MonadExit</span> <span class="n">m</span> <span class="ow">=&gt;</span> <span class="kt">MonadExit</span> <span class="p">(</span><span class="kt">ContT</span> <span class="n">r</span> <span class="n">m</span><span class="p">)</span>
+</pre></div>
+
+</div>
+
+<p>While this doesn’t completely alleviate the pain of writing instances, it’s definitely an improvement over what we had before. With <a href="https://downloads.haskell.org/~ghc/8.2.1-rc1/docs/html/users_guide/glasgow_exts.html#deriving-strategies">GHC 8.2’s new <code>DerivingStrategies</code> extension</a>, it becomes especially beneficial when defining entirely new transformers that should also have <code>ExitT</code> instances, since they can be derived with <code>DeriveAnyClass</code>:</p>
+
+<div class="brush: haskell">
+ <div class="source">
+  <pre><span></span><span class="kr">newtype</span> <span class="kt">ParserT</span> <span class="n">m</span> <span class="n">a</span> <span class="ow">=</span> <span class="kt">ParserT</span> <span class="p">(</span><span class="kt">Text</span> <span class="ow">-&gt;</span> <span class="n">m</span> <span class="p">(</span><span class="kt">Maybe</span> <span class="p">(</span><span class="kt">Text</span><span class="p">,</span> <span class="n">a</span><span class="p">)))</span>
+  <span class="kr">deriving</span> <span class="n">anyclass</span> <span class="p">(</span><span class="kt">MonadExit</span><span class="p">)</span>
+</pre></div>
+
+</div>
+
+<p>This is pretty wonderful.</p>
+
+<p>Given that only <code>MonadExit</code> supports being derived in this way, we sadly still need to implement the other, more standard mtl-style typeclasses ourselves, like <code>MonadIO</code>, <code>MonadBase</code>, <code>MonadReader</code>, <code>MonadWriter</code>, etc. However, what if all of those classes provided the same convenient default signatures that our <code>MonadExit</code> does? If that were the case, then we could write something like this:</p>
+
+<div class="brush: haskell">
+ <div class="source">
+  <pre><span></span><span class="kr">newtype</span> <span class="kt">ParserT</span> <span class="n">m</span> <span class="n">a</span> <span class="ow">=</span> <span class="kt">ParserT</span> <span class="p">(</span><span class="kt">Text</span> <span class="ow">-&gt;</span> <span class="n">m</span> <span class="p">(</span><span class="kt">Maybe</span> <span class="p">(</span><span class="kt">Text</span><span class="p">,</span> <span class="n">a</span><span class="p">)))</span>
+  <span class="kr">deriving</span> <span class="n">anyclass</span> <span class="p">(</span> <span class="kt">MonadIO</span><span class="p">,</span> <span class="kt">MonadBase</span> <span class="n">b</span>
+                    <span class="p">,</span> <span class="kt">MonadReader</span> <span class="n">r</span><span class="p">,</span> <span class="kt">MonadWriter</span> <span class="n">w</span><span class="p">,</span> <span class="kt">MonadState</span> <span class="n">s</span>
+                    <span class="p">,</span> <span class="kt">MonadThrow</span><span class="p">,</span> <span class="kt">MonadCatch</span><span class="p">,</span> <span class="kt">MonadMask</span>
+                    <span class="p">,</span> <span class="kt">MonadExit</span>
+                    <span class="p">)</span>
+</pre></div>
+
+</div>
+
+<p>Compared to having to write all those instances by hand, this would be a pretty enormous difference. Unfortunately, many of these typeclasses are not quite as simple as our <code>MonadExit</code>, and we’d have to be a bit more clever to make them derivable.</p>
+
+<h1 id="making-mtls-classes-derivable">Making mtl’s classes derivable</h1>
+
+<p>Our <code>MonadExit</code> class was extremely simple, since it only had a single method with a particularly simple type signature. For reference, this was the type of our generic <code>exitWith</code>:</p>
+
+<div class="brush: haskell">
+ <div class="source">
+  <pre><span></span><span class="nf">exitWith</span> <span class="ow">::</span> <span class="kt">MonadExit</span> <span class="n">m</span> <span class="ow">=&gt;</span> <span class="kt">ExitCode</span> <span class="ow">-&gt;</span> <span class="n">m</span> <span class="nb">()</span>
+</pre></div>
+
+</div>
+
+<p>Let’s now turn our attention to <code>MonadReader</code>. At first blush, this typeclass should not be any trickier to implement than <code>MonadExit</code>, since the types of <code>ask</code> and <code>reader</code> are both quite simple:</p>
+
+<div class="brush: haskell">
+ <div class="source">
+  <pre><span></span><span class="nf">ask</span> <span class="ow">::</span> <span class="kt">MonadReader</span> <span class="n">r</span> <span class="n">m</span> <span class="ow">=&gt;</span> <span class="n">m</span> <span class="n">r</span>
+<span class="nf">reader</span> <span class="ow">::</span> <span class="kt">MonadReader</span> <span class="n">r</span> <span class="n">m</span> <span class="ow">=&gt;</span> <span class="p">(</span><span class="n">r</span> <span class="ow">-&gt;</span> <span class="n">a</span><span class="p">)</span> <span class="ow">-&gt;</span> <span class="n">m</span> <span class="n">a</span>
+</pre></div>
+
+</div>
+
+<p>However, the type of the other method, <code>local</code>, throws a bit of a wrench in our plans. It has the following type signature:</p>
+
+<div class="brush: haskell">
+ <div class="source">
+  <pre><span></span><span class="nf">local</span> <span class="ow">::</span> <span class="kt">MonadReader</span> <span class="n">r</span> <span class="n">m</span> <span class="ow">=&gt;</span> <span class="p">(</span><span class="n">r</span> <span class="ow">-&gt;</span> <span class="n">r</span><span class="p">)</span> <span class="ow">-&gt;</span> <span class="n">m</span> <span class="n">a</span> <span class="ow">-&gt;</span> <span class="n">m</span> <span class="n">a</span>
+</pre></div>
+
+</div>
+
+<p>Why is this so much more complicated? Well, the key is in the second argument, which has the type <code>m a</code>. That’s not something that can be simply <code>lift</code>ed away! Try it yourself: try to write a <code>MonadReader</code> instance for some monad transformer. It’s not as easy as it looks!</p>
+
+<p>We can illustrate the problem by creating our own version of <code>MonadReader</code> and implementing it for something like <code>ExceptT</code> ourselves. We can start with the trivial methods first:</p>
+
+<div class="brush: haskell">
+ <div class="source">
+  <pre><span></span><span class="kr">class</span> <span class="kt">Monad</span> <span class="n">m</span> <span class="ow">=&gt;</span> <span class="kt">MonadReader</span> <span class="n">r</span> <span class="n">m</span> <span class="o">|</span> <span class="n">m</span> <span class="ow">-&gt;</span> <span class="n">r</span> <span class="kr">where</span>
+  <span class="n">ask</span> <span class="ow">::</span> <span class="n">m</span> <span class="n">r</span>
+  <span class="n">local</span> <span class="ow">::</span> <span class="p">(</span><span class="n">r</span> <span class="ow">-&gt;</span> <span class="n">r</span><span class="p">)</span> <span class="ow">-&gt;</span> <span class="n">m</span> <span class="n">a</span> <span class="ow">-&gt;</span> <span class="n">m</span> <span class="n">a</span>
+  <span class="n">reader</span> <span class="ow">::</span> <span class="p">(</span><span class="n">r</span> <span class="ow">-&gt;</span> <span class="n">a</span><span class="p">)</span> <span class="ow">-&gt;</span> <span class="n">m</span> <span class="n">a</span>
+
+<span class="kr">instance</span> <span class="kt">MonadReader</span> <span class="n">r</span> <span class="n">m</span> <span class="ow">=&gt;</span> <span class="kt">MonadReader</span> <span class="n">r</span> <span class="p">(</span><span class="kt">ExceptT</span> <span class="n">e</span> <span class="n">m</span><span class="p">)</span> <span class="kr">where</span>
+  <span class="n">ask</span> <span class="ow">=</span> <span class="n">lift</span> <span class="n">ask</span>
+  <span class="n">reader</span> <span class="ow">=</span> <span class="n">lift</span> <span class="o">.</span> <span class="n">reader</span>
+</pre></div>
+
+</div>
+
+<p>However, implementing <code>local</code> is harder. Let’s specialize the type signature to <code>ExceptT</code> to make it more clear why:</p>
+
+<div class="brush: haskell">
+ <div class="source">
+  <pre><span></span><span class="nf">local</span> <span class="ow">::</span> <span class="kt">MonadReader</span> <span class="n">r</span> <span class="n">m</span> <span class="ow">=&gt;</span> <span class="p">(</span><span class="n">r</span> <span class="ow">-&gt;</span> <span class="n">r</span><span class="p">)</span> <span class="ow">-&gt;</span> <span class="kt">ExceptT</span> <span class="n">e</span> <span class="n">m</span> <span class="n">a</span> <span class="ow">-&gt;</span> <span class="kt">ExceptT</span> <span class="n">e</span> <span class="n">m</span> <span class="n">a</span>
+</pre></div>
+
+</div>
+
+<p>Our base monad, <code>m</code>, implements <code>local</code>, but we have to convert the first argument from <code>ExceptT e m a</code> into <code>m (Either e a)</code> first, run it through <code>local</code> in <code>m</code>, then wrap it back up in <code>ExceptT</code>:</p>
+
+<div class="brush: haskell">
+ <div class="source">
+  <pre><span></span><span class="kr">instance</span> <span class="kt">MonadReader</span> <span class="n">r</span> <span class="n">m</span> <span class="ow">=&gt;</span> <span class="kt">MonadReader</span> <span class="n">r</span> <span class="p">(</span><span class="kt">ExceptT</span> <span class="n">e</span> <span class="n">m</span><span class="p">)</span> <span class="kr">where</span>
+  <span class="n">ask</span> <span class="ow">=</span> <span class="n">lift</span> <span class="n">ask</span>
+  <span class="n">reader</span> <span class="ow">=</span> <span class="n">lift</span> <span class="o">.</span> <span class="n">reader</span>
+  <span class="n">local</span> <span class="n">f</span> <span class="n">x</span> <span class="ow">=</span> <span class="kt">ExceptT</span> <span class="o">$</span> <span class="n">local</span> <span class="n">f</span> <span class="p">(</span><span class="n">runExceptT</span> <span class="n">x</span><span class="p">)</span>
+</pre></div>
+
+</div>
+
+<p>This operation is actually a mapping operation of sorts, since we’re mapping <code>local f</code> over <code>x</code>. For that reason, this can be rewritten using the <code>mapExceptT</code> function provided from <code>Control.Monad.Except</code>:</p>
+
+<div class="brush: haskell">
+ <div class="source">
+  <pre><span></span><span class="kr">instance</span> <span class="kt">MonadReader</span> <span class="n">r</span> <span class="n">m</span> <span class="ow">=&gt;</span> <span class="kt">MonadReader</span> <span class="n">r</span> <span class="p">(</span><span class="kt">ExceptT</span> <span class="n">e</span> <span class="n">m</span><span class="p">)</span> <span class="kr">where</span>
+  <span class="n">ask</span> <span class="ow">=</span> <span class="n">lift</span> <span class="n">ask</span>
+  <span class="n">reader</span> <span class="ow">=</span> <span class="n">lift</span> <span class="o">.</span> <span class="n">reader</span>
+  <span class="n">local</span> <span class="ow">=</span> <span class="n">mapExceptT</span> <span class="o">.</span> <span class="n">local</span>
+</pre></div>
+
+</div>
+
+<p>If you implement <code>MonadReader</code> instances for other transformers, like <code>StateT</code> and <code>WriterT</code>, you’ll find that the instances are exactly the same <em>except</em> for <code>mapExceptT</code>, which is replaced with <code>mapStateT</code> and <code>mapWriterT</code>, respectively. This is sort of obnoxious, given that we want to figure out how to create a generic version of <code>local</code> that works with any monad transformer, but this requires concrete information about which monad we’re in. Obviously, the power <code>MonadTrans</code> gives us is not enough to make this generic. Fortunately, there is a typeclass which does: <a href="http://hackage.haskell.org/package/monad-control-1.0.1.0/docs/Control-Monad-Trans-Control.html#t:MonadTransControl"><code>MonadTransControl</code></a> from the <code>monad-control</code> package.</p>
+
+<p>Using <code>MonadTransControl</code>, we can write a generic <code>mapT</code> function that maps over an arbitrary monad transformer with a <code>MonadTransControl</code> instance:</p>
+
+<div class="brush: haskell">
+ <div class="source">
+  <pre><span></span><span class="nf">mapT</span> <span class="ow">::</span> <span class="p">(</span><span class="kt">Monad</span> <span class="n">m</span><span class="p">,</span> <span class="kt">Monad</span> <span class="p">(</span><span class="n">t</span> <span class="n">m</span><span class="p">),</span> <span class="kt">MonadTransControl</span> <span class="n">t</span><span class="p">)</span>
+     <span class="ow">=&gt;</span> <span class="p">(</span><span class="n">m</span> <span class="p">(</span><span class="kt">StT</span> <span class="n">t</span> <span class="n">a</span><span class="p">)</span> <span class="ow">-&gt;</span> <span class="n">m</span> <span class="p">(</span><span class="kt">StT</span> <span class="n">t</span> <span class="n">b</span><span class="p">))</span>
+     <span class="ow">-&gt;</span> <span class="n">t</span> <span class="n">m</span> <span class="n">a</span>
+     <span class="ow">-&gt;</span> <span class="n">t</span> <span class="n">m</span> <span class="n">b</span>
+<span class="nf">mapT</span> <span class="n">f</span> <span class="n">x</span> <span class="ow">=</span> <span class="n">liftWith</span> <span class="p">(</span><span class="nf">\</span><span class="n">run</span> <span class="ow">-&gt;</span> <span class="n">f</span> <span class="p">(</span><span class="n">run</span> <span class="n">x</span><span class="p">))</span> <span class="o">&gt;&gt;=</span> <span class="n">restoreT</span> <span class="o">.</span> <span class="n">return</span>
+</pre></div>
+
+</div>
+
+<p>This type signature may look complicated (and, well, it is), but the idea is that the <code>StT</code> associated type family encapsulates the monadic state that <code>t</code> introduces. For example, for <code>ExceptT</code>, <code>StT (ExceptT e) a</code> is <code>Either e a</code>. For <code>StateT</code>, <code>StT (StateT s) a</code> is <code>(a, s)</code>. Some transformers, like <code>ReaderT</code>, have no state, so <code>StT (ReaderT r) a</code> is just <code>a</code>.</p>
+
+<p>I will not go into the precise mechanics of how <code>MonadTransControl</code> works in this blog post, but it doesn’t matter significantly; the point is that we can now use <code>mapT</code> to create a generic implementation of <code>local</code> for use with <code>DefaultSignatures</code>:</p>
+
+<div class="brush: haskell">
+ <div class="source">
+  <pre><span></span><span class="kr">class</span> <span class="kt">Monad</span> <span class="n">m</span> <span class="ow">=&gt;</span> <span class="kt">MonadReader</span> <span class="n">r</span> <span class="n">m</span> <span class="o">|</span> <span class="n">m</span> <span class="ow">-&gt;</span> <span class="n">r</span> <span class="kr">where</span>
+  <span class="n">ask</span> <span class="ow">::</span> <span class="n">m</span> <span class="n">r</span>
+  <span class="kr">default</span> <span class="n">ask</span> <span class="ow">::</span> <span class="p">(</span><span class="kt">MonadTrans</span> <span class="n">t</span><span class="p">,</span> <span class="kt">MonadReader</span> <span class="n">r</span> <span class="n">m1</span><span class="p">,</span> <span class="n">m</span> <span class="o">~</span> <span class="n">t</span> <span class="n">m1</span><span class="p">)</span> <span class="ow">=&gt;</span> <span class="n">m</span> <span class="n">r</span>
+  <span class="n">ask</span> <span class="ow">=</span> <span class="n">lift</span> <span class="n">ask</span>
+
+  <span class="n">local</span> <span class="ow">::</span> <span class="p">(</span><span class="n">r</span> <span class="ow">-&gt;</span> <span class="n">r</span><span class="p">)</span> <span class="ow">-&gt;</span> <span class="n">m</span> <span class="n">a</span> <span class="ow">-&gt;</span> <span class="n">m</span> <span class="n">a</span>
+  <span class="kr">default</span> <span class="n">local</span> <span class="ow">::</span> <span class="p">(</span><span class="kt">MonadTransControl</span> <span class="n">t</span><span class="p">,</span> <span class="kt">MonadReader</span> <span class="n">r</span> <span class="n">m1</span><span class="p">,</span> <span class="n">m</span> <span class="o">~</span> <span class="n">t</span> <span class="n">m1</span><span class="p">)</span> <span class="ow">=&gt;</span> <span class="p">(</span><span class="n">r</span> <span class="ow">-&gt;</span> <span class="n">r</span><span class="p">)</span> <span class="ow">-&gt;</span> <span class="n">m</span> <span class="n">a</span> <span class="ow">-&gt;</span> <span class="n">m</span> <span class="n">a</span>
+  <span class="n">local</span> <span class="ow">=</span> <span class="n">mapT</span> <span class="o">.</span> <span class="n">local</span>
+
+  <span class="n">reader</span> <span class="ow">::</span> <span class="p">(</span><span class="n">r</span> <span class="ow">-&gt;</span> <span class="n">a</span><span class="p">)</span> <span class="ow">-&gt;</span> <span class="n">m</span> <span class="n">a</span>
+  <span class="n">reader</span> <span class="n">f</span> <span class="ow">=</span> <span class="n">f</span> <span class="o">&lt;$&gt;</span> <span class="n">ask</span>
+</pre></div>
+
+</div>
+
+<p>Once more, we now get instances of our typeclass, in this case <code>MonadReader</code>, <strong>for free</strong>:</p>
+
+<div class="brush: haskell">
+ <div class="source">
+  <pre><span></span><span class="kr">instance</span> <span class="kt">MonadReader</span> <span class="n">r</span> <span class="n">m</span> <span class="ow">=&gt;</span> <span class="kt">MonadReader</span> <span class="n">r</span> <span class="p">(</span><span class="kt">ExceptT</span> <span class="n">e</span> <span class="n">m</span><span class="p">)</span>
+<span class="kr">instance</span> <span class="p">(</span><span class="kt">MonadReader</span> <span class="n">r</span> <span class="n">m</span><span class="p">,</span> <span class="kt">Monoid</span> <span class="n">w</span><span class="p">)</span> <span class="ow">=&gt;</span> <span class="kt">MonadReader</span> <span class="n">r</span> <span class="p">(</span><span class="kt">WriterT</span> <span class="n">w</span> <span class="n">m</span><span class="p">)</span>
+<span class="kr">instance</span> <span class="kt">MonadReader</span> <span class="n">r</span> <span class="n">m</span> <span class="ow">=&gt;</span> <span class="kt">MonadReader</span> <span class="n">r</span> <span class="p">(</span><span class="kt">StateT</span> <span class="n">s</span> <span class="n">m</span><span class="p">)</span>
+</pre></div>
+
+</div>
+
+<p>It’s also worth noting that we <em>don’t</em> get a <code>ContT</code> instance for free, even though <code>ContT</code> has a <code>MonadReader</code> instance in mtl. Unlike the other monad transformers mtl provides, <code>ContT</code> does not have a <code>MonadTransControl</code> instance because it cannot be generally mapped over. While a <code>mapContT</code> function does exist, its signature is more restricted:</p>
+
+<div class="brush: haskell">
+ <div class="source">
+  <pre><span></span><span class="nf">mapContT</span> <span class="ow">::</span> <span class="p">(</span><span class="n">m</span> <span class="n">r</span> <span class="ow">-&gt;</span> <span class="n">m</span> <span class="n">r</span><span class="p">)</span> <span class="ow">-&gt;</span> <span class="kt">ContT</span> <span class="n">k</span> <span class="n">r</span> <span class="n">m</span> <span class="n">a</span> <span class="ow">-&gt;</span> <span class="kt">ContT</span> <span class="n">k</span> <span class="n">r</span> <span class="n">m</span> <span class="n">a</span>
+</pre></div>
+
+</div>
+
+<p>It happens that <code>local</code> can still be implemented for <code>ContT</code>, so it can still have a <code>MonadReader</code> instance, but it cannot be derived in the same way as it can for the other transformers. Still, in practice, I’ve found that most user-defined transformers do not have such complex control flow, so they can safely be instances of <code>MonadTransControl</code>, and they get this deriving for free.</p>
+
+<h2 id="extending-this-technique-to-other-mtl-typeclasses">Extending this technique to other mtl typeclasses</h2>
+
+<p>The default instances for the other mtl typeclasses are slightly different from the one for <code>MonadReader</code>, but for the most part, the same general technique applies. Here’s a derivable <code>MonadError</code>:</p>
+
+<div class="brush: haskell">
+ <div class="source">
+  <pre><span></span><span class="kr">class</span> <span class="kt">Monad</span> <span class="n">m</span> <span class="ow">=&gt;</span> <span class="kt">MonadError</span> <span class="n">e</span> <span class="n">m</span> <span class="o">|</span> <span class="n">m</span> <span class="ow">-&gt;</span> <span class="n">e</span> <span class="kr">where</span>
+  <span class="n">throwError</span> <span class="ow">::</span> <span class="n">e</span> <span class="ow">-&gt;</span> <span class="n">m</span> <span class="n">a</span>
+  <span class="kr">default</span> <span class="n">throwError</span> <span class="ow">::</span> <span class="p">(</span><span class="kt">MonadTrans</span> <span class="n">t</span><span class="p">,</span> <span class="kt">MonadError</span> <span class="n">e</span> <span class="n">m1</span><span class="p">,</span> <span class="n">m</span> <span class="o">~</span> <span class="n">t</span> <span class="n">m1</span><span class="p">)</span> <span class="ow">=&gt;</span> <span class="n">e</span> <span class="ow">-&gt;</span> <span class="n">m</span> <span class="n">a</span>
+  <span class="n">throwError</span> <span class="ow">=</span> <span class="n">lift</span> <span class="o">.</span> <span class="n">throwError</span>
+
+  <span class="n">catchError</span> <span class="ow">::</span> <span class="n">m</span> <span class="n">a</span> <span class="ow">-&gt;</span> <span class="p">(</span><span class="n">e</span> <span class="ow">-&gt;</span> <span class="n">m</span> <span class="n">a</span><span class="p">)</span> <span class="ow">-&gt;</span> <span class="n">m</span> <span class="n">a</span>
+  <span class="kr">default</span> <span class="n">catchError</span> <span class="ow">::</span> <span class="p">(</span><span class="kt">MonadTransControl</span> <span class="n">t</span><span class="p">,</span> <span class="kt">MonadError</span> <span class="n">e</span> <span class="n">m1</span><span class="p">,</span> <span class="n">m</span> <span class="o">~</span> <span class="n">t</span> <span class="n">m1</span><span class="p">)</span> <span class="ow">=&gt;</span> <span class="n">m</span> <span class="n">a</span> <span class="ow">-&gt;</span> <span class="p">(</span><span class="n">e</span> <span class="ow">-&gt;</span> <span class="n">m</span> <span class="n">a</span><span class="p">)</span> <span class="ow">-&gt;</span> <span class="n">m</span> <span class="n">a</span>
+  <span class="n">catchError</span> <span class="n">x</span> <span class="n">f</span> <span class="ow">=</span> <span class="n">liftWith</span> <span class="p">(</span><span class="nf">\</span><span class="n">run</span> <span class="ow">-&gt;</span> <span class="n">catchError</span> <span class="p">(</span><span class="n">run</span> <span class="n">x</span><span class="p">)</span> <span class="p">(</span><span class="n">run</span> <span class="o">.</span> <span class="n">f</span><span class="p">))</span> <span class="o">&gt;&gt;=</span> <span class="n">restoreT</span> <span class="o">.</span> <span class="n">return</span>
+
+<span class="kr">instance</span> <span class="kt">MonadError</span> <span class="n">e</span> <span class="n">m</span> <span class="ow">=&gt;</span> <span class="kt">MonadError</span> <span class="n">e</span> <span class="p">(</span><span class="kt">ReaderT</span> <span class="n">r</span> <span class="n">m</span><span class="p">)</span>
+<span class="kr">instance</span> <span class="p">(</span><span class="kt">MonadError</span> <span class="n">e</span> <span class="n">m</span><span class="p">,</span> <span class="kt">Monoid</span> <span class="n">w</span><span class="p">)</span> <span class="ow">=&gt;</span> <span class="kt">MonadError</span> <span class="n">e</span> <span class="p">(</span><span class="kt">WriterT</span> <span class="n">w</span> <span class="n">m</span><span class="p">)</span>
+<span class="kr">instance</span> <span class="kt">MonadError</span> <span class="n">e</span> <span class="n">m</span> <span class="ow">=&gt;</span> <span class="kt">MonadError</span> <span class="n">e</span> <span class="p">(</span><span class="kt">StateT</span> <span class="n">s</span> <span class="n">m</span><span class="p">)</span>
+<span class="kr">instance</span> <span class="p">(</span><span class="kt">MonadError</span> <span class="n">e</span> <span class="n">m</span><span class="p">,</span> <span class="kt">Monoid</span> <span class="n">w</span><span class="p">)</span> <span class="ow">=&gt;</span> <span class="kt">MonadError</span> <span class="n">e</span> <span class="p">(</span><span class="kt">RWST</span> <span class="n">r</span> <span class="n">w</span> <span class="n">s</span> <span class="n">m</span><span class="p">)</span>
+</pre></div>
+
+</div>
+
+<p>The <code>MonadState</code> interface turns out to be extremely simple, so it doesn’t even need <code>MonadTransControl</code> at all:</p>
+
+<div class="brush: haskell">
+ <div class="source">
+  <pre><span></span><span class="kr">class</span> <span class="kt">Monad</span> <span class="n">m</span> <span class="ow">=&gt;</span> <span class="kt">MonadState</span> <span class="n">s</span> <span class="n">m</span> <span class="o">|</span> <span class="n">m</span> <span class="ow">-&gt;</span> <span class="n">s</span> <span class="kr">where</span>
+  <span class="n">get</span> <span class="ow">::</span> <span class="n">m</span> <span class="n">s</span>
+  <span class="kr">default</span> <span class="n">get</span> <span class="ow">::</span> <span class="p">(</span><span class="kt">MonadTrans</span> <span class="n">t</span><span class="p">,</span> <span class="kt">MonadState</span> <span class="n">s</span> <span class="n">m1</span><span class="p">,</span> <span class="n">m</span> <span class="o">~</span> <span class="n">t</span> <span class="n">m1</span><span class="p">)</span> <span class="ow">=&gt;</span> <span class="n">m</span> <span class="n">s</span>
+  <span class="n">get</span> <span class="ow">=</span> <span class="n">lift</span> <span class="n">get</span>
+
+  <span class="n">put</span> <span class="ow">::</span> <span class="n">s</span> <span class="ow">-&gt;</span> <span class="n">m</span> <span class="nb">()</span>
+  <span class="kr">default</span> <span class="n">put</span> <span class="ow">::</span> <span class="p">(</span><span class="kt">MonadTrans</span> <span class="n">t</span><span class="p">,</span> <span class="kt">MonadState</span> <span class="n">s</span> <span class="n">m1</span><span class="p">,</span> <span class="n">m</span> <span class="o">~</span> <span class="n">t</span> <span class="n">m1</span><span class="p">)</span> <span class="ow">=&gt;</span> <span class="n">s</span> <span class="ow">-&gt;</span> <span class="n">m</span> <span class="nb">()</span>
+  <span class="n">put</span> <span class="ow">=</span> <span class="n">lift</span> <span class="o">.</span> <span class="n">put</span>
+
+  <span class="n">state</span> <span class="ow">::</span> <span class="p">(</span><span class="n">s</span> <span class="ow">-&gt;</span> <span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">s</span><span class="p">))</span> <span class="ow">-&gt;</span> <span class="n">m</span> <span class="n">a</span>
+  <span class="n">state</span> <span class="n">f</span> <span class="ow">=</span> <span class="kr">do</span>
+    <span class="n">s</span> <span class="ow">&lt;-</span> <span class="n">get</span>
+    <span class="kr">let</span> <span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">s&#39;</span><span class="p">)</span> <span class="ow">=</span> <span class="n">f</span> <span class="n">s</span>
+    <span class="n">put</span> <span class="n">s&#39;</span>
+    <span class="n">return</span> <span class="n">a</span>
+
+<span class="kr">instance</span> <span class="kt">MonadState</span> <span class="n">s</span> <span class="n">m</span> <span class="ow">=&gt;</span> <span class="kt">MonadState</span> <span class="n">s</span> <span class="p">(</span><span class="kt">ExceptT</span> <span class="n">e</span> <span class="n">m</span><span class="p">)</span>
+<span class="kr">instance</span> <span class="kt">MonadState</span> <span class="n">s</span> <span class="n">m</span> <span class="ow">=&gt;</span> <span class="kt">MonadState</span> <span class="n">s</span> <span class="p">(</span><span class="kt">ReaderT</span> <span class="n">r</span> <span class="n">m</span><span class="p">)</span>
+<span class="kr">instance</span> <span class="p">(</span><span class="kt">MonadState</span> <span class="n">s</span> <span class="n">m</span><span class="p">,</span> <span class="kt">Monoid</span> <span class="n">w</span><span class="p">)</span> <span class="ow">=&gt;</span> <span class="kt">MonadState</span> <span class="n">s</span> <span class="p">(</span><span class="kt">WriterT</span> <span class="n">w</span> <span class="n">m</span><span class="p">)</span>
+</pre></div>
+
+</div>
+
+<p>Everything seems to be going well! However, not everything is quite so simple.</p>
+
+<h2 id="a-monadwriter-diversion">A <code>MonadWriter</code> diversion</h2>
+
+<p>Unexpectedly, <code>MonadWriter</code> turns out to be by far the trickiest of the bunch. It’s not too hard to create default implementations for most of the methods of the typeclass:</p>
+
+<div class="brush: haskell">
+ <div class="source">
+  <pre><span></span><span class="kr">class</span> <span class="p">(</span><span class="kt">Monoid</span> <span class="n">w</span><span class="p">,</span> <span class="kt">Monad</span> <span class="n">m</span><span class="p">)</span> <span class="ow">=&gt;</span> <span class="kt">MonadWriter</span> <span class="n">w</span> <span class="n">m</span> <span class="o">|</span> <span class="n">m</span> <span class="ow">-&gt;</span> <span class="n">w</span> <span class="kr">where</span>
+  <span class="n">writer</span> <span class="ow">::</span> <span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">w</span><span class="p">)</span> <span class="ow">-&gt;</span> <span class="n">m</span> <span class="n">a</span>
+  <span class="kr">default</span> <span class="n">writer</span> <span class="ow">::</span> <span class="p">(</span><span class="kt">MonadTrans</span> <span class="n">t</span><span class="p">,</span> <span class="kt">MonadWriter</span> <span class="n">w</span> <span class="n">m1</span><span class="p">,</span> <span class="n">m</span> <span class="o">~</span> <span class="n">t</span> <span class="n">m1</span><span class="p">)</span> <span class="ow">=&gt;</span> <span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">w</span><span class="p">)</span> <span class="ow">-&gt;</span> <span class="n">m</span> <span class="n">a</span>
+  <span class="n">writer</span> <span class="ow">=</span> <span class="n">lift</span> <span class="o">.</span> <span class="n">writer</span>
+
+  <span class="n">tell</span> <span class="ow">::</span> <span class="n">w</span> <span class="ow">-&gt;</span> <span class="n">m</span> <span class="nb">()</span>
+  <span class="kr">default</span> <span class="n">tell</span> <span class="ow">::</span> <span class="p">(</span><span class="kt">MonadTrans</span> <span class="n">t</span><span class="p">,</span> <span class="kt">MonadWriter</span> <span class="n">w</span> <span class="n">m1</span><span class="p">,</span> <span class="n">m</span> <span class="o">~</span> <span class="n">t</span> <span class="n">m1</span><span class="p">)</span> <span class="ow">=&gt;</span> <span class="n">w</span> <span class="ow">-&gt;</span> <span class="n">m</span> <span class="nb">()</span>
+  <span class="n">tell</span> <span class="ow">=</span> <span class="n">lift</span> <span class="o">.</span> <span class="n">tell</span>
+
+  <span class="n">listen</span> <span class="ow">::</span> <span class="n">m</span> <span class="n">a</span> <span class="ow">-&gt;</span> <span class="n">m</span> <span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">w</span><span class="p">)</span>
+  <span class="kr">default</span> <span class="n">listen</span> <span class="ow">::</span> <span class="p">(</span><span class="kt">MonadTransControl</span> <span class="n">t</span><span class="p">,</span> <span class="kt">MonadWriter</span> <span class="n">w</span> <span class="n">m1</span><span class="p">,</span> <span class="n">m</span> <span class="o">~</span> <span class="n">t</span> <span class="n">m1</span><span class="p">)</span> <span class="ow">=&gt;</span> <span class="n">m</span> <span class="n">a</span> <span class="ow">-&gt;</span> <span class="n">m</span> <span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">w</span><span class="p">)</span>
+  <span class="n">listen</span> <span class="n">x</span> <span class="ow">=</span> <span class="kr">do</span>
+    <span class="p">(</span><span class="n">y</span><span class="p">,</span> <span class="n">w</span><span class="p">)</span> <span class="ow">&lt;-</span> <span class="n">liftWith</span> <span class="p">(</span><span class="nf">\</span><span class="n">run</span> <span class="ow">-&gt;</span> <span class="n">listen</span> <span class="p">(</span><span class="n">run</span> <span class="n">x</span><span class="p">))</span>
+    <span class="n">y&#39;</span> <span class="ow">&lt;-</span> <span class="n">restoreT</span> <span class="p">(</span><span class="n">return</span> <span class="n">y</span><span class="p">)</span>
+    <span class="n">return</span> <span class="p">(</span><span class="n">y&#39;</span><span class="p">,</span> <span class="n">w</span><span class="p">)</span>
+</pre></div>
+
+</div>
+
+<p>However, <code>MonadWriter</code> has a fourth method, <code>pass</code>, which has a particularly tricky type signature:</p>
+
+<div class="brush: haskell">
+ <div class="source">
+  <pre><span></span><span class="nf">pass</span> <span class="ow">::</span> <span class="n">m</span> <span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">w</span> <span class="ow">-&gt;</span> <span class="n">w</span><span class="p">)</span> <span class="ow">-&gt;</span> <span class="n">m</span> <span class="n">a</span>
+</pre></div>
+
+</div>
+
+<p>As far as I can tell, this is not possible to generalize using <code>MonadTransControl</code> alone, since it would require inspection of the result of the monadic argument (that is, it would require a function from <code>StT t (a, b) -&gt; (StT t a, b)</code>), which is not possible in general. My gut is that this could likely also be generalized with a slightly more powerful abstraction than <code>MonadTransControl</code>, but it is not immediately obvious to me what that abstraction should be.</p>
+
+<p>One extremely simple way to make this possible would be to design something to serve this specific use case:</p>
+
+<div class="brush: haskell">
+ <div class="source">
+  <pre><span></span><span class="kr">type</span> <span class="kt">RunSplit</span> <span class="n">t</span> <span class="ow">=</span> <span class="n">forall</span> <span class="n">m</span> <span class="n">a</span> <span class="n">b</span><span class="o">.</span> <span class="kt">Monad</span> <span class="n">m</span> <span class="ow">=&gt;</span> <span class="n">t</span> <span class="n">m</span> <span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">)</span> <span class="ow">-&gt;</span> <span class="n">m</span> <span class="p">(</span><span class="kt">StT</span> <span class="n">t</span> <span class="n">a</span><span class="p">,</span> <span class="kt">Maybe</span> <span class="n">b</span><span class="p">)</span>
+<span class="kr">class</span> <span class="kt">MonadTransControl</span> <span class="n">t</span> <span class="ow">=&gt;</span> <span class="kt">MonadTransSplit</span> <span class="n">t</span> <span class="kr">where</span>
+  <span class="n">liftWithSplit</span> <span class="ow">::</span> <span class="kt">Monad</span> <span class="n">m</span> <span class="ow">=&gt;</span> <span class="p">(</span><span class="kt">RunSplit</span> <span class="n">t</span> <span class="ow">-&gt;</span> <span class="n">m</span> <span class="n">a</span><span class="p">)</span> <span class="ow">-&gt;</span> <span class="n">t</span> <span class="n">m</span> <span class="n">a</span>
+</pre></div>
+
+</div>
+
+<p>Instances of <code>MonadTransSplit</code> would basically just provide a way to pull out bits of the result, if possible:</p>
+
+<div class="brush: haskell">
+ <div class="source">
+  <pre><span></span><span class="kr">instance</span> <span class="kt">MonadTransSplit</span> <span class="p">(</span><span class="kt">ReaderT</span> <span class="n">r</span><span class="p">)</span> <span class="kr">where</span>
+  <span class="n">liftWithSplit</span> <span class="n">f</span> <span class="ow">=</span> <span class="n">liftWith</span> <span class="o">$</span> <span class="nf">\</span><span class="n">run</span> <span class="ow">-&gt;</span> <span class="n">f</span> <span class="p">(</span><span class="n">fmap</span> <span class="n">split</span> <span class="o">.</span> <span class="n">run</span><span class="p">)</span>
+    <span class="kr">where</span> <span class="n">split</span> <span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">)</span> <span class="ow">=</span> <span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="kt">Just</span> <span class="n">y</span><span class="p">)</span>
+
+<span class="kr">instance</span> <span class="kt">MonadTransSplit</span> <span class="p">(</span><span class="kt">ExceptT</span> <span class="n">e</span><span class="p">)</span> <span class="kr">where</span>
+  <span class="n">liftWithSplit</span> <span class="n">f</span> <span class="ow">=</span> <span class="n">liftWith</span> <span class="o">$</span> <span class="nf">\</span><span class="n">run</span> <span class="ow">-&gt;</span> <span class="n">f</span> <span class="p">(</span><span class="n">fmap</span> <span class="n">split</span> <span class="o">.</span> <span class="n">run</span><span class="p">)</span>
+    <span class="kr">where</span> <span class="n">split</span> <span class="p">(</span><span class="kt">Left</span> <span class="n">e</span><span class="p">)</span> <span class="ow">=</span> <span class="p">(</span><span class="kt">Left</span> <span class="n">e</span><span class="p">,</span> <span class="kt">Nothing</span><span class="p">)</span>
+          <span class="n">split</span> <span class="p">(</span><span class="kt">Right</span> <span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">))</span> <span class="ow">=</span> <span class="p">(</span><span class="kt">Right</span> <span class="n">x</span><span class="p">,</span> <span class="kt">Just</span> <span class="n">y</span><span class="p">)</span>
+
+<span class="kr">instance</span> <span class="kt">MonadTransSplit</span> <span class="p">(</span><span class="kt">StateT</span> <span class="n">s</span><span class="p">)</span> <span class="kr">where</span>
+  <span class="n">liftWithSplit</span> <span class="n">f</span> <span class="ow">=</span> <span class="n">liftWith</span> <span class="o">$</span> <span class="nf">\</span><span class="n">run</span> <span class="ow">-&gt;</span> <span class="n">f</span> <span class="p">(</span><span class="n">fmap</span> <span class="n">split</span> <span class="o">.</span> <span class="n">run</span><span class="p">)</span>
+    <span class="kr">where</span> <span class="n">split</span> <span class="p">((</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">),</span> <span class="n">s</span><span class="p">)</span> <span class="ow">=</span> <span class="p">((</span><span class="n">x</span><span class="p">,</span> <span class="n">s</span><span class="p">),</span> <span class="kt">Just</span> <span class="n">y</span><span class="p">)</span>
+</pre></div>
+
+</div>
+
+<p>Then, using this, it would be possible to write a generic version of <code>pass</code>:</p>
+
+<div class="brush: haskell">
+ <div class="source">
+  <pre><span></span><span class="kr">default</span> <span class="n">pass</span> <span class="ow">::</span> <span class="p">(</span><span class="kt">MonadTransSplit</span> <span class="n">t</span><span class="p">,</span> <span class="kt">MonadWriter</span> <span class="n">w</span> <span class="n">m1</span><span class="p">,</span> <span class="n">m</span> <span class="o">~</span> <span class="n">t</span> <span class="n">m1</span><span class="p">)</span> <span class="ow">=&gt;</span> <span class="n">m</span> <span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">w</span> <span class="ow">-&gt;</span> <span class="n">w</span><span class="p">)</span> <span class="ow">-&gt;</span> <span class="n">m</span> <span class="n">a</span>
+<span class="nf">pass</span> <span class="n">m</span> <span class="ow">=</span> <span class="kr">do</span>
+  <span class="n">r</span> <span class="ow">&lt;-</span> <span class="n">liftWithSplit</span> <span class="o">$</span> <span class="nf">\</span><span class="n">run</span> <span class="ow">-&gt;</span> <span class="n">pass</span> <span class="o">$</span> <span class="n">run</span> <span class="n">m</span> <span class="o">&gt;&gt;=</span> <span class="nf">\</span><span class="kr">case</span>
+    <span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="kt">Just</span> <span class="n">f</span><span class="p">)</span> <span class="ow">-&gt;</span> <span class="n">return</span> <span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">f</span><span class="p">)</span>
+    <span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="kt">Nothing</span><span class="p">)</span> <span class="ow">-&gt;</span> <span class="n">return</span> <span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">id</span><span class="p">)</span>
+  <span class="n">restoreT</span> <span class="p">(</span><span class="n">return</span> <span class="n">r</span><span class="p">)</span>
+</pre></div>
+
+</div>
+
+<p>However, this seems pretty overkill for just one particular method, given that I have no idea if <code>MonadTransSplit</code> would be useful <em>anywhere</em> else. One interesting thing about going down this rabbit hole, though, is that I learned that <code>pass</code> has some somewhat surprising behavior when mixed with transformers like <code>ExceptT</code> or <code>MaybeT</code>, if you don’t carefully consider how it works. It’s a strange method with a somewhat strange interface, so I don’t think I have a satisfactory conclusion about <code>MonadWriter</code> yet.</p>
+
+<h1 id="regrouping-and-stepping-back">Regrouping and stepping back</h1>
+
+<p>Alright, that was a lot of fairly intense, potentially confusing code. What the heck did we actually accomplish? Well, we got a couple of things:</p>
+
+<ol>
+ <li>
+  <p>First, we developed a technique for writing simple mtl-style typeclasses that are derivable using <code>DeriveAnyClass</code> (or simply writing an empty instance declaration). We used a <code>MonadExit</code> class as a proof of concept, but really, the technique is applicable to most mtl-style typeclasses that represent simple effects (including, for example, <code>MonadIO</code>).</p>
+  <p> This technique is useful in isolation, even if you completely disregard the rest of the blog post. For an example where I recently applied it in real code, see <a href="https://github.com/cjdev/monad-persist/blob/1ce8568d881da3171f8689dd65f4f2df5f6dd313/library/Control/Monad/Persist.hs#L226-L271">the default signatures provided with <code>MonadPersist</code> from the <code>monad-persist</code> library</a>, which make <a href="https://github.com/cjdev/monad-persist/blob/1ce8568d881da3171f8689dd65f4f2df5f6dd313/library/Control/Monad/Persist.hs#L506-L513">defining instances completely trivial</a>. If you use mtl-style typeclasses in your own application to model effects, I don’t see much of a reason <em>not</em> to use this technique.</p></li>
+ <li>
+  <p>After <code>MonadExit</code>, we applied the same technique to the mtl-provided typeclasses <code>MonadReader</code>, <code>MonadError</code>, and <code>MonadState</code>. These are a bit trickier, since the first two need <code>MonadTransControl</code> in addition to the usual <code>MonadTrans</code>.</p>
+  <p> Whether or not this sort of thing should actually be added to mtl itself probably remains to be seen. For the simplest typeclass, <code>MonadState</code>, it seems like there probably aren’t many downsides, but given the difficulty implementing it for <code>MonadWriter</code> (or, heaven forbid, <code>MonadCont</code>, which I didn’t even seriously take a look at for this blog post), it doesn’t seem like an obvious win. Consistency is important.</p>
+  <p> Another downside that I sort of glossed over is possibly even more significant from a practical point of view: adding default signatures to <code>MonadReader</code> would require the removal of the default implementation of <code>ask</code> that is provided by the existing library (which implements <code>ask</code> in terms of <code>reader</code>). This would be backwards-incompatible, so it’d be difficult to change, even if people wanted to do it. Still, it’s interesting to consider what these typeclasses might look like if they were designed today.</p></li></ol>
+
+<p>Overall, these techniques are not a silver bullet for deriving mtl-style typeclasses, nor do they eliminate the n<sup>2</sup> instances problem that mtl style suffers from. That said, they <em>do</em> significantly reduce boilerplate and clutter in the simplest cases, and they demonstrate how modern Haskell’s hierarchy of typeclasses provides a lot of power, both to describe quite abstract concepts and to alleviate the need to write code by hand.</p>
+
+<p>I will continue to experiment with the ideas described in this blog post, and I’m sure some more pros and cons will surface as I explore the design space. If you have any suggestions for how to deal with “the <code>MonadWriter</code> problem”, I’d be very interested to hear them! In the meantime, consider using the technique in your application code when writing effectful, monadic typeclasses.</p>
+  <footer>
+    <ul class="pager">
+      <li class="previous">
+        <a href="/blog/2017/05/27/realizing-hackett-a-metaprogrammable-haskell/">&larr; <em>Realizing Hackett, a metaprogrammable Haskell</em></a>
+      </li>
+      <li class="next">
+        <a href="/blog/2017/01/05/rascal-is-now-hackett-plus-some-answers-to-questions/"><em>Rascal is now Hackett, plus some answers to questions</em> &rarr;</a>
+      </li>
+    </ul>
+  </footer>
+</article>
+        </div>
+      </section>
+      <footer>
+        <div class="content">
+          <h2 id="copyright-notice">© 2021, Alexis King</h2>
+          <h3>
+            Built with <a href="https://github.com/greghendershott/frog">Frog</a>, the
+            <strong>fr</strong>ozen bl<strong>og</strong> tool.
+          </h3>
+          <h3>
+            Feeds are available via <a href="/feeds/all.atom.xml">Atom</a>
+            or <a href="/feeds/all.rss.xml">RSS</a>.
+          </h3>
+        </div>
+      </footer>
+    </div>
+  </body>
+</html>

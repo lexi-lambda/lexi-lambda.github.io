@@ -1,0 +1,428 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <title>Macroexpand anywhere with `local-apply-transformer`!</title>
+    <meta name="description" content="Racket programmers are accustomed to the language’s incredible capacity for extension and customization. Writing useful macros that do complicated things is easy, and it’s simple to add new syntactic forms to meet domain-specific needs. However, it doesn’...">
+    <meta name="author"      content="Alexis King">
+    <meta name="keywords"    content="racket, macros">
+    <meta name="viewport"    content="width=device-width, initial-scale=1.0">
+    <link rel="icon"      href="/favicon.ico">
+    <link rel="canonical" href="http://lexi-lambda.github.io/blog/2018/10/06/macroexpand-anywhere-with-local-apply-transformer/">
+    <link rel="next" href="/blog/2018/09/13/custom-core-forms-in-racket-part-ii-generalizing-to-arbitrary-expressions-and-internal-definitions/">
+    <link rel="prev" href="/blog/2019/04/21/defeating-racket-s-separate-compilation-guarantee/">
+    <!-- CSS -->
+    <link rel="stylesheet" type="text/css" href="https://fonts.googleapis.com/css?family=Merriweather+Sans:400,300,300italic,400italic,700,700italic,800,800italic|Merriweather:400,300,300italic,400italic,700,700italic,900,900italic|Fira+Code:300,400,500,600,700">
+    <link rel="stylesheet" type="text/css" href="/css/application.min.css">
+    <link rel="stylesheet" type="text/css" href="/css/pygments.min.css">
+    <!-- Feeds -->
+    <link rel="alternate" type="application/atom+xml"
+          href="/feeds/all.atom.xml" title="Atom Feed">
+    <link rel="alternate" type="application/rss+xml"
+          href="/feeds/all.rss.xml" title="RSS Feed">
+    <!-- JS -->
+    <!-- <script src="/js/application.min.js"></script> -->
+    <script type="text/javascript">
+      (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+      (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+      m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+      })(window,document,'script','//www.google-analytics.com/analytics.js','ga');
+
+      ga('create', 'UA-65250372-1', 'auto');
+      ga('send', 'pageview');
+    </script>
+  </head>
+  <body>
+    <div id="page-content">
+      <!-- Navigation Bar -->
+      <header>
+        <nav role="navigation" class="navigation-bar">
+          <ul class="navigation-items left">
+            <li id="blog-title-header"><a href="/"><h1>Alexis King</h1></a></li>
+          </ul>
+          <ul class="navigation-items center"></ul>
+          <ul class="navigation-items right">
+            <li><a href="/">Home</a></li>
+            <li><a href="/resume.html">About Me</a></li>
+          </ul>
+        </nav>
+      </header>
+      <section role="main">
+        <!-- Main column -->
+        <div class="content" class="col-md-12">
+
+
+
+          <article class="main">
+  <header>
+    <h1 class="title">Macroexpand anywhere with <code>local-apply-transformer</code>!</h1>
+    <div class='date-and-tags'>
+      <time datetime="2018-10-06T22:34:46">
+        2018-10-06
+      </time>
+      <span style="margin: 0 3px">⦿</span>
+      <span class="tags"><a href="/tags/racket.html">racket</a>, <a href="/tags/macros.html">macros</a></span>
+    </div>
+  </header>
+
+<p>Racket programmers are accustomed to the language’s incredible capacity for extension and customization. Writing useful macros that do complicated things is easy, and it’s simple to add new syntactic forms to meet domain-specific needs. However, it doesn’t take long before many budding macrologists bump into the realization that only <em>certain positions</em> in Racket code are subject to macroexpansion.</p>
+
+<p>To illustrate, consider a macro that provides a Clojure-style <code>let</code> form:</p>
+
+<div class="brush: racket">
+ <div class="source">
+  <pre><span></span><span class="p">(</span><span class="k">require</span> <span class="n">syntax/parse/define</span><span class="p">)</span>
+
+<span class="p">(</span><span class="n">define-simple-macro</span> <span class="p">(</span><span class="n">clj-let</span> <span class="p">[{</span><span class="n">~seq</span> <span class="n">x:id</span> <span class="n">e:expr</span><span class="p">}</span> <span class="k">...</span><span class="p">]</span> <span class="n">body:expr</span> <span class="n">...+</span><span class="p">)</span>
+  <span class="p">(</span><span class="k">let</span> <span class="p">([</span><span class="n">x</span> <span class="n">e</span><span class="p">]</span> <span class="k">...</span><span class="p">)</span> <span class="n">body</span> <span class="k">...</span><span class="p">))</span>
+</pre></div>
+
+</div>
+
+<p>This can be used anywhere an expression is expected, and it does as one would expect:</p>
+
+<div class="brush: racket">
+ <div class="source">
+  <pre><span></span><span class="nb">&gt;</span> <span class="p">(</span><span class="n">clj-let</span> <span class="p">[</span><span class="n">x</span> <span class="mi">1</span>
+            <span class="n">y</span> <span class="mi">2</span><span class="p">]</span>
+    <span class="p">(</span><span class="nb">+</span> <span class="n">x</span> <span class="n">y</span><span class="p">))</span>
+<span class="mi">3</span>
+</pre></div>
+
+</div>
+
+<p>However, a novice macro programmer might realize that <code>clj-let</code> really only modifies the syntax of <em>binding pairs</em> for a <code>let</code> form. Therefore, could one define a macro that only adjusts the binding pairs of some existing <code>let</code> form instead of expanding to an entire <code>let</code>? That is, could one write the above example like this:</p>
+
+<div class="brush: racket">
+ <div class="source">
+  <pre><span></span><span class="p">(</span><span class="n">define-simple-macro</span> <span class="p">(</span><span class="n">clj-binding-pairs</span> <span class="p">[{</span><span class="n">~seq</span> <span class="n">x:id</span> <span class="n">e:expr</span><span class="p">}</span> <span class="k">...</span><span class="p">])</span>
+  <span class="p">([</span><span class="n">x</span> <span class="n">e</span><span class="p">]</span> <span class="k">...</span><span class="p">))</span>
+
+<span class="nb">&gt;</span> <span class="p">(</span><span class="k">let</span> <span class="p">(</span><span class="n">clj-binding-pairs</span>
+        <span class="p">[</span><span class="n">x</span> <span class="mi">1</span>
+         <span class="n">y</span> <span class="mi">2</span><span class="p">])</span>
+    <span class="p">(</span><span class="nb">+</span> <span class="n">x</span> <span class="n">y</span><span class="p">))</span>
+<span class="mi">3</span>
+</pre></div>
+
+</div>
+
+<p>The answer is <em>no</em>: the binding pairs of a <code>let</code> form are not subject to macroexpansion, so the above attempt fails with a syntax error. In this blog post, we will examine the reasons behind this limitation, then explain how to overcome it using a solution that allows macroexpansion <em>anywhere</em> in a Racket program.</p>
+<!-- more-->
+
+<h1 id="why-only-some-positions-are-subject-to-macroexpansion">Why only some positions are subject to macroexpansion</h1>
+
+<p>To understand <em>why</em> the macroexpander refuses to touch certain positions in a program, we must first understand how the macro system operates. In Racket, a macro is defined as a compile-time function associated with a particular binding, and macros are given complete control over the syntax trees they are surrounded with. If we define a macro <em><code>mac</code></em>, then we write the expression <code>(
+  <i>mac</i>
+  <i>form</i>)</code>, <em><code>form</code></em> is provided as-is to <em><code>mac</code></em> as a syntax object. Its structure can be anything at all, since <em><code>mac</code></em> can be an arbitrary Racket function, and that function can use <em><code>form</code></em> however it pleases.</p>
+
+<p>To give a concrete illustration, consider a macro that binds some identifiers to symbols in a local scope:</p>
+
+<div class="brush: racket">
+ <div class="source">
+  <pre><span></span><span class="p">(</span><span class="n">define-simple-macro</span> <span class="p">(</span><span class="n">let-symbols</span> <span class="p">(</span><span class="n">x:id</span> <span class="k">...</span><span class="p">)</span> <span class="n">body</span> <span class="n">...+</span><span class="p">)</span>
+  <span class="p">(</span><span class="k">let</span> <span class="p">([</span><span class="n">x</span> <span class="o">&#39;</span><span class="ss">x</span><span class="p">]</span> <span class="k">...</span><span class="p">)</span> <span class="n">body</span> <span class="k">...</span><span class="p">))</span>
+
+<span class="nb">&gt;</span> <span class="p">(</span><span class="n">let-symbols</span> <span class="p">(</span><span class="n">hello</span> <span class="n">goodbye</span><span class="p">)</span>
+    <span class="p">(</span><span class="nb">list</span> <span class="n">hello</span> <span class="n">goodbye</span><span class="p">))</span>
+<span class="o">&#39;</span><span class="p">(</span><span class="ss">hello</span> <span class="ss">goodbye</span><span class="p">)</span>
+</pre></div>
+
+</div>
+
+<p>It isn’t the most exciting macro in the world, but it illustrates a key point: the first subform to <code>let-symbols</code> is a list of identifiers that are eventually put in <em>binding</em> position. This means that <code>hello</code> and <code>goodbye</code> are bindings, not uses, and such bindings shadow any existing bindings that might have been in scope:</p>
+
+<div class="brush: racket">
+ <div class="source">
+  <pre><span></span><span class="nb">&gt;</span> <span class="p">(</span><span class="k">let</span> <span class="p">([</span><span class="n">foo</span> <span class="mi">42</span><span class="p">])</span>
+    <span class="p">(</span><span class="n">let-symbols</span> <span class="p">(</span><span class="n">foo</span><span class="p">)</span>
+      <span class="n">foo</span><span class="p">))</span>
+<span class="o">&#39;</span><span class="ss">foo</span>
+</pre></div>
+
+</div>
+
+<p>This might not seem very interesting, but it’s critical to understand, since it means that the expander <em>can’t know</em> which sub-pieces of a use of <code>let-symbols</code> will eventually be expressions themselves until it expands the macro and discovers it produces a <code>let</code> form, so it can’t know where it’s safe to perform macroexpansion. To make this more explicit, imagine we define a macro under some name, then try and use that name with our <code>let-symbols</code> macro:</p>
+
+<div class="brush: racket">
+ <div class="source">
+  <pre><span></span><span class="p">(</span><span class="n">define-simple-macro</span> <span class="p">(</span><span class="n">hello</span> <span class="n">x:id</span><span class="p">)</span>
+  <span class="p">(</span><span class="n">x:id</span><span class="p">))</span>
+
+<span class="nb">&gt;</span> <span class="p">(</span><span class="n">let-symbols</span> <span class="p">(</span><span class="n">hello</span> <span class="n">goodbye</span><span class="p">)</span>
+    <span class="n">hello</span><span class="p">)</span>
+</pre></div>
+
+</div>
+
+<p>What should the above program do? If we treat the first use of <code>hello</code> in the <code>let-symbols</code> form as a macro application, then <code>(hello goodbye)</code> should be transformed into <code>(goodbye)</code>, and the use of <code>hello</code> in the body should be a syntax error. But if the first use of <code>hello</code> was instead intended to be a binder, then it should shadow the <code>hello</code> definition above, and the output of the program should be <code>'hello</code>.</p>
+
+<p>To avoid the chaos that would ensue if defining a macro could completely break local reasoning about other macros, Racket chooses the second option, and the program produces <code>'hello</code>. The macroexpander has no way of knowing <em>how</em> each macro will inspect its constituent pieces, so it avoids touching anything until the macro expands. After it discovers the <code>let</code> form in the expansion of <code>let-symbols</code>, it can safely determine that the body expressions are, indeed, expressions, and it can recursively expand any macros they contain. To put things another way, a macro’s sub-forms are never expanded before the macro itself is expanded, only after.</p>
+
+<h1 id="forcing-sub-form-expansion">Forcing sub-form expansion</h1>
+
+<p>The above section explains why the expander must operate as it does, but it’s a little bit unsatisfying. What if we write a macro where we <em>want</em> certain sub-forms to be expanded before they are passed to us? Fortunately, the Racket macro system provides an API to handle this use case, too.</p>
+
+<p>It is true that the Racket macro system never <em>automatically</em> expands sub-forms before outer forms are expanded, but macro transformers can explicitly op-in to recursive expansion via the <a href="http://docs.racket-lang.org/reference/stxtrans.html#%28def._%28%28quote._~23~25kernel%29._local-expand%29%29"><code>local-expand</code></a> function. This function effectively yields control back to the expander to expand some arbitrary piece of syntax as an expression, and when it returns, the macro transformer can inspect the expanded expression however it wishes. In theory, this can be used to implement extensible macros that allow macroexpansion in locations other than expression position.</p>
+
+<p>To give an example of such a macro, consider the Racket <code>match</code> form, which implements an expressive pattern-matcher as a macro. One of the most interesting qualities of Racket’s <code>match</code> macro is that its pattern language is user-extensible, essentially allowing pattern-level macros. For example, a user might find they frequently match against natural numbers, and they wish to be able to write <code>(nat n)</code> as a shorthand for <code>(? exact-nonnegative-integer? n)</code>. Fortunately, this is easy using <code>define-match-expander</code>:</p>
+
+<div class="brush: racket">
+ <div class="source">
+  <pre><span></span><span class="p">(</span><span class="k">define-match-expander</span> <span class="n">nat</span>
+  <span class="p">(</span><span class="n">syntax-parser</span>
+    <span class="p">[(</span><span class="k">_</span> <span class="n">pat</span><span class="p">)</span>
+     <span class="o">#&#39;</span><span class="p">(</span><span class="n">?</span> <span class="nb">exact-nonnegative-integer?</span> <span class="n">pat</span><span class="p">)]))</span>
+
+<span class="nb">&gt;</span> <span class="p">(</span><span class="k">match</span> <span class="o">&#39;</span><span class="p">(</span><span class="mi">-5</span> <span class="mi">-2</span> <span class="mi">4</span> <span class="mi">-7</span><span class="p">)</span>
+    <span class="p">[(</span><span class="nb">list</span> <span class="k">_</span> <span class="k">...</span> <span class="p">(</span><span class="n">nat</span> <span class="n">n</span><span class="p">)</span> <span class="k">_</span> <span class="k">...</span><span class="p">)</span>
+     <span class="n">n</span><span class="p">])</span>
+<span class="mi">4</span>
+</pre></div>
+
+</div>
+
+<p>Clearly, <code>match</code> is somehow expanding the <code>nat</code> match expander as a part of its expansion. Is it using <code>local-expand</code>?</p>
+
+<p>Well, no. While <a href="/blog/2018/04/15/reimplementing-hackett-s-type-language-expanding-to-custom-core-forms-in-racket/">a previous blog post of mine</a> has illustrated that it is possible to do such a thing with <code>local-expand</code> via some clever trickery, <code>local-expand</code> is really designed to expand <em>expressions</em>. This is a problem, since <code>(nat n)</code> is not an expression, it’s a pattern: it will expand into <code>(? exact-nonnegative-integer? n)</code>, which will lead to a syntax error, since <code>?</code> is not bound in the world of expressions. Instead, for a long while, <code>match</code> and forms like it have emulated how the expander performs macroexpansion in ad-hoc ways. Fortunately, as of Racket v7.0, the new <a href="http://docs.racket-lang.org/syntax/transformer-helpers.html#%28def._%28%28lib._syntax%2Fapply-transformer..rkt%29._local-apply-transformer%29%29"><code>local-apply-transformer</code></a> API provides a way to invoke recursive macroexpansion in a consistent way, and it doesn’t assume that what’s being expanded is an expression.</p>
+
+<h2 id="a-closer-look-at-local-apply-transformer">A closer look at <code>local-apply-transformer</code></h2>
+
+<p>If <code>local-apply-transformer</code> is the answer, what does it actually do? Well, <code>local-apply-transformer</code> allows explicitly invoking a transformer function on some piece of syntax and retrieving the result. In other words, <code>local-apply-transformer</code> allows expanding an arbitrary macro, but since it doesn’t make any assumptions about what the output will be, it only expands it <em>once</em>: just a single step of macro transformation.</p>
+
+<p>To illustrate, we can write a macro that uses <code>local-apply-transformer</code> to invoke a transformer function and preserve the result using <code>quote-syntax</code>:</p>
+
+<div class="brush: racket">
+ <div class="source">
+  <pre><span></span><span class="p">(</span><span class="k">require</span> <span class="p">(</span><span class="k">for-syntax</span> <span class="n">syntax/apply-transformer</span><span class="p">))</span>
+
+<span class="p">(</span><span class="k">define-for-syntax</span> <span class="n">flip</span>
+  <span class="p">(</span><span class="n">syntax-parser</span>
+    <span class="p">[(</span><span class="n">a</span> <span class="n">b</span> <span class="n">more</span> <span class="k">...</span><span class="p">)</span>
+     <span class="o">#&#39;</span><span class="p">(</span><span class="n">b</span> <span class="n">a</span> <span class="n">more</span> <span class="k">...</span><span class="p">)]))</span>
+
+<span class="p">(</span><span class="n">define-simple-macro</span> <span class="p">(</span><span class="n">mac</span><span class="p">)</span>
+  <span class="kd">#:with</span> <span class="n">result</span> <span class="p">(</span><span class="n">local-apply-transformer</span> <span class="n">flip</span> <span class="o">#&#39;</span><span class="p">(([</span><span class="n">x</span> <span class="mi">1</span><span class="p">])</span> <span class="k">let</span> <span class="n">x</span><span class="p">)</span> <span class="o">&#39;</span><span class="ss">expression</span><span class="p">)</span>
+  <span class="p">(</span><span class="k">quote-syntax</span> <span class="n">result</span><span class="p">))</span>
+</pre></div>
+
+</div>
+
+<p>When we use <code>mac</code>, our <code>flip</code> function will be applied, as a macro, to the syntax object we provide:</p>
+
+<div class="brush: racket">
+ <div class="source">
+  <pre><span></span><span class="nb">&gt;</span> <span class="p">(</span><span class="n">mac</span><span class="p">)</span>
+<span class="n">#&lt;syntax</span> <span class="p">(</span><span class="k">let</span> <span class="p">((</span><span class="n">x</span> <span class="mi">1</span><span class="p">))</span> <span class="n">x</span><span class="p">)</span><span class="nb">&gt;</span>
+</pre></div>
+
+</div>
+
+<p>Alright, so this works, but it raises some questions. Why is <code>flip</code> defined as a function at phase 1 (using <code>define-for-syntax</code>) instead of as a macro (using <code>define-syntax</code>)? What’s the deal with the <code>'expression</code> argument to <code>local-apply-transformer</code> given that <code>local-apply-transformer</code> is supposedly decoupled from expression expansion? And finally, how is this any different from just calling our <code>flip</code> function on the syntax object directly by writing <code>(flip #'(([x 1]) let x))</code>?</p>
+
+<p>Let’s start with the first of those questions: why is <code>flip</code> defined as a function rather than as a macro? Well, <code>local-apply-transformer</code> is a fairly low-level operation: remember, it doesn’t assume <em>anything</em> about the argument it’s given! Therefore, it doesn’t take an expression containing a macro and expand it based on its structure, it needs to be explicitly provided the macro transformer function to apply. In practice, this might not seem very useful, since presumably we want to write our macros as macros, not as phase 1 functions. Fortunately, it’s possible to look up the function associated with a macro binding using the <a href="http://docs.racket-lang.org/reference/stxtrans.html#%28def._%28%28quote._~23~25kernel%29._syntax-local-value%29%29"><code>syntax-local-value</code></a> function, so if we use that, we can define <code>flip</code> using <code>define-syntax</code> as usual:</p>
+
+<div class="brush: racket">
+ <div class="source">
+  <pre><span></span><span class="p">(</span><span class="k">define-syntax</span> <span class="n">flip</span>
+  <span class="p">(</span><span class="n">syntax-parser</span>
+    <span class="p">[(</span><span class="n">a</span> <span class="n">b</span> <span class="n">more</span> <span class="k">...</span><span class="p">)</span>
+     <span class="o">#&#39;</span><span class="p">(</span><span class="n">b</span> <span class="n">a</span> <span class="n">more</span> <span class="k">...</span><span class="p">)]))</span>
+
+<span class="p">(</span><span class="n">define-simple-macro</span> <span class="p">(</span><span class="n">mac</span><span class="p">)</span>
+  <span class="kd">#:with</span> <span class="n">result</span> <span class="p">(</span><span class="n">local-apply-transformer</span> <span class="p">(</span><span class="nb">syntax-local-value</span> <span class="o">#&#39;</span><span class="n">flip</span><span class="p">)</span>
+                                         <span class="o">#&#39;</span><span class="p">(([</span><span class="n">x</span> <span class="mi">1</span><span class="p">])</span> <span class="k">let</span> <span class="n">x</span><span class="p">)</span>
+                                         <span class="o">&#39;</span><span class="ss">expression</span><span class="p">)</span>
+  <span class="p">(</span><span class="k">quote-syntax</span> <span class="n">result</span><span class="p">))</span>
+</pre></div>
+
+</div>
+
+<p>Now for the next question: what is the meaning of the <code>'expression</code> argument? This one is more of a historical artifact than anything else: when the expander applies a macro transformer, it does it in a “context”, which is accessible using the <a href="http://docs.racket-lang.org/reference/stxtrans.html#%28def._%28%28quote._~23~25kernel%29._syntax-local-context%29%29"><code>syntax-local-context</code></a> function. This context can be one of a predefined enumeration of cases, including <code>'expression</code>, <code>'top-level</code>, <code>'module</code>, <code>'module-begin</code>, or a list representing a definition context. Whether or not any of those actually apply to our use case, we still have to pick one, but aside from how they affect the value returned by <code>syntax-local-context</code> (which some macros inspect), the value we choose is largely irrelevant. Using <code>'expression</code> will do, even if it’s a bit of a lie.</p>
+
+<p>Finally, how does any of this differ from just applying the function we get directly? Well, the critical answer is all about <em>hygiene</em>. Racket’s macro system is hygienic, which, among other things, ensures bindings defined with the same name in different places do not unintentionally conflict. Racket’s hygiene mechanism is implemented in the macroexpander, when macro transformers are applied. If we just applied the <code>flip</code> transformer procedure to a syntax object directly, we would circumvent this hygiene mechanism, potentially causing all sorts of problems. By using <code>local-apply-transformer</code>, we ensure hygiene is preserved.</p>
+
+<p>There is one small problem left with our program, however. Can you spot it? The key is to consider what would happen if we used <code>flip</code> as an ordinary macro, without using <code>local-apply-transformer</code>:</p>
+
+<div class="brush: racket">
+ <div class="source">
+  <pre><span></span><span class="nb">&gt;</span> <span class="p">(</span><span class="n">flip</span> <span class="p">(([</span><span class="n">x</span> <span class="mi">1</span><span class="p">])</span> <span class="k">let</span> <span class="n">x</span><span class="p">))</span>
+<span class="n">let:</span> <span class="n">bad</span> <span class="k">syntax</span>
+  <span class="n">in:</span> <span class="k">let</span>
+</pre></div>
+
+</div>
+
+<p>What happened? Well, remember that when a macro in Racket is used, it receives the whole use site as a syntax object: in this case, <code>#'(flip (([x 1]) let x))</code>. This means that <code>flip</code> ought to be written to parse its argument slightly differently:</p>
+
+<div class="brush: racket">
+ <div class="source">
+  <pre><span></span><span class="p">(</span><span class="k">define-syntax</span> <span class="n">flip</span>
+  <span class="p">(</span><span class="n">syntax-parser</span>
+    <span class="p">[(</span><span class="k">_</span> <span class="p">(</span><span class="n">a</span> <span class="n">b</span> <span class="n">more</span> <span class="k">...</span><span class="p">))</span>
+     <span class="o">#&#39;</span><span class="p">(</span><span class="n">b</span> <span class="n">a</span> <span class="n">more</span> <span class="k">...</span><span class="p">)]))</span>
+</pre></div>
+
+</div>
+
+<p>Indeed, now that we’ve properly restructured the macro, we can easily switch to using the convenient <code>define-simple-macro</code> shorthand:</p>
+
+<div class="brush: racket">
+ <div class="source">
+  <pre><span></span><span class="p">(</span><span class="n">define-simple-macro</span> <span class="p">(</span><span class="n">flip</span> <span class="p">(</span><span class="n">a</span> <span class="n">b</span> <span class="n">more</span> <span class="k">...</span><span class="p">))</span>
+  <span class="p">(</span><span class="n">b</span> <span class="n">a</span> <span class="n">more</span> <span class="k">...</span><span class="p">))</span>
+</pre></div>
+
+</div>
+
+<p>This means we also need to update our definition of <code>mac</code> to provide the full syntax object the expander would:</p>
+
+<div class="brush: racket">
+ <div class="source">
+  <pre><span></span><span class="p">(</span><span class="n">define-simple-macro</span> <span class="p">(</span><span class="n">mac</span><span class="p">)</span>
+  <span class="kd">#:with</span> <span class="n">result</span> <span class="p">(</span><span class="n">local-apply-transformer</span> <span class="p">(</span><span class="nb">syntax-local-value</span> <span class="o">#&#39;</span><span class="n">flip</span><span class="p">)</span>
+                                         <span class="o">#&#39;</span><span class="p">(</span><span class="n">flip</span> <span class="p">(([</span><span class="n">x</span> <span class="mi">1</span><span class="p">])</span> <span class="k">let</span> <span class="n">x</span><span class="p">))</span>
+                                         <span class="o">&#39;</span><span class="ss">expression</span><span class="p">)</span>
+  <span class="p">(</span><span class="k">quote-syntax</span> <span class="n">result</span><span class="p">))</span>
+</pre></div>
+
+</div>
+
+<p>This might seem redundant, but remember, <code>local-apply-transformer</code> is very low-level! While the convention that <code>(
+  <i>mac</i> . _)</code> is the syntax for a macro transformation might seem obvious, <code>local-apply-transformer</code> makes no assumptions. It just does what we tell it to do.</p>
+
+<h2 id="applying-local-apply-transformer">Applying <code>local-apply-transformer</code></h2>
+
+<p>So what does <code>local-apply-transformer</code> have to do with the problem at the beginning of this blog post? Well, as it happens, we can use <code>local-apply-transformer</code> to implement a macro that allows expansion <em>anywhere</em> using some simple tricks. While it’s true that we cannot magically divine which locations ought to be expanded, what we <em>can</em> do is explicitly annotate which places to expand.</p>
+
+<p>To do this, we will implement a macro, <code>expand-inside</code>, that looks for subforms annotated with a special <code>$expand</code> identifier and performs macro transformation on those locations before proceeding with ordinary macroexpansion. Using the <code>clj-binding-pairs</code> example from the beginning of this blog post, our solution to that problem will look like this:</p>
+
+<div class="brush: racket">
+ <div class="source">
+  <pre><span></span><span class="p">(</span><span class="n">define-simple-macro</span> <span class="p">(</span><span class="n">clj-binding-pairs</span> <span class="p">[{</span><span class="n">~seq</span> <span class="n">x:id</span> <span class="n">e:expr</span><span class="p">}</span> <span class="k">...</span><span class="p">])</span>
+  <span class="p">([</span><span class="n">x</span> <span class="n">e</span><span class="p">]</span> <span class="k">...</span><span class="p">))</span>
+
+<span class="nb">&gt;</span> <span class="p">(</span><span class="n">expand-inside</span>
+   <span class="p">(</span><span class="k">let</span> <span class="p">(</span><span class="n">$expand</span>
+         <span class="p">(</span><span class="n">clj-binding-pairs</span>
+          <span class="p">[</span><span class="n">x</span> <span class="mi">1</span>
+           <span class="n">y</span> <span class="mi">2</span><span class="p">]))</span>
+     <span class="p">(</span><span class="nb">+</span> <span class="n">x</span> <span class="n">y</span><span class="p">)))</span>
+<span class="mi">3</span>
+</pre></div>
+
+</div>
+
+<p>Put another way, <code>expand-inside</code> will force eager expansion on any subform surrounded with an <code>$expand</code> annotation.</p>
+
+<p>We’ll start by defining the <code>$expand</code> binding itself. This binding won’t mean anything at all outside of <code>expand-inside</code>, but we’d like it to be a unique binding so that users can rename it (using, <code>rename-in</code>, for example) if they wish. To do this, we’ll use the usual trick of defining it as a macro that always produces an error if it’s ever used:</p>
+
+<div class="brush: racket">
+ <div class="source">
+  <pre><span></span><span class="p">(</span><span class="k">define-syntax</span> <span class="p">(</span><span class="n">$expand</span> <span class="n">stx</span><span class="p">)</span>
+  <span class="p">(</span><span class="nb">raise-syntax-error</span> <span class="no">#f</span> <span class="s2">"illegal outside an ‘expand-inside’ form"</span> <span class="n">stx</span><span class="p">))</span>
+</pre></div>
+
+</div>
+
+<p>Next, we’ll implement a syntax class that will form the bulk of our implementation of <code>expand-inside</code>. Since we need to find uses of <code>$expand</code> that might be deeply-nested inside the syntax object provided to <code>expand-inside</code>, we need to recursively look through the syntax object, find any instances of <code>$expand</code>, and put it all back together once we’re done. This can be done relatively cleanly using a recursive syntax class:</p>
+
+<div class="brush: racket">
+ <div class="source">
+  <pre><span></span><span class="p">(</span><span class="k">begin-for-syntax</span>
+  <span class="p">(</span><span class="n">define-syntax-class</span> <span class="n">do-expand-inside</span>
+    <span class="kd">#:literals</span> <span class="p">[</span><span class="n">$expand</span><span class="p">]</span>
+    <span class="kd">#:attributes</span> <span class="p">[</span><span class="n">expansion</span><span class="p">]</span>
+    <span class="p">[</span><span class="n">pattern</span> <span class="p">{</span><span class="n">~or</span> <span class="n">$expand</span> <span class="p">(</span><span class="n">$expand</span> <span class="o">.</span> <span class="k">_</span><span class="p">)}</span>
+             <span class="kd">#:with</span> <span class="n">:do-expand-inside</span> <span class="p">(</span><span class="n">do-$expand</span> <span class="n">this-syntax</span><span class="p">)]</span>
+    <span class="p">[</span><span class="n">pattern</span> <span class="p">(</span><span class="n">a:do-expand-inside</span> <span class="o">.</span> <span class="n">b:do-expand-inside</span><span class="p">)</span>
+             <span class="kd">#:attr</span> <span class="n">expansion</span>
+             <span class="p">(</span><span class="k">let</span> <span class="p">([</span><span class="n">reassembled</span> <span class="p">(</span><span class="nb">cons</span> <span class="p">(</span><span class="n">attribute</span> <span class="n">a.expansion</span><span class="p">)</span>
+                                      <span class="p">(</span><span class="n">attribute</span> <span class="n">b.expansion</span><span class="p">))])</span>
+               <span class="p">(</span><span class="k">if</span> <span class="p">(</span><span class="nb">syntax?</span> <span class="n">this-syntax</span><span class="p">)</span>
+                   <span class="p">(</span><span class="nb">datum-&gt;syntax</span> <span class="n">this-syntax</span> <span class="n">reassembled</span>
+                                  <span class="n">this-syntax</span> <span class="n">this-syntax</span><span class="p">)</span>
+                   <span class="n">reassembled</span><span class="p">))]</span>
+    <span class="p">[</span><span class="n">pattern</span> <span class="k">_</span> <span class="kd">#:attr</span> <span class="n">expansion</span> <span class="n">this-syntax</span><span class="p">]))</span>
+</pre></div>
+
+</div>
+
+<p>There are some tricky details to get right in the reassembly of pairs, since syntax lists are actually composed of ordinary pairs rather than syntax pairs, but ultimately, the code for walking a syntax object is small. The key case of this syntax class is the call to <code>do-$expand</code> in the first clause, which we have not yet defined. This function will actually handle performing the expansion by invoking <code>local-apply-transformer</code>:</p>
+
+<div class="brush: racket">
+ <div class="source">
+  <pre><span></span><span class="p">(</span><span class="k">begin-for-syntax</span>
+  <span class="p">(</span><span class="k">define</span> <span class="p">(</span><span class="n">do-$expand</span> <span class="n">stx</span><span class="p">)</span>
+    <span class="p">(</span><span class="n">syntax-parse</span> <span class="n">stx</span>
+      <span class="p">[(</span><span class="k">_</span> <span class="p">{</span><span class="n">~and</span> <span class="n">form</span> <span class="p">{</span><span class="n">~or</span> <span class="n">trans</span> <span class="p">(</span><span class="n">trans</span> <span class="o">.</span> <span class="k">_</span><span class="p">)}})</span>
+       <span class="kd">#:declare</span> <span class="n">trans</span> <span class="p">(</span><span class="n">static</span> <span class="p">(</span><span class="nb">disjoin</span> <span class="nb">procedure?</span> <span class="nb">set!-transformer?</span><span class="p">)</span>
+                               <span class="s2">"syntax transformer"</span><span class="p">)</span>
+       <span class="p">(</span><span class="n">local-apply-transformer</span> <span class="p">(</span><span class="n">attribute</span> <span class="n">trans.value</span><span class="p">)</span>
+                                <span class="o">#&#39;</span><span class="n">form</span>
+                                <span class="o">&#39;</span><span class="ss">expression</span><span class="p">)])))</span>
+</pre></div>
+
+</div>
+
+<p>This uses the handy <code>static</code> syntax class that comes with <code>syntax/parse</code>, which implicitly handles the call to <code>syntax-local-value</code> and produces a nice error message if the value returned does not match a predicate. All we have to do is apply the transformer value bound to the <code>trans.value</code> attribute using <code>local-apply-transformer</code>, and now the <code>expand-macro</code> can be written in just a couple lines of code:</p>
+
+<div class="brush: racket">
+ <div class="source">
+  <pre><span></span><span class="p">(</span><span class="n">define-syntax-parser</span> <span class="n">expand-inside</span>
+  <span class="kd">#:track-literals</span>
+  <span class="p">[(</span><span class="k">_</span> <span class="n">form:do-expand-inside</span><span class="p">)</span> <span class="o">#&#39;</span><span class="n">form.expansion</span><span class="p">])</span>
+</pre></div>
+
+</div>
+
+<p>(Using the <code>#:track-literals</code> option, also new in Racket v7.0, ensures that Check Syntax will be able to recognize the uses of <code>$expand</code> that disappear from after <code>expand-inside</code> is expanded.)</p>
+
+<p>Putting everything together, our example from above really works:</p>
+
+<div class="brush: racket">
+ <div class="source">
+  <pre><span></span><span class="p">(</span><span class="n">define-simple-macro</span> <span class="p">(</span><span class="n">clj-binding-pairs</span> <span class="p">[{</span><span class="n">~seq</span> <span class="n">x:id</span> <span class="n">e:expr</span><span class="p">}</span> <span class="k">...</span><span class="p">])</span>
+  <span class="p">([</span><span class="n">x</span> <span class="n">e</span><span class="p">]</span> <span class="k">...</span><span class="p">))</span>
+
+<span class="nb">&gt;</span> <span class="p">(</span><span class="n">expand-inside</span>
+   <span class="p">(</span><span class="k">let</span> <span class="p">(</span><span class="n">$expand</span>
+         <span class="p">(</span><span class="n">clj-binding-pairs</span>
+          <span class="p">[</span><span class="n">x</span> <span class="mi">1</span>
+           <span class="n">y</span> <span class="mi">2</span><span class="p">]))</span>
+     <span class="p">(</span><span class="nb">+</span> <span class="n">x</span> <span class="n">y</span><span class="p">)))</span>
+<span class="mi">3</span>
+</pre></div>
+
+</div>
+
+<p>That’s it. All told, the entire implementation is only about 30 lines of code. For a full, compilable, working example, see <a href="https://gist.github.com/lexi-lambda/65d69043023b519694f50dfca2dc7d33">this gist</a>.</p>
+  <footer>
+    <ul class="pager">
+      <li class="previous">
+        <a href="/blog/2019/04/21/defeating-racket-s-separate-compilation-guarantee/">&larr; <em>Defeating Racket’s separate compilation guarantee</em></a>
+      </li>
+      <li class="next">
+        <a href="/blog/2018/09/13/custom-core-forms-in-racket-part-ii-generalizing-to-arbitrary-expressions-and-internal-definitions/"><em>Custom core forms in Racket, part II: generalizing to arbitrary expressions and internal definitions</em> &rarr;</a>
+      </li>
+    </ul>
+  </footer>
+</article>
+        </div>
+      </section>
+      <footer>
+        <div class="content">
+          <h2 id="copyright-notice">© 2021, Alexis King</h2>
+          <h3>
+            Built with <a href="https://github.com/greghendershott/frog">Frog</a>, the
+            <strong>fr</strong>ozen bl<strong>og</strong> tool.
+          </h3>
+          <h3>
+            Feeds are available via <a href="/feeds/all.atom.xml">Atom</a>
+            or <a href="/feeds/all.rss.xml">RSS</a>.
+          </h3>
+        </div>
+      </footer>
+    </div>
+  </body>
+</html>

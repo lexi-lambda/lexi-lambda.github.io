@@ -1,0 +1,894 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <title>Custom core forms in Racket, part II: generalizing to arbitrary expressions and internal definitions</title>
+    <meta name="description" content="In my previous blog post, I covered the process involved in creating a small language with a custom set of core forms. Specifically, it discussed what was necessary to create Hackett’s type language, which involved expanding to custom expressions. While s...">
+    <meta name="author"      content="Alexis King">
+    <meta name="keywords"    content="racket, macros">
+    <meta name="viewport"    content="width=device-width, initial-scale=1.0">
+    <link rel="icon"      href="/favicon.ico">
+    <link rel="canonical" href="http://lexi-lambda.github.io/blog/2018/09/13/custom-core-forms-in-racket-part-ii-generalizing-to-arbitrary-expressions-and-internal-definitions/">
+    <link rel="next" href="/blog/2018/04/15/reimplementing-hackett-s-type-language-expanding-to-custom-core-forms-in-racket/">
+    <link rel="prev" href="/blog/2018/10/06/macroexpand-anywhere-with-local-apply-transformer/">
+    <!-- CSS -->
+    <link rel="stylesheet" type="text/css" href="https://fonts.googleapis.com/css?family=Merriweather+Sans:400,300,300italic,400italic,700,700italic,800,800italic|Merriweather:400,300,300italic,400italic,700,700italic,900,900italic|Fira+Code:300,400,500,600,700">
+    <link rel="stylesheet" type="text/css" href="/css/application.min.css">
+    <link rel="stylesheet" type="text/css" href="/css/pygments.min.css">
+    <!-- Feeds -->
+    <link rel="alternate" type="application/atom+xml"
+          href="/feeds/all.atom.xml" title="Atom Feed">
+    <link rel="alternate" type="application/rss+xml"
+          href="/feeds/all.rss.xml" title="RSS Feed">
+    <!-- JS -->
+    <!-- <script src="/js/application.min.js"></script> -->
+    <script type="text/javascript">
+      (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+      (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+      m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+      })(window,document,'script','//www.google-analytics.com/analytics.js','ga');
+
+      ga('create', 'UA-65250372-1', 'auto');
+      ga('send', 'pageview');
+    </script>
+  </head>
+  <body>
+    <div id="page-content">
+      <!-- Navigation Bar -->
+      <header>
+        <nav role="navigation" class="navigation-bar">
+          <ul class="navigation-items left">
+            <li id="blog-title-header"><a href="/"><h1>Alexis King</h1></a></li>
+          </ul>
+          <ul class="navigation-items center"></ul>
+          <ul class="navigation-items right">
+            <li><a href="/">Home</a></li>
+            <li><a href="/resume.html">About Me</a></li>
+          </ul>
+        </nav>
+      </header>
+      <section role="main">
+        <!-- Main column -->
+        <div class="content" class="col-md-12">
+
+
+
+          <article class="main">
+  <header>
+    <h1 class="title">Custom core forms in Racket, part II: generalizing to arbitrary expressions and internal definitions</h1>
+    <div class='date-and-tags'>
+      <time datetime="2018-09-13T00:00:00">
+        2018-09-13
+      </time>
+      <span style="margin: 0 3px">⦿</span>
+      <span class="tags"><a href="/tags/racket.html">racket</a>, <a href="/tags/macros.html">macros</a></span>
+    </div>
+  </header>
+
+<p>In my <a href="/blog/2018/04/15/reimplementing-hackett-s-type-language-expanding-to-custom-core-forms-in-racket/">previous blog post</a>, I covered the process involved in creating a small language with a custom set of core forms. Specifically, it discussed what was necessary to create Hackett’s type language, which involved expanding to custom expressions. While somewhat involved, Hackett’s type language was actually a relatively simple example to use, since it only made use of a subset of the linguistic features Racket supports. In this blog post, I’ll demonstrate how that same technique can be generalized to support runtime bindings and internal definitions, two key concepts useful if intending to develop a more featureful language than Hackett’s intentionally-restrictive type system.</p>
+<!-- more-->
+
+<h1 id="what-are-internal-definitions">What are internal definitions?</h1>
+
+<p>This blog post is going to be largely focused on how to properly implement a form that handles the expansion of <em>internal definitions</em> in Racket. This is a tricky topic to get right, but before we can discuss internal definitions, we have to establish what definitions themselves are and how they relate to other binding forms.</p>
+
+<p>In a traditional Lisp, there are two kinds of bindings: top-level bindings and local bindings. In Scheme and its descendants, this distinction is characterized by two different binding forms, <code>define</code> and <code>let</code>. To a first approximation, <code>define</code> is used for defining top-level, global bindings, and it resembles variable definitions in many mainstream languages in the sense that definitions using <code>define</code> are not really expressions. They don’t produce a value, they define a new binding. Definitions written with <code>define</code> look like this:</p>
+
+<div class="brush: racket">
+ <div class="source">
+  <pre><span></span><span class="p">(</span><span class="k">define</span> <span class="n">x</span> <span class="mi">42</span><span class="p">)</span>
+<span class="p">(</span><span class="k">define</span> <span class="n">y</span> <span class="s2">"hello"</span><span class="p">)</span>
+</pre></div>
+
+</div>
+
+<p>Each definition is made up of two parts: the <em>binding identifier</em>, in this case <code>x</code> and <code>y</code>, and the <em>right hand side</em>, or RHS for short. Each RHS is a single expression that will be evaluated and used as the value for the introduced binding.</p>
+
+<p>In Scheme and Racket, <code>define</code> also supports a shorthand form for defining functions in a natural syntax without the explicit need to write <code>lambda</code>, which looks like this:</p>
+
+<div class="brush: racket">
+ <div class="source">
+  <pre><span></span><span class="p">(</span><span class="k">define</span> <span class="p">(</span><span class="n">double</span> <span class="n">x</span><span class="p">)</span>
+  <span class="p">(</span><span class="nb">*</span> <span class="n">x</span> <span class="mi">2</span><span class="p">))</span>
+</pre></div>
+
+</div>
+
+<p>However, this is just syntactic sugar. The above form is really just a macro for the following equivalent, expanded version:</p>
+
+<div class="brush: racket">
+ <div class="source">
+  <pre><span></span><span class="p">(</span><span class="k">define</span> <span class="n">double</span>
+  <span class="p">(</span><span class="k">lambda</span> <span class="p">(</span><span class="n">x</span><span class="p">)</span> <span class="p">(</span><span class="nb">*</span> <span class="n">x</span> <span class="mi">2</span><span class="p">)))</span>
+</pre></div>
+
+</div>
+
+<p>Since we only care about fully-expanded programs, we’ll focus exclusively on the expanded version of <code>define</code> in this blog post, since if we handle that, we’ll also handle the function shorthand’s expansion.</p>
+
+<p>In contrast to <code>define</code>, there is also <code>let</code>, which has a rather different shape. A <code>let</code> form <em>is</em> an expression, and it creates local bindings in a delimited scope:</p>
+
+<div class="brush: racket">
+ <div class="source">
+  <pre><span></span><span class="p">(</span><span class="k">let</span> <span class="p">([</span><span class="n">x</span> <span class="mi">2</span><span class="p">]</span>
+      <span class="p">[</span><span class="n">y</span> <span class="mi">3</span><span class="p">])</span>
+  <span class="p">(</span><span class="nb">+</span> <span class="n">x</span> <span class="n">y</span><span class="p">))</span>
+</pre></div>
+
+</div>
+
+<p>The binding clauses of a <code>let</code> expression are known as the <em>binding pairs</em>, and the sequence of expressions afterwards are known as the <em>body</em> of the <code>let</code>. Each binding pair consists of a binding identifier and a RHS, just like a top-level definition created with <code>define</code>, but while <code>define</code> is a standalone form, the binding pairs cannot meaningfully exist outside of a <code>let</code>—they are recognized as part of the grammar of the <code>let</code> form itself.</p>
+
+<p>Like other Lisps, Racket distinguishes between top-level—or, more precisely, <em>module-level</em>—bindings and local bindings. A module-level binding can be exported using <code>provide</code>, which will allow other modules to access the binding by importing the module with <code>require</code>. Such definitions are treated specially by the macroexpander, compiler, and runtime system alike. There is a pervasive, meaningful difference between module-level definitions and local definitions besides simply scope.</p>
+
+<p>I am making an effort to make this as clear as possible before discussing internal definitions because without it, the following point can be rather confusing: internal definitions are written using <code>define</code>, but they are local bindings, <em>not</em> module-level ones! In Racket, <code>define</code> is allowed to appear in the body of virtually all block forms like <code>let</code>, so the following is a legal program:</p>
+
+<div class="brush: racket">
+ <div class="source">
+  <pre><span></span><span class="p">(</span><span class="k">let</span> <span class="p">()</span>
+  <span class="p">(</span><span class="k">define</span> <span class="n">x</span> <span class="mi">2</span><span class="p">)</span>
+  <span class="p">(</span><span class="k">define</span> <span class="n">y</span> <span class="mi">3</span><span class="p">)</span>
+  <span class="p">(</span><span class="nb">+</span> <span class="n">x</span> <span class="n">y</span><span class="p">))</span>
+</pre></div>
+
+</div>
+
+<p>This program is equivalent to the one expressed using <code>let</code>. In fact, when the Racket macroexpander expands these local uses of <code>define</code>, it actually translates them into uses of <code>letrec</code>. After expanding the above expression, it would look closer to the following:</p>
+
+<div class="brush: racket">
+ <div class="source">
+  <pre><span></span><span class="p">(</span><span class="k">let</span> <span class="p">()</span>
+  <span class="p">(</span><span class="k">letrec</span> <span class="p">([</span><span class="n">x</span> <span class="mi">2</span><span class="p">]</span>
+           <span class="p">[</span><span class="n">y</span> <span class="mi">3</span><span class="p">])</span>
+    <span class="p">(</span><span class="nb">+</span> <span class="n">x</span> <span class="n">y</span><span class="p">)))</span>
+</pre></div>
+
+</div>
+
+<p>In this sense, <code>define</code> is a form with a double life in Racket. When used at the module level, it creates module-level definitions, which remain in a fully-expanded program and can be imported by other modules. When used inside local blocks, it creates internal definitions, which do not remain in fully expanded programs, since they are translated into recursive local binding forms.</p>
+
+<p>In this blog post, we will ignore module-level definitions. Like in the previous blog post, we will focus exclusively on expanding expressions, not whole modules. However, we will extend our language to allow internal definitions inside local binding forms, and we will translate them into <code>letrec</code> forms in the same way as the Racket macroexpander.</p>
+
+<h1 id="revisiting-and-generalizing-the-expression-expander">Revisiting and generalizing the expression expander</h1>
+
+<p>In the previous blog post, our expander expanded types, which were essentially expressions from the perspective of the Racket macroexpander. We wrote a syntax class that handled the parsing of a restricted type grammar that disallowed most Racket-level expression forms, like <code>begin</code>, <code>if</code>, <code>#%plain-lambda</code>, and <code>quote</code>. After all, Hackett is not dependently-typed, and it disallows explicit type abstraction to preserve type inference, so it would be a very bad thing if we allowed <code>if</code> or explicit lambda abstraction to appear in our types. For this blog post, however, we will restructure the type expander to handle the full grammar of expressions permitted by Racket.</p>
+
+<p>While the syntax class approach used in the previous blog post was cute, this blog post will use ordinary functions defined at phase 1 instead of syntax classes. In practice, this provides superior error reporting, since it reports syntax errors in terms of the form that went wrong, not the form prior to expansion. Since we can still use <code>syntax-parse</code> to parse the arguments to these functions, we don’t lose any expressive power in the expression of our pattern language.</p>
+
+<p>To start, we’ll extract the call to <code>local-expand</code> into its own function. This corresponds to the <code>type</code> syntax class from the previous blog post, but we’ll use phase 1 parameters to avoid threading so many explicit function arguments around:</p>
+
+<div class="brush: racket">
+ <div class="source">
+  <pre><span></span><span class="p">(</span><span class="k">begin-for-syntax</span>
+  <span class="p">(</span><span class="k">define</span> <span class="n">current-context</span> <span class="p">(</span><span class="nb">make-parameter</span> <span class="no">#f</span><span class="p">))</span>
+  <span class="p">(</span><span class="k">define</span> <span class="n">current-stop-list</span> <span class="p">(</span><span class="nb">make-parameter</span> <span class="p">(</span><span class="nb">list</span> <span class="o">#&#39;</span><span class="k">define-values</span> <span class="o">#&#39;</span><span class="k">define-syntaxes</span><span class="p">)))</span>
+  <span class="p">(</span><span class="k">define</span> <span class="n">current-intdef-ctx</span> <span class="p">(</span><span class="nb">make-parameter</span> <span class="no">#f</span><span class="p">))</span>
+
+  <span class="p">(</span><span class="k">define</span> <span class="p">(</span><span class="n">current-expand</span> <span class="n">stx</span><span class="p">)</span>
+    <span class="p">(</span><span class="nb">local-expand</span> <span class="n">stx</span>
+                  <span class="p">(</span><span class="n">current-context</span><span class="p">)</span>
+                  <span class="p">(</span><span class="n">current-stop-list</span><span class="p">)</span>
+                  <span class="p">(</span><span class="n">current-intdef-ctx</span><span class="p">))))</span>
+</pre></div>
+
+</div>
+
+<p>Due to the way <code>local-expand</code> implicitly extends the stop list, as discussed in the previous blog post, we can initialize the stop list to a list containing just <code>define-values</code> and <code>define-syntaxes</code>, and the other forms we care about will be included automatically.</p>
+
+<p>Next, we’ll use this function to implement a <code>expand-expression</code> function, which will emulate the way the expander expands a single expression, as the name implies. We’ll ignore any custom core forms for now, so we’ll just focus exclusively on the Racket core forms.</p>
+
+<p>A few of Racket’s core forms are not actually subject to any expansion at all, and they expand to themselves. These forms are <code>quote</code>, <code>quote-syntax</code>, and <code>#%variable-reference</code>. Additionally, <code>#%top</code> is not something useful to handle ourselves, since it involves no recursive expansion, so we’ll treat it as if it expands to itself as well and allow the expander to raise any unbound identifier errors it produces. Here’s what the <code>expand-expression</code> function looks like when exclusively handling these things:</p>
+
+<div class="brush: racket">
+ <div class="source">
+  <pre><span></span><span class="p">(</span><span class="k">define</span> <span class="p">(</span><span class="n">expand-expression</span> <span class="n">stx</span><span class="p">)</span>
+    <span class="p">(</span><span class="n">syntax-parse</span> <span class="p">(</span><span class="k">parameterize</span> <span class="p">([</span><span class="n">current-context</span> <span class="o">&#39;</span><span class="ss">expression</span><span class="p">])</span>
+                    <span class="p">(</span><span class="n">current-expand</span> <span class="n">stx</span><span class="p">))</span>
+      <span class="kd">#:literal-sets</span> <span class="p">[</span><span class="n">kernel-literals</span><span class="p">]</span>
+      <span class="p">[({</span><span class="n">~or</span> <span class="k">quote</span> <span class="ss">quote-syntax</span> <span class="k">#%top</span> <span class="k">#%variable-reference</span><span class="p">}</span> <span class="n">~!</span> <span class="o">.</span> <span class="k">_</span><span class="p">)</span>
+       <span class="n">this-syntax</span><span class="p">]))</span>
+</pre></div>
+
+</div>
+
+<p>Another set of Racket core forms are simple expressions which contain subforms, all of which are themselves expressions. These forms include things like <code>#%expression</code>, <code>begin</code>, and <code>if</code>, and they can be expanded recursively. We’ll add another clause to handle these, which can be written with a straightforward recursive call to <code>expand-expression</code>:</p>
+
+<div class="brush: racket">
+ <div class="source">
+  <pre><span></span><span class="p">[({</span><span class="n">~and</span> <span class="n">head</span> <span class="p">{</span><span class="n">~or</span> <span class="k">#%expression</span> <span class="k">#%plain-app</span> <span class="k">begin</span> <span class="k">begin0</span> <span class="k">if</span> <span class="k">with-continuation-mark</span><span class="p">}}</span> <span class="n">~!</span> <span class="n">form</span> <span class="k">...</span><span class="p">)</span>
+ <span class="kd">#:with</span> <span class="p">[</span><span class="n">form*</span> <span class="k">...</span><span class="p">]</span> <span class="p">(</span><span class="nb">map</span> <span class="n">expand-expression</span> <span class="p">(</span><span class="n">attribute</span> <span class="n">form</span><span class="p">))</span>
+ <span class="p">(</span><span class="n">syntax/loc/props</span> <span class="n">this-syntax</span>
+   <span class="p">(</span><span class="n">head</span> <span class="n">form*</span> <span class="k">...</span><span class="p">))]</span>
+</pre></div>
+
+</div>
+
+<p>Another easy form to handle is <code>set!</code>, since it also requires simple recursive expansion, but it can’t be handled in the same way as the above forms since one of its subforms (the variable to mutate) should not be expanded. It needs another small clause:</p>
+
+<div class="brush: racket">
+ <div class="source">
+  <pre><span></span><span class="p">[(</span><span class="n">head:set!</span> <span class="n">~!</span> <span class="n">x:id</span> <span class="n">rhs</span><span class="p">)</span>
+ <span class="p">(</span><span class="n">quasisyntax/loc/props</span> <span class="n">this-syntax</span>
+   <span class="p">(</span><span class="n">head</span> <span class="n">x</span> <span class="o">#,</span><span class="p">(</span><span class="n">expand-expression</span> <span class="o">#&#39;</span><span class="n">rhs</span><span class="p">)))]</span>
+</pre></div>
+
+</div>
+
+<p>The other expressions are harder, since they’re all the binding forms. Fully-expanded Racket code has four local binding forms: <code>#%plain-lambda</code>, <code>case-lambda</code>, <code>let-values</code>, and <code>letrec-values</code>. Additionally, as discussed in the previous blog post, <code>local-expand</code> can also produce <code>letrec-syntaxes+values</code> forms produced by local syntax bindings. In the type expander, we completely disallowed runtime bindings from appearing in the resulting program, so we completely removed <code>letrec-syntaxes+values</code> in our expansion, but in the case of handling arbitrary Racket programs, we actually want to leave a <code>letrec-values</code> form behind to hold any runtime bindings (i.e. the <code>values</code> part of <code>letrec-syntaxes+values</code>).</p>
+
+<p>We’ll start with <code>#%plain-lambda</code>, which is the simplest of all the five aforementioned binding forms. It binds a sequence of identifiers at runtime, and they are in scope within the body of the lambda expression. Just as we created and used an internal-definition context to hold the bindings of a <code>letrec-syntax+values</code> form in the previous blog post, we’ll do the same for Racket’s other binding forms as well:</p>
+
+<div class="brush: racket">
+ <div class="source">
+  <pre><span></span><span class="p">[(</span><span class="n">head:#%plain-lambda</span> <span class="n">~!</span> <span class="p">[</span><span class="n">x:id</span> <span class="k">...</span><span class="p">]</span> <span class="n">body</span> <span class="k">...</span><span class="p">)</span>
+ <span class="kd">#:do</span> <span class="p">[(</span><span class="k">define</span> <span class="n">intdef-ctx</span> <span class="p">(</span><span class="nb">syntax-local-make-definition-context</span> <span class="p">(</span><span class="n">current-intdef-ctx</span><span class="p">)))</span>
+       <span class="p">(</span><span class="nb">syntax-local-bind-syntaxes</span> <span class="p">(</span><span class="n">attribute</span> <span class="n">x</span><span class="p">)</span> <span class="no">#f</span> <span class="n">intdef-ctx</span><span class="p">)]</span>
+ <span class="kd">#:with</span> <span class="p">[</span><span class="n">x*</span> <span class="k">...</span><span class="p">]</span> <span class="p">(</span><span class="nb">internal-definition-context-introduce</span> <span class="n">intdef-ctx</span> <span class="o">#&#39;</span><span class="p">[</span><span class="n">x</span> <span class="k">...</span><span class="p">])</span>
+ <span class="kd">#:with</span> <span class="p">[</span><span class="n">body*</span> <span class="k">...</span><span class="p">]</span> <span class="p">(</span><span class="k">parameterize</span> <span class="p">([</span><span class="n">current-intdef-ctx</span> <span class="n">intdef-ctx</span><span class="p">])</span>
+                      <span class="p">(</span><span class="nb">map</span> <span class="n">expand-expression</span> <span class="p">(</span><span class="n">attribute</span> <span class="n">body</span><span class="p">)))</span>
+ <span class="p">(</span><span class="n">syntax/loc/props</span> <span class="n">this-syntax</span>
+   <span class="p">(</span><span class="n">head</span> <span class="p">[</span><span class="n">x*</span> <span class="k">...</span><span class="p">]</span> <span class="n">body*</span> <span class="k">...</span><span class="p">))]</span>
+</pre></div>
+
+</div>
+
+<p>However, the above handling of <code>#%plain-lambda</code> isn’t <em>quite</em> right, since the argument list can also include a “rest argument” binding in addition to a sequence of positional arguments. To accommodate this, we can introduce a simple syntax class that handles the different permutations:</p>
+
+<div class="brush: racket">
+ <div class="source">
+  <pre><span></span><span class="p">(</span><span class="k">begin-for-syntax</span>
+  <span class="p">(</span><span class="n">define-syntax-class</span> <span class="n">plain-formals</span>
+    <span class="kd">#:description</span> <span class="s2">"formals"</span>
+    <span class="kd">#:attributes</span> <span class="p">[[</span><span class="n">id</span> <span class="mi">1</span><span class="p">]]</span>
+    <span class="kd">#:commit</span>
+    <span class="p">[</span><span class="n">pattern</span> <span class="p">(</span><span class="n">id:id</span> <span class="k">...</span><span class="p">)]</span>
+    <span class="p">[</span><span class="n">pattern</span> <span class="p">(</span><span class="n">id*:id</span> <span class="k">...</span> <span class="o">.</span> <span class="n">id**:id</span><span class="p">)</span> <span class="kd">#:with</span> <span class="p">[</span><span class="n">id</span> <span class="k">...</span><span class="p">]</span> <span class="o">#&#39;</span><span class="p">[</span><span class="n">id*</span> <span class="k">...</span> <span class="n">id**</span><span class="p">]]))</span>
+</pre></div>
+
+</div>
+
+<p>Now we can use this to adjust <code>#%plain-lambda</code> to handle rest arguments:</p>
+
+<div class="brush: racket">
+ <div class="source">
+  <pre><span></span><span class="p">[(</span><span class="n">head:#%plain-lambda</span> <span class="n">~!</span> <span class="n">formals:plain-formals</span> <span class="n">body</span> <span class="k">...</span><span class="p">)</span>
+ <span class="kd">#:do</span> <span class="p">[(</span><span class="k">define</span> <span class="n">intdef-ctx</span> <span class="p">(</span><span class="nb">syntax-local-make-definition-context</span> <span class="p">(</span><span class="n">current-intdef-ctx</span><span class="p">)))</span>
+       <span class="p">(</span><span class="nb">syntax-local-bind-syntaxes</span> <span class="p">(</span><span class="n">attribute</span> <span class="n">formals.id</span><span class="p">)</span> <span class="no">#f</span> <span class="n">intdef-ctx</span><span class="p">)]</span>
+ <span class="kd">#:with</span> <span class="n">formals*</span> <span class="p">(</span><span class="nb">internal-definition-context-introduce</span> <span class="n">intdef-ctx</span> <span class="o">#&#39;</span><span class="n">formals</span><span class="p">)</span>
+ <span class="kd">#:with</span> <span class="p">[</span><span class="n">body*</span> <span class="k">...</span><span class="p">]</span> <span class="p">(</span><span class="k">parameterize</span> <span class="p">([</span><span class="n">current-intdef-ctx</span> <span class="n">intdef-ctx</span><span class="p">])</span>
+                      <span class="p">(</span><span class="nb">map</span> <span class="n">expand-expression</span> <span class="p">(</span><span class="n">attribute</span> <span class="n">body</span><span class="p">)))</span>
+ <span class="p">(</span><span class="n">syntax/loc/props</span> <span class="n">this-syntax</span>
+   <span class="p">(</span><span class="n">head</span> <span class="n">formals*</span> <span class="n">body*</span> <span class="k">...</span><span class="p">))]</span>
+</pre></div>
+
+</div>
+
+<p>Next, we’ll handle <code>case-lambda</code>. As it turns out, expanding <code>case-lambda</code> is almost exactly the same as expanding <code>#%plain-lambda</code>, except that it has multiple clauses. Since each clause is expanded identically to the body of a <code>#%plain-lambda</code>, and it even has the same shape, the clauses can be extracted into a separate syntax class to share code between the two forms:</p>
+
+<div class="brush: racket">
+ <div class="source">
+  <pre><span></span><span class="p">(</span><span class="k">begin-for-syntax</span>
+  <span class="p">(</span><span class="n">define-syntax-class</span> <span class="n">lambda-clause</span>
+    <span class="kd">#:description</span> <span class="no">#f</span>
+    <span class="kd">#:attributes</span> <span class="p">[</span><span class="n">expansion</span><span class="p">]</span>
+    <span class="kd">#:commit</span>
+    <span class="p">[</span><span class="n">pattern</span> <span class="p">[</span><span class="n">formals:plain-formals</span> <span class="n">body</span> <span class="k">...</span><span class="p">]</span>
+             <span class="kd">#:do</span> <span class="p">[(</span><span class="k">define</span> <span class="n">intdef-ctx</span> <span class="p">(</span><span class="nb">syntax-local-make-definition-context</span> <span class="p">(</span><span class="n">current-intdef-ctx</span><span class="p">)))</span>
+                   <span class="p">(</span><span class="nb">syntax-local-bind-syntaxes</span> <span class="p">(</span><span class="n">attribute</span> <span class="n">formals.id</span><span class="p">)</span> <span class="no">#f</span> <span class="n">intdef-ctx</span><span class="p">)]</span>
+             <span class="kd">#:with</span> <span class="n">formals*</span> <span class="p">(</span><span class="nb">internal-definition-context-introduce</span> <span class="n">intdef-ctx</span> <span class="o">#&#39;</span><span class="n">formals</span><span class="p">)</span>
+             <span class="kd">#:with</span> <span class="p">[</span><span class="n">body*</span> <span class="k">...</span><span class="p">]</span> <span class="p">(</span><span class="k">parameterize</span> <span class="p">([</span><span class="n">current-intdef-ctx</span> <span class="n">intdef-ctx</span><span class="p">])</span>
+                                  <span class="p">(</span><span class="nb">map</span> <span class="n">expand-expression</span> <span class="p">(</span><span class="n">attribute</span> <span class="n">body</span><span class="p">)))</span>
+             <span class="kd">#:attr</span> <span class="n">expansion</span> <span class="o">#&#39;</span><span class="p">[</span><span class="n">formals*</span> <span class="n">body*</span> <span class="k">...</span><span class="p">]]))</span>
+</pre></div>
+
+</div>
+
+<p>Now, both <code>#%plain-lambda</code> and <code>case-lambda</code> can be handled in a few lines of code each:</p>
+
+<div class="brush: racket">
+ <div class="source">
+  <pre><span></span><span class="p">[(</span><span class="n">head:#%plain-lambda</span> <span class="n">~!</span> <span class="o">.</span> <span class="n">clause:lambda-clause</span><span class="p">)</span>
+ <span class="p">(</span><span class="n">syntax/loc/props</span> <span class="n">this-syntax</span>
+   <span class="p">(</span><span class="n">head</span> <span class="o">.</span> <span class="n">clause.expansion</span><span class="p">))]</span>
+
+<span class="p">[(</span><span class="n">head:case-lambda</span> <span class="n">~!</span> <span class="n">clause:lambda-clause</span> <span class="k">...</span><span class="p">)</span>
+ <span class="p">(</span><span class="n">syntax/loc/props</span> <span class="n">this-syntax</span>
+   <span class="p">(</span><span class="n">head</span> <span class="n">clause.expansion</span> <span class="k">...</span><span class="p">))]</span>
+</pre></div>
+
+</div>
+
+<p>Finally, we need to tackle the three <code>let</code> forms. None of these involve any fundamentally new ideas, but they are a little bit more involved than the variants of lambda due to the need to handle the RHSs. Each variant is slightly different, but not dramatically so: the bindings aren’t in scope when expanding the RHSs of <code>let-values</code>, but they are for <code>letrec-values</code> and <code>letrec-syntaxes+values</code>, and <code>letrec-syntaxes+values</code> creates transformer bindings and must evaluate some RHSs in phase 1 while <code>let-values</code> and <code>letrec-values</code> exclusively bind runtime bindings. It would be possible to implement these three forms in separate clauses, but since we’d ideally like to duplicate as little code as possible, we can write a rather elaborate <code>syntax/parse</code> pattern to handle all three binding forms all at once.</p>
+
+<p>We’ll start by handling <code>let-values</code> alone to keep things simple:</p>
+
+<div class="brush: racket">
+ <div class="source">
+  <pre><span></span><span class="p">[(</span><span class="n">head:let-values</span> <span class="n">~!</span> <span class="p">([(</span><span class="n">x:id</span> <span class="k">...</span><span class="p">)</span> <span class="n">rhs</span><span class="p">]</span> <span class="k">...</span><span class="p">)</span> <span class="n">body</span> <span class="k">...</span><span class="p">)</span>
+ <span class="kd">#:do</span> <span class="p">[(</span><span class="k">define</span> <span class="n">intdef-ctx</span> <span class="p">(</span><span class="nb">syntax-local-make-definition-context</span> <span class="p">(</span><span class="n">current-intdef-ctx</span><span class="p">)))</span>
+       <span class="p">(</span><span class="nb">syntax-local-bind-syntaxes</span> <span class="p">(</span><span class="nb">append*</span> <span class="p">(</span><span class="n">attribute</span> <span class="n">x</span><span class="p">))</span> <span class="no">#f</span> <span class="n">intdef-ctx</span><span class="p">)]</span>
+ <span class="kd">#:with</span> <span class="p">[[</span><span class="n">x*</span> <span class="k">...</span><span class="p">]</span> <span class="k">...</span><span class="p">]</span> <span class="p">(</span><span class="nb">internal-definition-context-introduce</span> <span class="n">intdef-ctx</span> <span class="o">#&#39;</span><span class="p">[[</span><span class="n">x</span> <span class="k">...</span><span class="p">]</span> <span class="k">...</span><span class="p">])</span>
+ <span class="kd">#:with</span> <span class="p">[</span><span class="n">rhs*</span> <span class="k">...</span><span class="p">]</span> <span class="p">(</span><span class="nb">map</span> <span class="n">expand-expression</span> <span class="p">(</span><span class="n">attribute</span> <span class="n">rhs</span><span class="p">))</span>
+ <span class="kd">#:with</span> <span class="p">[</span><span class="n">body*</span> <span class="k">...</span><span class="p">]</span> <span class="p">(</span><span class="k">parameterize</span> <span class="p">([</span><span class="n">current-intdef-ctx</span> <span class="n">intdef-ctx</span><span class="p">])</span>
+                      <span class="p">(</span><span class="nb">map</span> <span class="n">expand-expression</span> <span class="p">(</span><span class="n">attribute</span> <span class="n">body</span><span class="p">)))</span>
+ <span class="p">(</span><span class="n">syntax/loc/props</span> <span class="n">this-syntax</span>
+   <span class="p">(</span><span class="n">head</span> <span class="p">([(</span><span class="n">x*</span> <span class="k">...</span><span class="p">)</span> <span class="n">rhs*</span><span class="p">]</span> <span class="k">...</span><span class="p">)</span> <span class="n">body*</span> <span class="k">...</span><span class="p">))]</span>
+</pre></div>
+
+</div>
+
+<p>This isn’t dramatically different from the implementation of <code>#%plain-lambda</code>. The only difference is that we have to recursively invoke <code>expand-expression</code> on the RHSs in addition to expanding the body expressions. To handle <code>letrec-values</code> in the same clause, however, we’ll have to get a little more creative.</p>
+
+<p>So far, we haven’t actually tapped very far into <code>syntax/parse</code>’s pattern language over the course of these two blog posts. The full language available to patterns is rather extensive, and we can take advantage of that to write a modification of the above clause that handles both <code>let-values</code> and <code>letrec-values</code> at once:</p>
+
+<div class="brush: racket">
+ <div class="source">
+  <pre><span></span><span class="p">[({</span><span class="n">~or</span> <span class="p">{</span><span class="n">~and</span> <span class="n">head:let-values</span> <span class="p">{</span><span class="n">~bind</span> <span class="p">[</span><span class="n">rec?</span> <span class="no">#f</span><span class="p">]}}</span>
+       <span class="p">{</span><span class="n">~and</span> <span class="n">head:letrec-values</span> <span class="p">{</span><span class="n">~bind</span> <span class="p">[</span><span class="n">rec?</span> <span class="no">#t</span><span class="p">]}}}</span>
+  <span class="n">~!</span> <span class="p">([(</span><span class="n">x:id</span> <span class="k">...</span><span class="p">)</span> <span class="n">rhs</span><span class="p">]</span> <span class="k">...</span><span class="p">)</span> <span class="n">body</span> <span class="k">...</span><span class="p">)</span>
+ <span class="kd">#:do</span> <span class="p">[(</span><span class="k">define</span> <span class="n">intdef-ctx</span> <span class="p">(</span><span class="nb">syntax-local-make-definition-context</span> <span class="p">(</span><span class="n">current-intdef-ctx</span><span class="p">)))</span>
+       <span class="p">(</span><span class="nb">syntax-local-bind-syntaxes</span> <span class="p">(</span><span class="nb">append*</span> <span class="p">(</span><span class="n">attribute</span> <span class="n">x</span><span class="p">))</span> <span class="no">#f</span> <span class="n">intdef-ctx</span><span class="p">)]</span>
+ <span class="kd">#:with</span> <span class="p">[[</span><span class="n">x*</span> <span class="k">...</span><span class="p">]</span> <span class="k">...</span><span class="p">]</span> <span class="p">(</span><span class="nb">internal-definition-context-introduce</span> <span class="n">intdef-ctx</span> <span class="o">#&#39;</span><span class="p">[[</span><span class="n">x</span> <span class="k">...</span><span class="p">]</span> <span class="k">...</span><span class="p">])</span>
+ <span class="kd">#:with</span> <span class="p">[</span><span class="n">rhs*</span> <span class="k">...</span><span class="p">]</span> <span class="p">(</span><span class="k">if</span> <span class="p">(</span><span class="n">attribute</span> <span class="n">rec?</span><span class="p">)</span>
+                       <span class="p">(</span><span class="k">parameterize</span> <span class="p">([</span><span class="n">current-intdef-ctx</span> <span class="n">intdef-ctx</span><span class="p">])</span>
+                         <span class="p">(</span><span class="nb">map</span> <span class="n">expand-expression</span> <span class="p">(</span><span class="n">attribute</span> <span class="n">rhs</span><span class="p">)))</span>
+                       <span class="p">(</span><span class="nb">map</span> <span class="n">expand-expression</span> <span class="p">(</span><span class="n">attribute</span> <span class="n">rhs</span><span class="p">)))</span>
+ <span class="kd">#:with</span> <span class="p">[</span><span class="n">body*</span> <span class="k">...</span><span class="p">]</span> <span class="p">(</span><span class="k">parameterize</span> <span class="p">([</span><span class="n">current-intdef-ctx</span> <span class="n">intdef-ctx</span><span class="p">])</span>
+                      <span class="p">(</span><span class="nb">map</span> <span class="n">expand-expression</span> <span class="p">(</span><span class="n">attribute</span> <span class="n">body</span><span class="p">)))</span>
+ <span class="p">(</span><span class="n">syntax/loc/props</span> <span class="n">this-syntax</span>
+   <span class="p">(</span><span class="n">head</span> <span class="p">([(</span><span class="n">x*</span> <span class="k">...</span><span class="p">)</span> <span class="n">rhs*</span><span class="p">]</span> <span class="k">...</span><span class="p">)</span> <span class="n">body*</span> <span class="k">...</span><span class="p">))]</span>
+</pre></div>
+
+</div>
+
+<p>The <code>~bind</code> pattern allows us to explicitly control how attributes are bound as part of the pattern-matching process, which allows us to track when we want to enable the recursive binding behavior of <code>letrec-values</code> in our handler code. Since the vast majority of the logic is otherwise identical, this is a significant improvement over duplicating the clause.</p>
+
+<p>Adding support for <code>letrec-syntaxes+values</code> is done in the same general way, but the pattern is even more involved. In addition to tracking whether or not the bindings are recursive, we have to track if any syntax bindings were present at all, and if they were, bind them with <code>syntax-local-bind-syntaxes</code>:</p>
+
+<div class="brush: racket">
+ <div class="source">
+  <pre><span></span><span class="p">[({</span><span class="n">~or</span> <span class="p">{</span><span class="n">~or</span> <span class="p">{</span><span class="n">~and</span> <span class="n">head:let-values</span> <span class="n">~!</span> <span class="p">{</span><span class="n">~bind</span> <span class="p">[</span><span class="n">rec?</span> <span class="no">#f</span><span class="p">]</span> <span class="p">[</span><span class="n">stxs?</span> <span class="no">#f</span><span class="p">]}}</span>
+            <span class="p">{</span><span class="n">~and</span> <span class="n">head:letrec-values</span> <span class="n">~!</span> <span class="p">{</span><span class="n">~bind</span> <span class="p">[</span><span class="n">rec?</span> <span class="no">#t</span><span class="p">]</span> <span class="p">[</span><span class="n">stxs?</span> <span class="no">#f</span><span class="p">]}}}</span>
+       <span class="p">{</span><span class="n">~seq</span> <span class="n">head:letrec-syntaxes+values</span> <span class="p">{</span><span class="n">~bind</span> <span class="p">[</span><span class="n">rec?</span> <span class="no">#t</span><span class="p">]</span> <span class="p">[</span><span class="n">stxs?</span> <span class="no">#t</span><span class="p">]}</span>
+             <span class="n">~!</span> <span class="p">([(</span><span class="n">x/s:id</span> <span class="k">...</span><span class="p">)</span> <span class="n">rhs/s</span><span class="p">]</span> <span class="k">...</span><span class="p">)}}</span>
+  <span class="p">([(</span><span class="n">x:id</span> <span class="k">...</span><span class="p">)</span> <span class="n">rhs</span><span class="p">]</span> <span class="k">...</span><span class="p">)</span> <span class="n">body</span> <span class="k">...</span><span class="p">)</span>
+ <span class="kd">#:do</span> <span class="p">[(</span><span class="k">define</span> <span class="n">intdef-ctx</span> <span class="p">(</span><span class="nb">syntax-local-make-definition-context</span> <span class="p">(</span><span class="n">current-intdef-ctx</span><span class="p">)))</span>
+       <span class="p">(</span><span class="nb">syntax-local-bind-syntaxes</span> <span class="p">(</span><span class="nb">append*</span> <span class="p">(</span><span class="n">attribute</span> <span class="n">x</span><span class="p">))</span> <span class="no">#f</span> <span class="n">intdef-ctx</span><span class="p">)</span>
+       <span class="p">(</span><span class="k">when</span> <span class="p">(</span><span class="n">attribute</span> <span class="n">stxs?</span><span class="p">)</span>
+         <span class="p">(</span><span class="k">for</span> <span class="p">([</span><span class="n">xs/s</span> <span class="p">(</span><span class="nb">in-list</span> <span class="p">(</span><span class="n">attribute</span> <span class="n">x/s</span><span class="p">))]</span>
+               <span class="p">[</span><span class="n">rhs/s</span> <span class="p">(</span><span class="nb">in-list</span> <span class="p">(</span><span class="n">attribute</span> <span class="n">rhs/s</span><span class="p">))])</span>
+           <span class="p">(</span><span class="nb">syntax-local-bind-syntaxes</span> <span class="n">xs/s</span> <span class="n">rhs/s</span> <span class="n">intdef-ctx</span><span class="p">)))]</span>
+ <span class="kd">#:with</span> <span class="p">[[</span><span class="n">x*</span> <span class="k">...</span><span class="p">]</span> <span class="k">...</span><span class="p">]</span> <span class="p">(</span><span class="nb">internal-definition-context-introduce</span> <span class="n">intdef-ctx</span> <span class="o">#&#39;</span><span class="p">[[</span><span class="n">x</span> <span class="k">...</span><span class="p">]</span> <span class="k">...</span><span class="p">])</span>
+ <span class="kd">#:with</span> <span class="p">[</span><span class="n">rhs*</span> <span class="k">...</span><span class="p">]</span> <span class="p">(</span><span class="k">if</span> <span class="p">(</span><span class="n">attribute</span> <span class="n">rec?</span><span class="p">)</span>
+                       <span class="p">(</span><span class="k">parameterize</span> <span class="p">([</span><span class="n">current-intdef-ctx</span> <span class="n">intdef-ctx</span><span class="p">])</span>
+                         <span class="p">(</span><span class="nb">map</span> <span class="n">expand-expression</span> <span class="p">(</span><span class="n">attribute</span> <span class="n">rhs</span><span class="p">)))</span>
+                       <span class="p">(</span><span class="nb">map</span> <span class="n">expand-expression</span> <span class="p">(</span><span class="n">attribute</span> <span class="n">rhs</span><span class="p">)))</span>
+ <span class="kd">#:with</span> <span class="p">[</span><span class="n">body*</span> <span class="k">...</span><span class="p">]</span> <span class="p">(</span><span class="k">parameterize</span> <span class="p">([</span><span class="n">current-intdef-ctx</span> <span class="n">intdef-ctx</span><span class="p">])</span>
+                      <span class="p">(</span><span class="nb">map</span> <span class="n">expand-expression</span> <span class="p">(</span><span class="n">attribute</span> <span class="n">body</span><span class="p">)))</span>
+ <span class="p">(</span><span class="k">if</span> <span class="p">(</span><span class="n">attribute</span> <span class="n">stxs?</span><span class="p">)</span>
+     <span class="p">(</span><span class="n">~&gt;</span> <span class="p">(</span><span class="k">syntax/loc</span> <span class="n">this-syntax</span>
+           <span class="p">(</span><span class="k">letrec-values</span> <span class="p">([(</span><span class="n">x*</span> <span class="k">...</span><span class="p">)</span> <span class="n">rhs*</span><span class="p">]</span> <span class="k">...</span><span class="p">)</span> <span class="n">body*</span> <span class="k">...</span><span class="p">))</span>
+         <span class="p">(</span><span class="nb">syntax-track-origin</span> <span class="n">this-syntax</span> <span class="o">#&#39;</span><span class="n">head</span><span class="p">))</span>
+     <span class="p">(</span><span class="n">syntax/loc/props</span> <span class="n">this-syntax</span>
+       <span class="p">(</span><span class="n">head</span> <span class="p">([(</span><span class="n">x*</span> <span class="k">...</span><span class="p">)</span> <span class="n">rhs*</span><span class="p">]</span> <span class="k">...</span><span class="p">)</span> <span class="n">body*</span> <span class="k">...</span><span class="p">)))]</span>
+</pre></div>
+
+</div>
+
+<p>This behemoth clause handles all three varieties of <code>let</code> forms that can appear in the result of <code>local-expand</code>. Notably, in the <code>letrec-syntaxes+values</code> case, we expand into <code>letrec-values</code>, since the transformer bindings are effectively erased, and we use <code>syntax-track-origin</code> to record that the result originally came from a use of <code>letrec-syntaxes+values</code>.</p>
+
+<p>With these five clauses, we’ve handled all the special forms that can appear in expression position in Racket’s kernel language. To tie things off, we just need to handle the cases of a variable reference, which is represented by a bare identifier not bound to syntax, or literal data, like numbers or strings. We can add one more clause at the end to handle those:</p>
+
+<div class="brush: racket">
+ <div class="source">
+  <pre><span></span><span class="p">[</span><span class="k">_</span>
+ <span class="n">this-syntax</span><span class="p">]</span>
+</pre></div>
+
+</div>
+
+<p>Putting them all together, our <code>expand-expression</code> function looks as follows:</p>
+
+<div class="brush: racket">
+ <div class="source">
+  <pre><span></span><span class="p">(</span><span class="k">begin-for-syntax</span>
+  <span class="p">(</span><span class="k">define</span> <span class="p">(</span><span class="n">expand-expression</span> <span class="n">stx</span><span class="p">)</span>
+    <span class="p">(</span><span class="n">syntax-parse</span> <span class="p">(</span><span class="k">parameterize</span> <span class="p">([</span><span class="n">current-context</span> <span class="o">&#39;</span><span class="ss">expression</span><span class="p">])</span>
+                    <span class="p">(</span><span class="n">current-expand</span> <span class="n">stx</span><span class="p">))</span>
+      <span class="kd">#:literal-sets</span> <span class="p">[</span><span class="n">kernel-literals</span><span class="p">]</span>
+      <span class="p">[({</span><span class="n">~or</span> <span class="k">quote</span> <span class="ss">quote-syntax</span> <span class="k">#%top</span> <span class="k">#%variable-reference</span><span class="p">}</span> <span class="n">~!</span> <span class="o">.</span> <span class="k">_</span><span class="p">)</span>
+       <span class="n">this-syntax</span><span class="p">]</span>
+
+      <span class="p">[({</span><span class="n">~and</span> <span class="n">head</span> <span class="p">{</span><span class="n">~or</span> <span class="k">#%expression</span> <span class="k">#%plain-app</span> <span class="k">begin</span> <span class="k">begin0</span> <span class="k">if</span> <span class="k">with-continuation-mark</span><span class="p">}}</span> <span class="n">~!</span> <span class="n">form</span> <span class="k">...</span><span class="p">)</span>
+       <span class="kd">#:with</span> <span class="p">[</span><span class="n">form*</span> <span class="k">...</span><span class="p">]</span> <span class="p">(</span><span class="nb">map</span> <span class="n">expand-expression</span> <span class="p">(</span><span class="n">attribute</span> <span class="n">form</span><span class="p">))</span>
+       <span class="p">(</span><span class="n">syntax/loc/props</span> <span class="n">this-syntax</span>
+         <span class="p">(</span><span class="n">head</span> <span class="n">form*</span> <span class="k">...</span><span class="p">))]</span>
+
+      <span class="p">[(</span><span class="n">head:#%plain-lambda</span> <span class="n">~!</span> <span class="o">.</span> <span class="n">clause:lambda-clause</span><span class="p">)</span>
+       <span class="p">(</span><span class="n">syntax/loc/props</span> <span class="n">this-syntax</span>
+         <span class="p">(</span><span class="n">head</span> <span class="o">.</span> <span class="n">clause.expansion</span><span class="p">))]</span>
+
+      <span class="p">[(</span><span class="n">head:case-lambda</span> <span class="n">~!</span> <span class="n">clause:lambda-clause</span> <span class="k">...</span><span class="p">)</span>
+       <span class="p">(</span><span class="n">syntax/loc/props</span> <span class="n">this-syntax</span>
+         <span class="p">(</span><span class="n">head</span> <span class="n">clause.expansion</span> <span class="k">...</span><span class="p">))]</span>
+
+      <span class="p">[({</span><span class="n">~or</span> <span class="p">{</span><span class="n">~or</span> <span class="p">{</span><span class="n">~and</span> <span class="n">head:let-values</span> <span class="n">~!</span> <span class="p">{</span><span class="n">~bind</span> <span class="p">[</span><span class="n">rec?</span> <span class="no">#f</span><span class="p">]</span> <span class="p">[</span><span class="n">stxs?</span> <span class="no">#f</span><span class="p">]}}</span>
+                  <span class="p">{</span><span class="n">~and</span> <span class="n">head:letrec-values</span> <span class="n">~!</span> <span class="p">{</span><span class="n">~bind</span> <span class="p">[</span><span class="n">rec?</span> <span class="no">#t</span><span class="p">]</span> <span class="p">[</span><span class="n">stxs?</span> <span class="no">#f</span><span class="p">]}}}</span>
+             <span class="p">{</span><span class="n">~seq</span> <span class="n">head:letrec-syntaxes+values</span> <span class="p">{</span><span class="n">~bind</span> <span class="p">[</span><span class="n">rec?</span> <span class="no">#t</span><span class="p">]</span> <span class="p">[</span><span class="n">stxs?</span> <span class="no">#t</span><span class="p">]}</span>
+                   <span class="n">~!</span> <span class="p">([(</span><span class="n">x/s:id</span> <span class="k">...</span><span class="p">)</span> <span class="n">rhs/s</span><span class="p">]</span> <span class="k">...</span><span class="p">)}}</span>
+        <span class="p">([(</span><span class="n">x:id</span> <span class="k">...</span><span class="p">)</span> <span class="n">rhs</span><span class="p">]</span> <span class="k">...</span><span class="p">)</span> <span class="n">body</span> <span class="k">...</span><span class="p">)</span>
+       <span class="kd">#:do</span> <span class="p">[(</span><span class="k">define</span> <span class="n">intdef-ctx</span> <span class="p">(</span><span class="nb">syntax-local-make-definition-context</span> <span class="p">(</span><span class="n">current-intdef-ctx</span><span class="p">)))</span>
+             <span class="p">(</span><span class="nb">syntax-local-bind-syntaxes</span> <span class="p">(</span><span class="nb">append*</span> <span class="p">(</span><span class="n">attribute</span> <span class="n">x</span><span class="p">))</span> <span class="no">#f</span> <span class="n">intdef-ctx</span><span class="p">)</span>
+             <span class="p">(</span><span class="k">when</span> <span class="p">(</span><span class="n">attribute</span> <span class="n">stxs?</span><span class="p">)</span>
+               <span class="p">(</span><span class="k">for</span> <span class="p">([</span><span class="n">xs/s</span> <span class="p">(</span><span class="nb">in-list</span> <span class="p">(</span><span class="n">attribute</span> <span class="n">x/s</span><span class="p">))]</span>
+                     <span class="p">[</span><span class="n">rhs/s</span> <span class="p">(</span><span class="nb">in-list</span> <span class="p">(</span><span class="n">attribute</span> <span class="n">rhs/s</span><span class="p">))])</span>
+                 <span class="p">(</span><span class="nb">syntax-local-bind-syntaxes</span> <span class="n">xs/s</span> <span class="n">rhs/s</span> <span class="n">intdef-ctx</span><span class="p">)))]</span>
+       <span class="kd">#:with</span> <span class="p">[[</span><span class="n">x*</span> <span class="k">...</span><span class="p">]</span> <span class="k">...</span><span class="p">]</span> <span class="p">(</span><span class="nb">internal-definition-context-introduce</span> <span class="n">intdef-ctx</span> <span class="o">#&#39;</span><span class="p">[[</span><span class="n">x</span> <span class="k">...</span><span class="p">]</span> <span class="k">...</span><span class="p">])</span>
+       <span class="kd">#:with</span> <span class="p">[</span><span class="n">rhs*</span> <span class="k">...</span><span class="p">]</span> <span class="p">(</span><span class="k">if</span> <span class="p">(</span><span class="n">attribute</span> <span class="n">rec?</span><span class="p">)</span>
+                             <span class="p">(</span><span class="k">parameterize</span> <span class="p">([</span><span class="n">current-intdef-ctx</span> <span class="n">intdef-ctx</span><span class="p">])</span>
+                               <span class="p">(</span><span class="nb">map</span> <span class="n">expand-expression</span> <span class="p">(</span><span class="n">attribute</span> <span class="n">rhs</span><span class="p">)))</span>
+                             <span class="p">(</span><span class="nb">map</span> <span class="n">expand-expression</span> <span class="p">(</span><span class="n">attribute</span> <span class="n">rhs</span><span class="p">)))</span>
+       <span class="kd">#:with</span> <span class="p">[</span><span class="n">body*</span> <span class="k">...</span><span class="p">]</span> <span class="p">(</span><span class="k">parameterize</span> <span class="p">([</span><span class="n">current-intdef-ctx</span> <span class="n">intdef-ctx</span><span class="p">])</span>
+                            <span class="p">(</span><span class="nb">map</span> <span class="n">expand-expression</span> <span class="p">(</span><span class="n">attribute</span> <span class="n">body</span><span class="p">)))</span>
+       <span class="p">(</span><span class="k">if</span> <span class="p">(</span><span class="n">attribute</span> <span class="n">stxs?</span><span class="p">)</span>
+           <span class="p">(</span><span class="n">~&gt;</span> <span class="p">(</span><span class="k">syntax/loc</span> <span class="n">this-syntax</span>
+                 <span class="p">(</span><span class="k">letrec-values</span> <span class="p">([(</span><span class="n">x*</span> <span class="k">...</span><span class="p">)</span> <span class="n">rhs*</span><span class="p">]</span> <span class="k">...</span><span class="p">)</span> <span class="n">body*</span> <span class="k">...</span><span class="p">))</span>
+               <span class="p">(</span><span class="nb">syntax-track-origin</span> <span class="n">this-syntax</span> <span class="o">#&#39;</span><span class="n">head</span><span class="p">))</span>
+           <span class="p">(</span><span class="n">syntax/loc/props</span> <span class="n">this-syntax</span>
+             <span class="p">(</span><span class="n">head</span> <span class="p">([(</span><span class="n">x*</span> <span class="k">...</span><span class="p">)</span> <span class="n">rhs*</span><span class="p">]</span> <span class="k">...</span><span class="p">)</span> <span class="n">body*</span> <span class="k">...</span><span class="p">)))]</span>
+
+      <span class="p">[</span><span class="k">_</span>
+       <span class="n">this-syntax</span><span class="p">])))</span>
+</pre></div>
+
+</div>
+
+<p>If we try it out, we’ll see that it really does work! Even complicated local binding forms are handled properly by our expander:</p>
+
+<div class="brush: racket">
+ <div class="source">
+  <pre><span></span><span class="nb">&gt;</span> <span class="p">(</span><span class="n">expand-expression</span>
+   <span class="o">#&#39;</span><span class="p">(</span><span class="k">let</span> <span class="p">([</span><span class="n">x</span> <span class="mi">42</span><span class="p">])</span>
+       <span class="p">(</span><span class="k">letrec-syntax</span> <span class="p">([</span><span class="n">y</span> <span class="p">(</span><span class="nb">make-rename-transformer</span> <span class="o">#&#39;</span><span class="n">z</span><span class="p">)]</span>
+                       <span class="p">[</span><span class="n">z</span> <span class="p">(</span><span class="nb">make-rename-transformer</span> <span class="o">#&#39;</span><span class="n">x</span><span class="p">)])</span>
+         <span class="p">(</span><span class="nb">+</span> <span class="n">y</span> <span class="mi">3</span><span class="p">))))</span>
+<span class="n">#&lt;syntax</span> <span class="p">(</span><span class="k">let-values</span> <span class="p">(((</span><span class="n">x</span><span class="p">)</span> <span class="o">&#39;</span><span class="mi">42</span><span class="p">))</span>
+           <span class="p">(</span><span class="k">letrec-values</span> <span class="p">()</span>
+             <span class="p">(</span><span class="k">#%plain-app</span> <span class="nb">+</span> <span class="n">x</span> <span class="o">&#39;</span><span class="mi">3</span><span class="p">)))</span><span class="nb">&gt;</span>
+</pre></div>
+
+</div>
+
+<p>We are now able to expand arbitrary Racket expressions in the same way that the expander does. While this might not seem immediately useful—after all, we haven’t actually gained anything here over just calling <code>local-expand</code> with an empty stop list—we can use this as the basis of an expander that can extensibly handle custom core forms, which I may cover in a future blog post.</p>
+
+<h1 id="adding-support-for-internal-definitions">Adding support for internal definitions</h1>
+
+<p>In the previous section, we defined an expander that could expand arbitrary Racket expressions, but our expander is still imperfect: we still do not support internal definitions. For all forms that have bodies, including <code>#%plain-lambda</code>, <code>case-lambda</code>, <code>let-values</code>, <code>letrec-values</code>, and <code>letrec-syntaxes+values</code>, Racket permits the use of internal definitions.</p>
+
+<p>In practice, internal-definition contexts allow for an increased degree of modularity compared to traditional local binding forms, since they provide an <em>extensible</em> binding language. Users may mix many different binding forms within a single definition context, such as <code>define</code>, <code>define-syntax</code>, <code>match-define</code>, and even <code>struct</code>. However, this means the rewriting process described earlier in this blog post is not as simple as detecting the definitions and lifting them into a local binding form, since it’s not immediately apparent which forms are binding forms and which are expressions!</p>
+
+<p>For this reason, expanding internal-definition contexts happens to be a nontrivial problem in itself. It involves a little more care than expanding expressions does, since it requires using partial expansion to discover which forms are definitions and which forms are expressions. We must take care to never expand too much, but also to expand enough that we reveal all uses of <code>define-values</code> and <code>define-syntaxes</code> (which all definition forms eventually expand into). We also must handle the splicing behavior of <code>begin</code>, which is necessary to allow single forms to expand into multiple definitions.</p>
+
+<p>We’ll start by writing an <code>expand-body</code> function, which operates similarly to our previous <code>expand-expression</code> function. Unlike <code>expand-expression</code>, <code>expand-body</code> will accept a <em>list</em> of syntax objects, which represents the sequence of forms that make up the body. Logically, each body will create a first-class definition context with <code>syntax-local-make-definition-context</code> to represent the sequence of definitions:</p>
+
+<div class="brush: racket">
+ <div class="source">
+  <pre><span></span><span class="p">(</span><span class="k">begin-for-syntax</span>
+  <span class="p">(</span><span class="k">define</span> <span class="p">(</span><span class="n">expand-body</span> <span class="n">stxs</span><span class="p">)</span>
+    <span class="p">(</span><span class="k">define</span> <span class="n">intdef-ctx</span> <span class="p">(</span><span class="nb">syntax-local-make-definition-context</span> <span class="p">(</span><span class="n">current-intdef-ctx</span><span class="p">)))</span>
+    <span class="p">(</span><span class="k">parameterize</span> <span class="p">([</span><span class="n">current-context</span> <span class="p">(</span><span class="nb">list</span> <span class="p">(</span><span class="nb">gensym</span><span class="p">))]</span>
+                   <span class="p">[</span><span class="n">current-intdef-ctx</span> <span class="n">intdef-ctx</span><span class="p">])</span>
+      <span class="p">)))</span>
+</pre></div>
+
+</div>
+
+<p>The bulk of our <code>expand-body</code> function will be a loop that partially expands body forms, adds definitions to the definition context as it discovers them, and returns the expressions and runtime definitions to be rewritten into binding pairs for a <code>letrec-values</code> form. Additionally, the loop will also track so-called <em>disappeared uses</em> and <em>disappeared bindings</em>, which are attached to the expansion using syntax properties to allow tools like DrRacket to learn about the binding structure of phase 1 definitions that are erased as part of macroexpansion.</p>
+
+<p>The skeleton of this loop is relatively straightforward to write. We will iterate over the syntax objects that make up the body, expand them, and process the expansion using <code>syntax-parse</code>:</p>
+
+<div class="brush: racket">
+ <div class="source">
+  <pre><span></span><span class="p">(</span><span class="k">begin-for-syntax</span>
+  <span class="p">(</span><span class="k">define</span> <span class="p">(</span><span class="n">expand-body</span> <span class="n">stxs</span><span class="p">)</span>
+    <span class="p">(</span><span class="k">define</span> <span class="n">intdef-ctx</span> <span class="p">(</span><span class="nb">syntax-local-make-definition-context</span> <span class="p">(</span><span class="n">current-intdef-ctx</span><span class="p">)))</span>
+    <span class="p">(</span><span class="k">parameterize</span> <span class="p">([</span><span class="n">current-context</span> <span class="p">(</span><span class="nb">list</span> <span class="p">(</span><span class="nb">gensym</span><span class="p">))]</span>
+                   <span class="p">[</span><span class="n">current-intdef-ctx</span> <span class="n">intdef-ctx</span><span class="p">])</span>
+      <span class="p">(</span><span class="k">define-values</span> <span class="p">[</span><span class="n">binding-clauses</span> <span class="n">exprs</span> <span class="n">disappeared-uses</span> <span class="n">disappeared-bindings</span><span class="p">]</span>
+        <span class="p">(</span><span class="k">let</span> <span class="n">loop</span> <span class="p">([</span><span class="n">stxs</span> <span class="n">stxs</span><span class="p">]</span>
+                   <span class="p">[</span><span class="n">binding-clauses</span> <span class="o">&#39;</span><span class="p">()]</span>
+                   <span class="p">[</span><span class="n">exprs</span> <span class="o">&#39;</span><span class="p">()]</span>
+                   <span class="p">[</span><span class="n">disappeared-uses</span> <span class="o">&#39;</span><span class="p">()]</span>
+                   <span class="p">[</span><span class="n">disappeared-bindings</span> <span class="o">&#39;</span><span class="p">()])</span>
+          <span class="p">(</span><span class="k">if</span> <span class="p">(</span><span class="nb">empty?</span> <span class="n">stxs</span><span class="p">)</span>
+              <span class="p">(</span><span class="nb">values</span> <span class="p">(</span><span class="nb">reverse</span> <span class="n">binding-clauses</span><span class="p">)</span> <span class="p">(</span><span class="nb">reverse</span> <span class="n">exprs</span><span class="p">)</span> <span class="n">disappeared-uses</span> <span class="n">disappeared-bindings</span><span class="p">)</span>
+              <span class="p">(</span><span class="n">syntax-parse</span> <span class="p">(</span><span class="n">current-expand</span> <span class="p">(</span><span class="nb">first</span> <span class="n">stxs</span><span class="p">))</span>
+                <span class="kd">#:literal-sets</span> <span class="p">[</span><span class="n">kernel-literals</span><span class="p">]</span>
+                <span class="p">)))))))</span>
+</pre></div>
+
+</div>
+
+<p>The hard part, of course, is actually handling the potential results of that expansion. We need to handle three forms specially: <code>begin</code>, <code>define-values</code>, and <code>define-syntaxes</code>. All other results of partial expansion will be treated as expressions. We’ll start by handling <code>begin</code>, since it’s the simplest case; we only need to prepend the subforms to the list of body forms to be processed, then continue looping:</p>
+
+<div class="brush: racket">
+ <div class="source">
+  <pre><span></span><span class="p">[(</span><span class="n">head:begin</span> <span class="n">~!</span> <span class="n">form</span> <span class="k">...</span><span class="p">)</span>
+ <span class="p">(</span><span class="n">loop</span> <span class="p">(</span><span class="nb">append</span> <span class="p">(</span><span class="n">attribute</span> <span class="n">form</span><span class="p">)</span> <span class="n">stxs</span><span class="p">)</span> <span class="n">binding-clauses</span> <span class="n">exprs</span>
+       <span class="n">disappeared-uses</span> <span class="n">disappeared-bindings</span><span class="p">)]</span>
+</pre></div>
+
+</div>
+
+<p>However, as is often the case, this isn’t quite perfect, since the information that these forms came from a surrounding <code>begin</code> is lost, which tools like DrRacket want to know. To solve this problem, the expander adjusts the <code>origin</code> property for all spliced forms, which we can mimic using <code>syntax-track-origin</code>:</p>
+
+<div class="brush: racket">
+ <div class="source">
+  <pre><span></span><span class="p">[(</span><span class="n">head:begin</span> <span class="n">~!</span> <span class="n">form</span> <span class="k">...</span><span class="p">)</span>
+ <span class="p">(</span><span class="n">loop</span> <span class="p">(</span><span class="nb">append</span> <span class="p">(</span><span class="k">for/list</span> <span class="p">([</span><span class="n">form</span> <span class="p">(</span><span class="nb">in-list</span> <span class="p">(</span><span class="n">attribute</span> <span class="n">form</span><span class="p">))])</span>
+                 <span class="p">(</span><span class="nb">syntax-track-origin</span> <span class="n">form</span> <span class="n">this-syntax</span> <span class="o">#&#39;</span><span class="n">head</span><span class="p">))</span>
+               <span class="n">stxs</span><span class="p">)</span>
+       <span class="n">binding-clauses</span> <span class="n">exprs</span> <span class="n">disappeared-uses</span> <span class="n">disappeared-bindings</span><span class="p">)]</span>
+</pre></div>
+
+</div>
+
+<p>This is sufficient for <code>begin</code>, so we can move onto the actual definitions themselves. This actually isn’t too hard, since we just need to add the bindings we discover to the first-class definition context and preserve <code>define-values</code> bindings as binding pairs:</p>
+
+<div class="brush: racket">
+ <div class="source">
+  <pre><span></span><span class="p">[(</span><span class="n">head:define-values</span> <span class="n">~!</span> <span class="p">[</span><span class="n">x:id</span> <span class="k">...</span><span class="p">]</span> <span class="n">rhs</span><span class="p">)</span>
+ <span class="kd">#:do</span> <span class="p">[(</span><span class="nb">syntax-local-bind-syntaxes</span> <span class="p">(</span><span class="n">attribute</span> <span class="n">x</span><span class="p">)</span> <span class="no">#f</span> <span class="n">intdef-ctx</span><span class="p">)]</span>
+ <span class="p">(</span><span class="n">loop</span> <span class="p">(</span><span class="nb">rest</span> <span class="n">stxs</span><span class="p">)</span> <span class="p">(</span><span class="nb">cons</span> <span class="o">#&#39;</span><span class="p">[(</span><span class="n">x</span> <span class="k">...</span><span class="p">)</span> <span class="n">rhs</span><span class="p">]</span> <span class="n">binding-clauses</span><span class="p">)</span> <span class="n">exprs</span>
+       <span class="n">disappeared-uses</span> <span class="n">disappeared-bindings</span><span class="p">)]</span>
+</pre></div>
+
+</div>
+
+<p>This solution is missing one thing, however, which is the use of <code>syntax-local-identifier-as-binding</code> to any use-site scopes that were added to the binding identifier while expanding the binding form in the definition context. Explaining precisely why this is necessary is outside the scope of this blog post, and is best understood by reading <a href="http://www.cs.utah.edu/plt/scope-sets/pattern-macros.html#%28part._use-site%29">the section on use-site scopes</a> in the paper that describes the theory behind Racket’s current macro system, Bindings as Sets of Scopes. In any case, the impact on our implementation is small:</p>
+
+<div class="brush: racket">
+ <div class="source">
+  <pre><span></span><span class="p">[(</span><span class="n">head:define-values</span> <span class="n">~!</span> <span class="p">[</span><span class="n">x:id</span> <span class="k">...</span><span class="p">]</span> <span class="n">rhs</span><span class="p">)</span>
+ <span class="kd">#:with</span> <span class="p">[</span><span class="n">x*</span> <span class="k">...</span><span class="p">]</span> <span class="p">(</span><span class="nb">map</span> <span class="nb">syntax-local-identifier-as-binding</span> <span class="p">(</span><span class="n">attribute</span> <span class="n">x</span><span class="p">))</span>
+ <span class="kd">#:do</span> <span class="p">[(</span><span class="nb">syntax-local-bind-syntaxes</span> <span class="p">(</span><span class="n">attribute</span> <span class="n">x*</span><span class="p">)</span> <span class="no">#f</span> <span class="n">intdef-ctx</span><span class="p">)]</span>
+ <span class="p">(</span><span class="n">loop</span> <span class="p">(</span><span class="nb">rest</span> <span class="n">stxs</span><span class="p">)</span> <span class="p">(</span><span class="nb">cons</span> <span class="o">#&#39;</span><span class="p">[(</span><span class="n">x*</span> <span class="k">...</span><span class="p">)</span> <span class="n">rhs</span><span class="p">]</span> <span class="n">binding-clauses</span><span class="p">)</span> <span class="n">exprs</span>
+       <span class="n">disappeared-uses</span> <span class="n">disappeared-bindings</span><span class="p">)]</span>
+</pre></div>
+
+</div>
+
+<p>Finally, as with <code>begin</code>, we want to track that the binding pairs we generate actually came from a use of <code>define-values</code> (which in turn likely came from a use of some other definition form). Therefore, we’ll add another use of <code>syntax-track-origin</code> to copy and extend the necessary properties:</p>
+
+<div class="brush: racket">
+ <div class="source">
+  <pre><span></span><span class="p">[(</span><span class="n">head:define-values</span> <span class="n">~!</span> <span class="p">[</span><span class="n">x:id</span> <span class="k">...</span><span class="p">]</span> <span class="n">rhs</span><span class="p">)</span>
+ <span class="kd">#:with</span> <span class="p">[</span><span class="n">x*</span> <span class="k">...</span><span class="p">]</span> <span class="p">(</span><span class="nb">map</span> <span class="nb">syntax-local-identifier-as-binding</span> <span class="p">(</span><span class="n">attribute</span> <span class="n">x</span><span class="p">))</span>
+ <span class="kd">#:do</span> <span class="p">[(</span><span class="nb">syntax-local-bind-syntaxes</span> <span class="p">(</span><span class="n">attribute</span> <span class="n">x*</span><span class="p">)</span> <span class="no">#f</span> <span class="n">intdef-ctx</span><span class="p">)]</span>
+ <span class="p">(</span><span class="n">loop</span>
+  <span class="p">(</span><span class="nb">rest</span> <span class="n">stxs</span><span class="p">)</span>
+  <span class="p">(</span><span class="nb">cons</span> <span class="p">(</span><span class="nb">syntax-track-origin</span> <span class="o">#&#39;</span><span class="p">[(</span><span class="n">x*</span> <span class="k">...</span><span class="p">)</span> <span class="n">rhs</span><span class="p">]</span> <span class="n">this-syntax</span> <span class="o">#&#39;</span><span class="n">head</span><span class="p">)</span> <span class="n">binding-clauses</span><span class="p">)</span>
+  <span class="n">exprs</span> <span class="n">disappeared-uses</span> <span class="n">disappeared-bindings</span><span class="p">)]</span>
+</pre></div>
+
+</div>
+
+<p>That’s it for <code>define-values</code>. All that’s left is to handle <code>define-syntaxes</code>, which is quite similar, but instead of storing the definition in a binding pair, its RHS is immediately evaluated and added to the definition context using <code>syntax-local-bind-syntaxes</code>:</p>
+
+<div class="brush: racket">
+ <div class="source">
+  <pre><span></span><span class="p">[(</span><span class="n">head:define-syntaxes</span> <span class="n">~!</span> <span class="p">[</span><span class="n">x:id</span> <span class="k">...</span><span class="p">]</span> <span class="n">rhs</span><span class="p">)</span>
+ <span class="kd">#:with</span> <span class="p">[</span><span class="n">x*</span> <span class="k">...</span><span class="p">]</span> <span class="p">(</span><span class="nb">map</span> <span class="nb">syntax-local-identifier-as-binding</span> <span class="p">(</span><span class="n">attribute</span> <span class="n">x</span><span class="p">))</span>
+ <span class="kd">#:do</span> <span class="p">[(</span><span class="nb">syntax-local-bind-syntaxes</span> <span class="p">(</span><span class="n">attribute</span> <span class="n">x*</span><span class="p">)</span> <span class="o">#&#39;</span><span class="n">rhs</span> <span class="n">intdef-ctx</span><span class="p">)]</span>
+ <span class="p">(</span><span class="n">loop</span> <span class="p">(</span><span class="nb">rest</span> <span class="n">stxs</span><span class="p">)</span> <span class="n">binding-clauses</span> <span class="n">exprs</span>
+       <span class="p">(</span><span class="nb">cons</span> <span class="o">#&#39;</span><span class="n">head</span> <span class="n">disappeared-uses</span><span class="p">)</span> <span class="p">(</span><span class="nb">cons</span> <span class="p">(</span><span class="n">attribute</span> <span class="n">x*</span><span class="p">)</span> <span class="n">disappeared-bindings</span><span class="p">))]</span>
+</pre></div>
+
+</div>
+
+<p>As the above snippet indicates, this is also where the disappeared uses and disappeared bindings come in. In previous cases, we’ve used <code>syntax-track-origin</code> to indicate that a piece of syntax was the result of expanding a different piece of syntax, but in this case, <code>define-syntaxes</code> doesn’t expand into anything at all; it’s simply removed from the expansion entirely. Therefore, we need to resort to tracking the information in syntax properties on the resulting <code>letrec-values</code> form, so we’ll save them for later.</p>
+
+<p>Finally, to finish things up, we can add a catchall clause that handles all other forms, which are now guaranteed to be expressions:</p>
+
+<div class="brush: racket">
+ <div class="source">
+  <pre><span></span><span class="p">[</span><span class="k">_</span>
+ <span class="p">(</span><span class="n">loop</span> <span class="p">(</span><span class="nb">rest</span> <span class="n">stxs</span><span class="p">)</span> <span class="n">binding-clauses</span> <span class="p">(</span><span class="nb">cons</span> <span class="n">this-syntax</span> <span class="n">exprs</span><span class="p">)</span>
+       <span class="n">disappeared-uses</span> <span class="n">disappeared-bindings</span><span class="p">)]</span>
+</pre></div>
+
+</div>
+
+<p>This completes our loop that processes definition forms, so all that’s left to do is handle the results. The only significant remaining work is to actually expand the RHSs of the binding pairs we collected and the body expressions, which can be done by calling our own <code>expand-expression</code> function directly:</p>
+
+<div class="brush: racket">
+ <div class="source">
+  <pre><span></span><span class="p">(</span><span class="k">define</span> <span class="n">expanded-binding-clauses</span>
+  <span class="p">(</span><span class="k">for/list</span> <span class="p">([</span><span class="n">binding-clause</span> <span class="p">(</span><span class="nb">in-list</span> <span class="n">binding-clauses</span><span class="p">)])</span>
+    <span class="p">(</span><span class="n">syntax-parse</span> <span class="n">binding-clause</span>
+      <span class="p">[[(</span><span class="n">x</span> <span class="k">...</span><span class="p">)</span> <span class="n">rhs</span><span class="p">]</span>
+       <span class="p">(</span><span class="n">quasisyntax/loc/props</span> <span class="n">this-syntax</span>
+         <span class="p">[(</span><span class="n">x</span> <span class="k">...</span><span class="p">)</span> <span class="o">#,</span><span class="p">(</span><span class="n">expand-expression</span> <span class="o">#&#39;</span><span class="n">rhs</span><span class="p">)])])))</span>
+<span class="p">(</span><span class="k">define</span> <span class="n">expanded-exprs</span> <span class="p">(</span><span class="nb">map</span> <span class="n">expand-expression</span> <span class="n">exprs</span><span class="p">))</span>
+</pre></div>
+
+</div>
+
+<p>Finally, we can assemble all the pieces together into a single local binding form with the appropriate syntax properties:</p>
+
+<div class="brush: racket">
+ <div class="source">
+  <pre><span></span><span class="p">(</span><span class="n">~&gt;</span> <span class="o">#`</span><span class="p">(</span><span class="k">letrec-values</span> <span class="o">#,</span><span class="n">expanded-binding-clauses</span> <span class="o">#,@</span><span class="n">expanded-exprs</span><span class="p">)</span>
+    <span class="p">(</span><span class="nb">syntax-property</span> <span class="o">&#39;</span><span class="ss">disappeared-uses</span> <span class="n">disappeared-uses</span><span class="p">)</span>
+    <span class="p">(</span><span class="nb">syntax-property</span> <span class="o">&#39;</span><span class="ss">disappeared-bindings</span> <span class="n">disappeared-bindings</span><span class="p">))</span>
+</pre></div>
+
+</div>
+
+<p>That’s it. We’ve now written an <code>expand-body</code> function that can process internal definition contexts in the same way that the macroexpander does. Overall, the whole function is just under 45 lines of code:</p>
+
+<div class="brush: racket">
+ <div class="source">
+  <pre><span></span><span class="p">(</span><span class="k">begin-for-syntax</span>
+  <span class="p">(</span><span class="k">define</span> <span class="p">(</span><span class="n">expand-body</span> <span class="n">stxs</span><span class="p">)</span>
+    <span class="p">(</span><span class="k">define</span> <span class="n">intdef-ctx</span> <span class="p">(</span><span class="nb">syntax-local-make-definition-context</span> <span class="p">(</span><span class="n">current-intdef-ctx</span><span class="p">)))</span>
+    <span class="p">(</span><span class="k">parameterize</span> <span class="p">([</span><span class="n">current-context</span> <span class="p">(</span><span class="nb">list</span> <span class="p">(</span><span class="nb">gensym</span><span class="p">))]</span>
+                   <span class="p">[</span><span class="n">current-intdef-ctx</span> <span class="n">intdef-ctx</span><span class="p">])</span>
+      <span class="p">(</span><span class="k">define-values</span> <span class="p">[</span><span class="n">binding-clauses</span> <span class="n">exprs</span> <span class="n">disappeared-uses</span> <span class="n">disappeared-bindings</span><span class="p">]</span>
+        <span class="p">(</span><span class="k">let</span> <span class="n">loop</span> <span class="p">([</span><span class="n">stxs</span> <span class="n">stxs</span><span class="p">]</span>
+                   <span class="p">[</span><span class="n">binding-clauses</span> <span class="o">&#39;</span><span class="p">()]</span>
+                   <span class="p">[</span><span class="n">exprs</span> <span class="o">&#39;</span><span class="p">()]</span>
+                   <span class="p">[</span><span class="n">disappeared-uses</span> <span class="o">&#39;</span><span class="p">()]</span>
+                   <span class="p">[</span><span class="n">disappeared-bindings</span> <span class="o">&#39;</span><span class="p">()])</span>
+          <span class="p">(</span><span class="k">if</span> <span class="p">(</span><span class="nb">empty?</span> <span class="n">stxs</span><span class="p">)</span>
+              <span class="p">(</span><span class="nb">values</span> <span class="p">(</span><span class="nb">reverse</span> <span class="n">binding-clauses</span><span class="p">)</span> <span class="p">(</span><span class="nb">reverse</span> <span class="n">exprs</span><span class="p">)</span> <span class="n">disappeared-uses</span> <span class="n">disappeared-bindings</span><span class="p">)</span>
+              <span class="p">(</span><span class="n">syntax-parse</span> <span class="p">(</span><span class="n">current-expand</span> <span class="p">(</span><span class="nb">first</span> <span class="n">stxs</span><span class="p">))</span>
+                <span class="kd">#:literal-sets</span> <span class="p">[</span><span class="n">kernel-literals</span><span class="p">]</span>
+                <span class="p">[(</span><span class="n">head:begin</span> <span class="n">~!</span> <span class="n">form</span> <span class="k">...</span><span class="p">)</span>
+                 <span class="p">(</span><span class="n">loop</span> <span class="p">(</span><span class="nb">append</span> <span class="p">(</span><span class="k">for/list</span> <span class="p">([</span><span class="n">form</span> <span class="p">(</span><span class="nb">in-list</span> <span class="p">(</span><span class="n">attribute</span> <span class="n">form</span><span class="p">))])</span>
+                                 <span class="p">(</span><span class="nb">syntax-track-origin</span> <span class="n">form</span> <span class="n">this-syntax</span> <span class="o">#&#39;</span><span class="n">head</span><span class="p">))</span>
+                               <span class="n">stxs</span><span class="p">)</span>
+                       <span class="n">binding-clauses</span> <span class="n">exprs</span> <span class="n">disappeared-uses</span> <span class="n">disappeared-bindings</span><span class="p">)]</span>
+                <span class="p">[(</span><span class="n">head:define-values</span> <span class="n">~!</span> <span class="p">[</span><span class="n">x:id</span> <span class="k">...</span><span class="p">]</span> <span class="n">rhs</span><span class="p">)</span>
+                 <span class="kd">#:with</span> <span class="p">[</span><span class="n">x*</span> <span class="k">...</span><span class="p">]</span> <span class="p">(</span><span class="nb">map</span> <span class="nb">syntax-local-identifier-as-binding</span> <span class="p">(</span><span class="n">attribute</span> <span class="n">x</span><span class="p">))</span>
+                 <span class="kd">#:do</span> <span class="p">[(</span><span class="nb">syntax-local-bind-syntaxes</span> <span class="p">(</span><span class="n">attribute</span> <span class="n">x*</span><span class="p">)</span> <span class="no">#f</span> <span class="n">intdef-ctx</span><span class="p">)]</span>
+                 <span class="p">(</span><span class="n">loop</span>
+                  <span class="p">(</span><span class="nb">rest</span> <span class="n">stxs</span><span class="p">)</span>
+                  <span class="p">(</span><span class="nb">cons</span> <span class="p">(</span><span class="nb">syntax-track-origin</span> <span class="o">#&#39;</span><span class="p">[(</span><span class="n">x*</span> <span class="k">...</span><span class="p">)</span> <span class="n">rhs</span><span class="p">]</span> <span class="n">this-syntax</span> <span class="o">#&#39;</span><span class="n">head</span><span class="p">)</span> <span class="n">binding-clauses</span><span class="p">)</span>
+                  <span class="n">exprs</span> <span class="n">disappeared-uses</span> <span class="n">disappeared-bindings</span><span class="p">)]</span>
+                <span class="p">[(</span><span class="n">head:define-syntaxes</span> <span class="n">~!</span> <span class="p">[</span><span class="n">x:id</span> <span class="k">...</span><span class="p">]</span> <span class="n">rhs</span><span class="p">)</span>
+                 <span class="kd">#:with</span> <span class="p">[</span><span class="n">x*</span> <span class="k">...</span><span class="p">]</span> <span class="p">(</span><span class="nb">map</span> <span class="nb">syntax-local-identifier-as-binding</span> <span class="p">(</span><span class="n">attribute</span> <span class="n">x</span><span class="p">))</span>
+                 <span class="kd">#:do</span> <span class="p">[(</span><span class="nb">syntax-local-bind-syntaxes</span> <span class="p">(</span><span class="n">attribute</span> <span class="n">x*</span><span class="p">)</span> <span class="o">#&#39;</span><span class="n">rhs</span> <span class="n">intdef-ctx</span><span class="p">)]</span>
+                 <span class="p">(</span><span class="n">loop</span> <span class="p">(</span><span class="nb">rest</span> <span class="n">stxs</span><span class="p">)</span> <span class="n">binding-clauses</span> <span class="n">exprs</span>
+                       <span class="p">(</span><span class="nb">cons</span> <span class="o">#&#39;</span><span class="n">head</span> <span class="n">disappeared-uses</span><span class="p">)</span> <span class="p">(</span><span class="nb">cons</span> <span class="p">(</span><span class="n">attribute</span> <span class="n">x*</span><span class="p">)</span> <span class="n">disappeared-bindings</span><span class="p">))]</span>
+                <span class="p">[</span><span class="k">_</span>
+                 <span class="p">(</span><span class="n">loop</span> <span class="p">(</span><span class="nb">rest</span> <span class="n">stxs</span><span class="p">)</span> <span class="n">binding-clauses</span> <span class="p">(</span><span class="nb">cons</span> <span class="n">this-syntax</span> <span class="n">exprs</span><span class="p">)</span>
+                       <span class="n">disappeared-uses</span> <span class="n">disappeared-bindings</span><span class="p">)]))))</span>
+      <span class="p">(</span><span class="k">define</span> <span class="n">expanded-binding-clauses</span>
+        <span class="p">(</span><span class="k">for/list</span> <span class="p">([</span><span class="n">binding-clause</span> <span class="p">(</span><span class="nb">in-list</span> <span class="n">binding-clauses</span><span class="p">)])</span>
+          <span class="p">(</span><span class="n">syntax-parse</span> <span class="n">binding-clause</span>
+            <span class="p">[[(</span><span class="n">x</span> <span class="k">...</span><span class="p">)</span> <span class="n">rhs</span><span class="p">]</span>
+             <span class="p">(</span><span class="n">quasisyntax/loc/props</span> <span class="n">this-syntax</span>
+               <span class="p">[(</span><span class="n">x</span> <span class="k">...</span><span class="p">)</span> <span class="o">#,</span><span class="p">(</span><span class="n">expand-expression</span> <span class="o">#&#39;</span><span class="n">rhs</span><span class="p">)])])))</span>
+      <span class="p">(</span><span class="k">define</span> <span class="n">expanded-exprs</span> <span class="p">(</span><span class="nb">map</span> <span class="n">expand-expression</span> <span class="n">exprs</span><span class="p">))</span>
+      <span class="p">(</span><span class="n">~&gt;</span> <span class="o">#`</span><span class="p">(</span><span class="k">letrec-values</span> <span class="o">#,</span><span class="n">expanded-binding-clauses</span> <span class="o">#,@</span><span class="n">expanded-exprs</span><span class="p">)</span>
+          <span class="p">(</span><span class="nb">syntax-property</span> <span class="o">&#39;</span><span class="ss">disappeared-uses</span> <span class="n">disappeared-uses</span><span class="p">)</span>
+          <span class="p">(</span><span class="nb">syntax-property</span> <span class="o">&#39;</span><span class="ss">disappeared-bindings</span> <span class="n">disappeared-bindings</span><span class="p">)))))</span>
+</pre></div>
+
+</div>
+
+<p>The next step is to actually use this function. We need to replace certain recursive calls to <code>expand-expression</code> with calls to <code>expand-body</code>, but if we do this naïvely, we’ll have some problems. Currently, when we expand body forms, they’re always immediately inside another definition context (i.e. the bindings introduced by lambda formals or by <code>let</code> binding pairs), but they haven’t actually been expanded in that context yet. When we call <code>expand-body</code>, we create a nested context, which will inherit the bindings, but won’t automatically add the parent context’s scope. Therefore, we need to manually call <code>internal-definition-context-introduce</code> on the body syntax objects before calling <code>expand-body</code>. We can write a small helper function to make this easier:</p>
+
+<div class="brush: racket">
+ <div class="source">
+  <pre><span></span><span class="p">(</span><span class="k">begin-for-syntax</span>
+  <span class="p">(</span><span class="k">define</span> <span class="p">(</span><span class="n">expand-body/in-ctx</span> <span class="n">stxs</span> <span class="n">ctx</span><span class="p">)</span>
+    <span class="p">(</span><span class="k">define</span> <span class="p">(</span><span class="n">add-ctx-scope</span> <span class="n">stx</span><span class="p">)</span>
+      <span class="p">(</span><span class="nb">internal-definition-context-introduce</span> <span class="n">ctx</span> <span class="n">stx</span> <span class="o">&#39;</span><span class="ss">add</span><span class="p">))</span>
+    <span class="p">(</span><span class="k">parameterize</span> <span class="p">([</span><span class="n">current-intdef-ctx</span> <span class="n">ctx</span><span class="p">])</span>
+      <span class="p">(</span><span class="n">add-ctx-scope</span> <span class="p">(</span><span class="n">expand-body</span> <span class="p">(</span><span class="nb">map</span> <span class="n">add-ctx-scope</span> <span class="n">stxs</span><span class="p">))))))</span>
+</pre></div>
+
+</div>
+
+<p>Now we just need to replace the relevant calls to <code>expand-expression</code> with calls to <code>expand-body/in-ctx</code>, starting with a minor adjustment to our <code>lambda-clause</code> syntax class from earlier:</p>
+
+<div class="brush: racket">
+ <div class="source">
+  <pre><span></span><span class="p">(</span><span class="k">begin-for-syntax</span>
+  <span class="p">(</span><span class="n">define-syntax-class</span> <span class="n">lambda-clause</span>
+    <span class="kd">#:description</span> <span class="no">#f</span>
+    <span class="kd">#:attributes</span> <span class="p">[</span><span class="n">expansion</span><span class="p">]</span>
+    <span class="kd">#:commit</span>
+    <span class="p">[</span><span class="n">pattern</span> <span class="p">[</span><span class="n">formals:plain-formals</span> <span class="n">body</span> <span class="k">...</span><span class="p">]</span>
+             <span class="kd">#:do</span> <span class="p">[(</span><span class="k">define</span> <span class="n">intdef-ctx</span> <span class="p">(</span><span class="nb">syntax-local-make-definition-context</span> <span class="p">(</span><span class="n">current-intdef-ctx</span><span class="p">)))</span>
+                   <span class="p">(</span><span class="nb">syntax-local-bind-syntaxes</span> <span class="p">(</span><span class="n">attribute</span> <span class="n">formals.id</span><span class="p">)</span> <span class="no">#f</span> <span class="n">intdef-ctx</span><span class="p">)]</span>
+             <span class="kd">#:with</span> <span class="n">formals*</span> <span class="p">(</span><span class="nb">internal-definition-context-introduce</span> <span class="n">intdef-ctx</span> <span class="o">#&#39;</span><span class="n">formals</span><span class="p">)</span>
+             <span class="kd">#:with</span> <span class="n">body*</span> <span class="p">(</span><span class="n">expand-body/in-ctx</span> <span class="p">(</span><span class="n">attribute</span> <span class="n">body</span><span class="p">)</span> <span class="n">intdef-ctx</span><span class="p">)</span>
+             <span class="kd">#:attr</span> <span class="n">expansion</span> <span class="o">#&#39;</span><span class="p">[</span><span class="n">formals*</span> <span class="n">body*</span><span class="p">]]))</span>
+</pre></div>
+
+</div>
+
+<p>The only other change must occur in the handling of the various <code>let</code> forms, which similarly replaces <code>expand-expression</code> with <code>expand-body/in-ctx</code>:</p>
+
+<div class="brush: racket">
+ <div class="source">
+  <pre><span></span><span class="p">[({</span><span class="n">~or</span> <span class="p">{</span><span class="n">~or</span> <span class="p">{</span><span class="n">~and</span> <span class="n">head:let-values</span> <span class="n">~!</span> <span class="p">{</span><span class="n">~bind</span> <span class="p">[</span><span class="n">rec?</span> <span class="no">#f</span><span class="p">]</span> <span class="p">[</span><span class="n">stxs?</span> <span class="no">#f</span><span class="p">]}}</span>
+            <span class="p">{</span><span class="n">~and</span> <span class="n">head:letrec-values</span> <span class="n">~!</span> <span class="p">{</span><span class="n">~bind</span> <span class="p">[</span><span class="n">rec?</span> <span class="no">#t</span><span class="p">]</span> <span class="p">[</span><span class="n">stxs?</span> <span class="no">#f</span><span class="p">]}}}</span>
+       <span class="p">{</span><span class="n">~seq</span> <span class="n">head:letrec-syntaxes+values</span> <span class="p">{</span><span class="n">~bind</span> <span class="p">[</span><span class="n">rec?</span> <span class="no">#t</span><span class="p">]</span> <span class="p">[</span><span class="n">stxs?</span> <span class="no">#t</span><span class="p">]}</span>
+             <span class="n">~!</span> <span class="p">([(</span><span class="n">x/s:id</span> <span class="k">...</span><span class="p">)</span> <span class="n">rhs/s</span><span class="p">]</span> <span class="k">...</span><span class="p">)}}</span>
+  <span class="p">([(</span><span class="n">x:id</span> <span class="k">...</span><span class="p">)</span> <span class="n">rhs</span><span class="p">]</span> <span class="k">...</span><span class="p">)</span> <span class="n">body</span> <span class="k">...</span><span class="p">)</span>
+ <span class="kd">#:do</span> <span class="p">[(</span><span class="k">define</span> <span class="n">intdef-ctx</span> <span class="p">(</span><span class="nb">syntax-local-make-definition-context</span> <span class="p">(</span><span class="n">current-intdef-ctx</span><span class="p">)))</span>
+       <span class="p">(</span><span class="nb">syntax-local-bind-syntaxes</span> <span class="p">(</span><span class="nb">append*</span> <span class="p">(</span><span class="n">attribute</span> <span class="n">x</span><span class="p">))</span> <span class="no">#f</span> <span class="n">intdef-ctx</span><span class="p">)</span>
+       <span class="p">(</span><span class="k">when</span> <span class="p">(</span><span class="n">attribute</span> <span class="n">stxs?</span><span class="p">)</span>
+         <span class="p">(</span><span class="k">for</span> <span class="p">([</span><span class="n">xs/s</span> <span class="p">(</span><span class="nb">in-list</span> <span class="p">(</span><span class="n">attribute</span> <span class="n">x/s</span><span class="p">))]</span>
+               <span class="p">[</span><span class="n">rhs/s</span> <span class="p">(</span><span class="nb">in-list</span> <span class="p">(</span><span class="n">attribute</span> <span class="n">rhs/s</span><span class="p">))])</span>
+           <span class="p">(</span><span class="nb">syntax-local-bind-syntaxes</span> <span class="n">xs/s</span> <span class="n">rhs/s</span> <span class="n">intdef-ctx</span><span class="p">)))]</span>
+ <span class="kd">#:with</span> <span class="p">[[</span><span class="n">x*</span> <span class="k">...</span><span class="p">]</span> <span class="k">...</span><span class="p">]</span> <span class="p">(</span><span class="nb">internal-definition-context-introduce</span> <span class="n">intdef-ctx</span> <span class="o">#&#39;</span><span class="p">[[</span><span class="n">x</span> <span class="k">...</span><span class="p">]</span> <span class="k">...</span><span class="p">])</span>
+ <span class="kd">#:with</span> <span class="p">[</span><span class="n">rhs*</span> <span class="k">...</span><span class="p">]</span> <span class="p">(</span><span class="k">if</span> <span class="p">(</span><span class="n">attribute</span> <span class="n">rec?</span><span class="p">)</span>
+                       <span class="p">(</span><span class="k">parameterize</span> <span class="p">([</span><span class="n">current-intdef-ctx</span> <span class="n">intdef-ctx</span><span class="p">])</span>
+                         <span class="p">(</span><span class="nb">map</span> <span class="n">expand-expression</span> <span class="p">(</span><span class="n">attribute</span> <span class="n">rhs</span><span class="p">)))</span>
+                       <span class="p">(</span><span class="nb">map</span> <span class="n">expand-expression</span> <span class="p">(</span><span class="n">attribute</span> <span class="n">rhs</span><span class="p">)))</span>
+ <span class="kd">#:with</span> <span class="n">body*</span> <span class="p">(</span><span class="n">expand-body/in-ctx</span> <span class="p">(</span><span class="n">attribute</span> <span class="n">body</span><span class="p">)</span> <span class="n">intdef-ctx</span><span class="p">)</span>
+ <span class="p">(</span><span class="k">if</span> <span class="p">(</span><span class="n">attribute</span> <span class="n">stxs?</span><span class="p">)</span>
+     <span class="p">(</span><span class="n">~&gt;</span> <span class="p">(</span><span class="k">syntax/loc</span> <span class="n">this-syntax</span>
+           <span class="p">(</span><span class="k">letrec-values</span> <span class="p">([(</span><span class="n">x*</span> <span class="k">...</span><span class="p">)</span> <span class="n">rhs*</span><span class="p">]</span> <span class="k">...</span><span class="p">)</span> <span class="n">body*</span><span class="p">))</span>
+         <span class="p">(</span><span class="nb">syntax-track-origin</span> <span class="n">this-syntax</span> <span class="o">#&#39;</span><span class="n">head</span><span class="p">))</span>
+     <span class="p">(</span><span class="n">syntax/loc/props</span> <span class="n">this-syntax</span>
+       <span class="p">(</span><span class="n">head</span> <span class="p">([(</span><span class="n">x*</span> <span class="k">...</span><span class="p">)</span> <span class="n">rhs*</span><span class="p">]</span> <span class="k">...</span><span class="p">)</span> <span class="n">body*</span><span class="p">)))]</span>
+</pre></div>
+
+</div>
+
+<p>With these changes, we’ve now extended our expression expander with the ability to expand internal definitions. We can see this in action on a simple example:</p>
+
+<div class="brush: racket">
+ <div class="source">
+  <pre><span></span><span class="nb">&gt;</span> <span class="p">(</span><span class="n">expand-expression</span>
+   <span class="o">#&#39;</span><span class="p">(</span><span class="k">let</span> <span class="p">()</span>
+       <span class="p">(</span><span class="k">define</span> <span class="n">x</span> <span class="mi">42</span><span class="p">)</span>
+       <span class="p">(</span><span class="k">define-syntax</span> <span class="n">y</span> <span class="p">(</span><span class="nb">make-rename-transformer</span> <span class="o">#&#39;</span><span class="n">z</span><span class="p">))</span>
+       <span class="p">(</span><span class="k">define-syntax</span> <span class="n">z</span> <span class="p">(</span><span class="nb">make-rename-transformer</span> <span class="o">#&#39;</span><span class="n">x</span><span class="p">))</span>
+       <span class="p">(</span><span class="nb">+</span> <span class="n">y</span> <span class="mi">3</span><span class="p">)))</span>
+<span class="n">#&lt;syntax</span> <span class="p">(</span><span class="k">let-values</span> <span class="p">()</span>
+           <span class="p">(</span><span class="k">letrec-values</span> <span class="p">([(</span><span class="n">x</span><span class="p">)</span> <span class="o">&#39;</span><span class="mi">42</span><span class="p">])</span>
+             <span class="p">(</span><span class="k">#%app</span> <span class="nb">+</span> <span class="n">x</span> <span class="o">&#39;</span><span class="mi">3</span><span class="p">)))</span><span class="nb">&gt;</span>
+</pre></div>
+
+</div>
+
+<p>Just as we’d like, the transformer bindings were expanded and subsequently eliminated, and the runtime binding was collected into a <code>letrec-values</code> form. The outer <code>let-values</code> is left over from the outer <code>let</code>, which is needed only to create an internal-definition context to hold our internal definitions.</p>
+
+<h1 id="putting-the-expression-expander-to-work">Putting the expression expander to work</h1>
+
+<p>So far, we’ve done a lot of work to emulate the behavior of Racket’s macroexpander, and as the above example demonstrates, we’ve been fairly successful in that goal. However, you might be wondering <em>why</em> we did any of this, as replicating the behavior of <code>local-expand</code> is not very useful on its own. As mentioned above, this can be used as the foundation of an expander for custom core forms that extends, rather than replaces, the built-in Racket core forms, It can also be used to “cheat” and expand through the behavior of the <code>local-expand</code> stop list, which implicitly adds the Racket core forms to any non-empty stop list. Hopefully, I’ll have a chance to cover some of these things more deeply in the future, but for now, I’ll just give a small taste of the latter.</p>
+
+<p>By using the power of our <code>expand-expression</code> function, it’s actually possible to use this kind of expression expander to do genuinely nefarious things, such as hijack the behavior of arbitrary macros! For example, we could do something evil like make <code>for</code> loops run in reverse order by adding <code>for</code> to <code>current-stop-list</code>, then adding an additional special case to <code>expand-expression</code> for <code>for</code>:</p>
+
+<div class="brush: racket">
+ <div class="source">
+  <pre><span></span><span class="p">(</span><span class="k">begin-for-syntax</span>
+  <span class="p">(</span><span class="k">define</span> <span class="n">current-stop-list</span> <span class="p">(</span><span class="nb">make-parameter</span> <span class="p">(</span><span class="nb">list</span> <span class="o">#&#39;</span><span class="k">define-values</span> <span class="o">#&#39;</span><span class="k">define-syntaxes</span> <span class="o">#&#39;</span><span class="k">for</span><span class="p">)))</span>
+
+  <span class="p">(</span><span class="k">define</span> <span class="p">(</span><span class="n">expand-expression</span> <span class="n">stx</span><span class="p">)</span>
+    <span class="p">(</span><span class="n">syntax-parse</span> <span class="p">(</span><span class="k">parameterize</span> <span class="p">([</span><span class="n">current-context</span> <span class="o">&#39;</span><span class="ss">expression</span><span class="p">])</span>
+                    <span class="p">(</span><span class="n">current-expand</span> <span class="n">stx</span><span class="p">))</span>
+      <span class="kd">#:literal-sets</span> <span class="p">[</span><span class="n">kernel-literals</span><span class="p">]</span>
+      <span class="kd">#:literals</span> <span class="p">[</span><span class="k">for</span><span class="p">]</span>
+      <span class="c1">; ...</span>
+      <span class="p">[(</span><span class="n">head:for</span> <span class="p">([</span><span class="n">x:id</span> <span class="n">seq:expr</span><span class="p">]</span> <span class="k">...</span><span class="p">)</span> <span class="n">body</span> <span class="n">...+</span><span class="p">)</span>
+       <span class="p">(</span><span class="n">syntax/loc/props</span> <span class="n">this-syntax</span>
+         <span class="p">(</span><span class="n">head</span> <span class="p">([</span><span class="n">x</span> <span class="p">(</span><span class="nb">in-list</span> <span class="p">(</span><span class="nb">reverse</span> <span class="p">(</span><span class="nb">sequence-&gt;list</span> <span class="n">seq</span><span class="p">)))]</span> <span class="k">...</span><span class="p">)</span>
+           <span class="n">body</span> <span class="k">...</span><span class="p">))]</span>
+      <span class="c1">; ...</span>
+    <span class="p">)))</span>
+</pre></div>
+
+</div>
+
+<p>Amazingly, due to the fact that we’ve taken complete control of the expansion process, this will rewrite uses of <code>for</code> <em>even if they are introduced by macroexpansion</em>. For example, we could write a small macro that expands into a use of <code>for</code>:</p>
+
+<div class="brush: racket">
+ <div class="source">
+  <pre><span></span><span class="p">(</span><span class="n">define-simple-macro</span> <span class="p">(</span><span class="n">print-up-to</span> <span class="n">n</span><span class="p">)</span>
+  <span class="p">(</span><span class="k">for</span> <span class="p">([</span><span class="n">i</span> <span class="p">(</span><span class="nb">in-range</span> <span class="n">n</span><span class="p">)])</span>
+    <span class="p">(</span><span class="nb">println</span> <span class="n">i</span><span class="p">)))</span>
+
+<span class="nb">&gt;</span> <span class="p">(</span><span class="n">print-up-to</span> <span class="mi">5</span><span class="p">)</span>
+<span class="mi">0</span>
+<span class="mi">1</span>
+<span class="mi">2</span>
+<span class="mi">3</span>
+<span class="mi">4</span>
+</pre></div>
+
+</div>
+
+<p>If we write a wrapper macro that applies our evil version of <code>expand-expression</code> to its body, then wrap a use of our <code>print-up-to</code> macro with it, it will execute the loop in reverse order:</p>
+
+<div class="brush: racket">
+ <div class="source">
+  <pre><span></span><span class="p">(</span><span class="n">define-syntax-parser</span> <span class="n">hijack-for-loops</span>
+  <span class="p">[(</span><span class="k">_</span> <span class="n">form:expr</span><span class="p">)</span> <span class="p">(</span><span class="n">expand-expression</span> <span class="o">#&#39;</span><span class="n">form</span><span class="p">)])</span>
+
+<span class="nb">&gt;</span> <span class="p">(</span><span class="n">hijack-for-loops</span>
+   <span class="p">(</span><span class="n">print-up-to</span> <span class="mi">5</span><span class="p">))</span>
+<span class="mi">4</span>
+<span class="mi">3</span>
+<span class="mi">2</span>
+<span class="mi">1</span>
+<span class="mi">0</span>
+</pre></div>
+
+</div>
+
+<p>On its own, this is not that impressive, since we could have just used <code>local-expand</code> on the body directly to achieve this. However, what’s remarkable about <code>hijack-for-loops</code> is that it will work even if the <code>for</code> loop is buried deep inside some arbitrary expression:</p>
+
+<div class="brush: racket">
+ <div class="source">
+  <pre><span></span><span class="nb">&gt;</span> <span class="p">(</span><span class="k">define</span> <span class="n">foo</span>
+    <span class="p">(</span><span class="n">hijack-for-loops</span>
+     <span class="p">(</span><span class="k">lambda</span> <span class="p">(</span><span class="n">x</span><span class="p">)</span>
+       <span class="p">(</span><span class="k">define</span> <span class="n">n</span> <span class="p">(</span><span class="nb">*</span> <span class="n">x</span> <span class="mi">2</span><span class="p">))</span>
+       <span class="p">(</span><span class="n">print-up-to</span> <span class="n">n</span><span class="p">))))</span>
+<span class="nb">&gt;</span> <span class="p">(</span><span class="n">foo</span> <span class="mi">3</span><span class="p">)</span>
+<span class="mi">5</span>
+<span class="mi">4</span>
+<span class="mi">3</span>
+<span class="mi">2</span>
+<span class="mi">1</span>
+<span class="mi">0</span>
+</pre></div>
+
+</div>
+
+<p>Of course, this example is rather contrived—mucking with <code>for</code> loops like this isn’t useful at all, and nobody would really write <code>print-up-to</code> as a macro, anyway—but there is potential for using this technique to do more interesting things.</p>
+
+<h1 id="closing-thoughts">Closing thoughts</h1>
+
+<p>The system outlined in this blog post is not something I would recommend using in any real macro. It is enormously complicated, requires knowledge well above that of your average working macrologist, and it involves doing rather horrible things to the macro system, things it was undoubtably never designed to do. Still, I believe this blog post is useful, for a few different reasons:</p>
+
+<ol>
+ <li>
+  <p>The technology outlined in this post, while perhaps not directly applicable to existing real-world problems, provides a framework for implementing various new kinds of syntax transformations in Racket <em>without</em> extending the macro system. It demonstrates the expressive power of the macro system, and it hopefully lays the foundation for a better, more high-level interface for users who wish to define their own languages with custom core forms.</p></li>
+ <li>
+  <p>This system provides insight into the way the Racket macroexpander operates, <em>in terms of the userspace syntax API</em>. The canonical existing model of hygienic macroexpansion, in the aforementioned <a href="http://www.cs.utah.edu/plt/scope-sets/">Bindings as Sets of Scopes</a> paper, does not explain the workings of internal definition contexts in detail, and it certainly doesn’t explain them in terms that a Racket programmer would already be familiar with. By reencoding those ideas within the macro system itself, an advanced macro writer may be able to more easily connect concepts in the macro system’s implementation to concepts they have already been exposed to.</p></li>
+ <li>
+  <p>The capability of the proof-of-concept outlined here demonstrates that the limitation imposed by the existing implementation of the stop list (namely, the way it is implicitly extended with additional identifiers) is essentially artificial, and it can be hacked around with sufficient (albeit significant) effort. This isn’t enormously important, but it is somewhat relevant to a recent debate in <a href="https://github.com/racket/racket/issues/2154">a GitHub issue</a> about the handling of the <code>local-expand</code> stop list.</p></li>
+ <li>
+  <p>Finally, for myself as much as anyone else, this implementation records in a concise way (perhaps overly concise at times) the collection of very subtle details I’ve learned over the past six months about how information is preserved and propagated during the expansion process.</p></li></ol>
+
+<p>This blog post is not for everybody. If you made it to the end, give yourself a pat on the back. If you made it to the end <em>and</em> understood everything you read: congratulations, you are a certified expert in Racket macro programming. If not, do not fear, and do not lose hope—I plan for something significantly more mellow next time.</p>
+
+<p>As always, I’d like to give thanks to the people who contributed significantly, if indirectly, to the contents of this blog post, namely <a href="http://www.cs.utah.edu/~mflatt/">Matthew Flatt</a>, <a href="http://mballantyne.net">Michael Ballantyne</a>, and <a href="http://www.ccs.neu.edu/home/ryanc/">Ryan Culpepper</a>. And finally, for those interested, all of the code in this blog post can be found in a runnable form <a href="https://gist.github.com/lexi-lambda/c4f4b91ac9c0a555447d72d02e18be7b">in this GitHub gist</a>.</p>
+  <footer>
+    <ul class="pager">
+      <li class="previous">
+        <a href="/blog/2018/10/06/macroexpand-anywhere-with-local-apply-transformer/">&larr; <em>Macroexpand anywhere with <code>local-apply-transformer</code>!</em></a>
+      </li>
+      <li class="next">
+        <a href="/blog/2018/04/15/reimplementing-hackett-s-type-language-expanding-to-custom-core-forms-in-racket/"><em>Reimplementing Hackett’s type language: expanding to custom core forms in Racket</em> &rarr;</a>
+      </li>
+    </ul>
+  </footer>
+</article>
+        </div>
+      </section>
+      <footer>
+        <div class="content">
+          <h2 id="copyright-notice">© 2021, Alexis King</h2>
+          <h3>
+            Built with <a href="https://github.com/greghendershott/frog">Frog</a>, the
+            <strong>fr</strong>ozen bl<strong>og</strong> tool.
+          </h3>
+          <h3>
+            Feeds are available via <a href="/feeds/all.atom.xml">Atom</a>
+            or <a href="/feeds/all.rss.xml">RSS</a>.
+          </h3>
+        </div>
+      </footer>
+    </div>
+  </body>
+</html>

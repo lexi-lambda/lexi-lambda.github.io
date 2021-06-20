@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <title>Deploying Racket applications on Heroku</title>
+    <meta name="description" content="Heroku is a &quot;platform as a service&quot; that provides an incredibly simple way to deploy simple internet applications, and I take liberal advantage of its free tier for testing out simple applications. It has support for a variety of languages built-in, but R...">
+    <meta name="author"      content="Alexis King">
+    <meta name="keywords"    content="racket, heroku, 12factor">
+    <meta name="viewport"    content="width=device-width, initial-scale=1.0">
+    <link rel="icon"      href="/favicon.ico">
+    <link rel="canonical" href="http://lexi-lambda.github.io/blog/2015/08/22/deploying-racket-applications-on-heroku/">
+    <link rel="next" href="/blog/2015/07/18/automatically-deploying-a-frog-powered-blog-to-github-pages/">
+    <link rel="prev" href="/blog/2015/08/30/managing-application-configuration-with-envy/">
+    <!-- CSS -->
+    <link rel="stylesheet" type="text/css" href="https://fonts.googleapis.com/css?family=Merriweather+Sans:400,300,300italic,400italic,700,700italic,800,800italic|Merriweather:400,300,300italic,400italic,700,700italic,900,900italic|Fira+Code:300,400,500,600,700">
+    <link rel="stylesheet" type="text/css" href="/css/application.min.css">
+    <link rel="stylesheet" type="text/css" href="/css/pygments.min.css">
+    <!-- Feeds -->
+    <link rel="alternate" type="application/atom+xml"
+          href="/feeds/all.atom.xml" title="Atom Feed">
+    <link rel="alternate" type="application/rss+xml"
+          href="/feeds/all.rss.xml" title="RSS Feed">
+    <!-- JS -->
+    <!-- <script src="/js/application.min.js"></script> -->
+    <script type="text/javascript">
+      (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+      (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+      m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+      })(window,document,'script','//www.google-analytics.com/analytics.js','ga');
+
+      ga('create', 'UA-65250372-1', 'auto');
+      ga('send', 'pageview');
+    </script>
+  </head>
+  <body>
+    <div id="page-content">
+      <!-- Navigation Bar -->
+      <header>
+        <nav role="navigation" class="navigation-bar">
+          <ul class="navigation-items left">
+            <li id="blog-title-header"><a href="/"><h1>Alexis King</h1></a></li>
+          </ul>
+          <ul class="navigation-items center"></ul>
+          <ul class="navigation-items right">
+            <li><a href="/">Home</a></li>
+            <li><a href="/resume.html">About Me</a></li>
+          </ul>
+        </nav>
+      </header>
+      <section role="main">
+        <!-- Main column -->
+        <div class="content" class="col-md-12">
+
+
+
+          <article class="main">
+  <header>
+    <h1 class="title">Deploying Racket applications on Heroku</h1>
+    <div class='date-and-tags'>
+      <time datetime="2015-08-22T14:47:49">
+        2015-08-22
+      </time>
+      <span style="margin: 0 3px">⦿</span>
+      <span class="tags"><a href="/tags/racket.html">racket</a>, <a href="/tags/heroku.html">heroku</a>, <a href="/tags/12factor.html">12factor</a></span>
+    </div>
+  </header>
+
+<p><a href="https://www.heroku.com">Heroku</a> is a &ldquo;platform as a service&rdquo; that provides an incredibly simple way to deploy simple internet applications, and I take liberal advantage of its free tier for testing out simple applications. It has support for a variety of languages built-in, but Racket is not currently among them. Fortunately, Heroku provides an interface for adding custom build processes for arbitrary types of applications, called “buildpacks”. I&rsquo;ve built one for Racket apps, and with just a little bit of configuration, it’s possible to get a Racket webserver running on Heroku.</p>
+<!-- more-->
+
+<h1 id="building-the-server">Building the server</h1>
+
+<p>Racket&rsquo;s <a href="http://docs.racket-lang.org/web-server/index.html">web-server</a> package makes building and running a simple server incredibly easy. Here&rsquo;s all the code we&rsquo;ll need to get going:</p>
+
+<div class="brush: racket">
+ <div class="source">
+  <pre><span></span><span class="kn">#lang </span><span class="nn">racket</span>
+
+<span class="p">(</span><span class="k">require</span> <span class="n">web-server/servlet</span>
+         <span class="n">web-server/servlet-env</span><span class="p">)</span>
+
+<span class="p">(</span><span class="k">define</span> <span class="p">(</span><span class="n">start</span> <span class="n">req</span><span class="p">)</span>
+  <span class="p">(</span><span class="n">response/xexpr</span>
+   <span class="o">&#39;</span><span class="p">(</span><span class="ss">html</span> <span class="p">(</span><span class="ss">head</span> <span class="p">(</span><span class="ss">title</span> <span class="s2">"Racket Heroku App"</span><span class="p">))</span>
+          <span class="p">(</span><span class="ss">body</span> <span class="p">(</span><span class="ss">h1</span> <span class="s2">"It works!"</span><span class="p">)))))</span>
+
+<span class="p">(</span><span class="n">serve/servlet</span> <span class="n">start</span> <span class="kd">#:servlet-path</span> <span class="s2">"/"</span><span class="p">)</span>
+</pre></div>
+
+</div>
+
+<p>Running the above file will start up the server on the default port, 8080. When running on Heroku, however, we&rsquo;re required to bind to the port that Heroku provides via the <code>PORT</code> environment variable. We can access this using the Racket <code><a href="http://docs.racket-lang.org/reference/envvars.html#(def._((lib._racket/private/misc..rkt)._getenv))" style="color: inherit">getenv</a></code> function.</p>
+
+<p>Additionally, the Racket web server specifically binds to localhost, but Heroku doesn&rsquo;t allow that restriction, so we need to pass <code>#f</code> for the <code>#:listen-ip</code> argument.</p>
+
+<div class="brush: racket">
+ <div class="source">
+  <pre><span></span><span class="p">(</span><span class="k">define</span> <span class="n">port</span> <span class="p">(</span><span class="k">if</span> <span class="p">(</span><span class="nb">getenv</span> <span class="s2">"PORT"</span><span class="p">)</span>
+                 <span class="p">(</span><span class="nb">string-&gt;number</span> <span class="p">(</span><span class="nb">getenv</span> <span class="s2">"PORT"</span><span class="p">))</span>
+                 <span class="mi">8080</span><span class="p">))</span>
+<span class="p">(</span><span class="n">serve/servlet</span> <span class="n">start</span>
+               <span class="kd">#:servlet-path</span> <span class="s2">"/"</span>
+               <span class="kd">#:listen-ip</span> <span class="no">#f</span>
+               <span class="kd">#:port</span> <span class="n">port</span><span class="p">)</span>
+</pre></div>
+
+</div>
+
+<p>Also, by default, <code>serve/servlet</code> will open a web browser automatically when the program is run, which is very useful for rapid prototyping within something like DrRacket, but we&rsquo;ll want to turn that off.</p>
+
+<div class="brush: racket">
+ <div class="source">
+  <pre><span></span><span class="p">(</span><span class="n">serve/servlet</span> <span class="n">start</span>
+               <span class="kd">#:servlet-path</span> <span class="s2">"/"</span>
+               <span class="kd">#:listen-ip</span> <span class="no">#f</span>
+               <span class="kd">#:port</span> <span class="n">port</span>
+               <span class="kd">#:command-line?</span> <span class="no">#t</span><span class="p">)</span>
+</pre></div>
+
+</div>
+
+<p>That&rsquo;s it! Now we have a Racket web server that can run on Heroku. Obviously it&rsquo;s not a very interesting application right now, but that&rsquo;s fine for our purposes.</p>
+
+<h1 id="setting-up-our-app-for-heroku">Setting up our app for Heroku</h1>
+
+<p>The next step is to actually create an app on Heroku. Don&rsquo;t worry—it&rsquo;s free! That said, explaining precisely how Heroku works is outside the scope of this article. Just make an account, then create an app. I called mine &ldquo;racket-heroku-sample&rdquo;. Once you&rsquo;ve created an app and set up Heroku&rsquo;s command-line tool, you can specify the proper buildpack:</p>
+
+<div class="brush: sh">
+ <div class="source">
+  <pre><span></span>$ git init
+$ heroku git:remote -a racket-heroku-sample
+$ heroku buildpacks:set https://github.com/lexi-lambda/heroku-buildpack-racket
+</pre></div>
+
+</div>
+
+<p>We&rsquo;ll also need to pick a particular Racket version before we deploy our app. At the time of this writing, Racket 6.2.1 is the latest version, so I just set the <code>RACKET_VERSION</code> environment variable as follows:</p>
+
+<div class="brush: sh">
+ <div class="source">
+  <pre><span></span>$ heroku config:set <span class="nv">RACKET_VERSION</span><span class="o">=</span><span class="m">6</span>.2.1
+</pre></div>
+
+</div>
+
+<p>Now there&rsquo;s just one thing left to do before we can push to Heroku: we need to tell Heroku what command to use to run our application. To do this, we use something called a &ldquo;Procfile&rdquo; that contains information about the process types for our app. Heroku supports multiple processes of different types, but we&rsquo;re just going to have a single web process.</p>
+
+<p>Specifically, we just want to run our <code>serve.rkt</code> module. The Racket buildpack installs the repository as a package, so we can run <code>racket</code> with the <code>-l</code> flag to specify a module path, which will be more robust than specifying a filesystem path directly. Therefore, our Procfile will look like this:</p>
+
+<div class="brush: procfile">
+ <div class="source">
+  <pre><span></span>web: racket -l sample-heroku-app/server
+</pre></div>
+
+</div>
+
+<p>Now all that&rsquo;s left to do is push our repository to Heroku&rsquo;s git remote. Once the build completes, we can <a href="https://racket-heroku-sample.herokuapp.com">navigate to our app&rsquo;s URL and actually see it running live</a>!</p>
+
+<h1 id="conclusion">Conclusion</h1>
+
+<p>That&rsquo;s all that&rsquo;s needed to get a Racket app up and running on Heroku, but it probably isn&rsquo;t the best way to manage a real application. Usually it&rsquo;s best to use a continuous integration service to automatically deploy certain GitHub branches to Heroku, after running the tests, of course. Also, a real application would obviously be a little more complicated.</p>
+
+<p>That said, this provides the foundation and shell. If you&rsquo;d like to see the sample app used in this post, you can <a href="https://github.com/lexi-lambda/racket-sample-heroku-app">find it on GitHub here</a>. For more details on the buildpack itself, <a href="https://github.com/lexi-lambda/heroku-buildpack-racket">it&rsquo;s also available on GitHub here</a>.</p>
+  <footer>
+    <ul class="pager">
+      <li class="previous">
+        <a href="/blog/2015/08/30/managing-application-configuration-with-envy/">&larr; <em>Managing application configuration with Envy</em></a>
+      </li>
+      <li class="next">
+        <a href="/blog/2015/07/18/automatically-deploying-a-frog-powered-blog-to-github-pages/"><em>Automatically deploying a Frog-powered blog to GitHub pages</em> &rarr;</a>
+      </li>
+    </ul>
+  </footer>
+</article>
+        </div>
+      </section>
+      <footer>
+        <div class="content">
+          <h2 id="copyright-notice">© 2021, Alexis King</h2>
+          <h3>
+            Built with <a href="https://github.com/greghendershott/frog">Frog</a>, the
+            <strong>fr</strong>ozen bl<strong>og</strong> tool.
+          </h3>
+          <h3>
+            Feeds are available via <a href="/feeds/all.atom.xml">Atom</a>
+            or <a href="/feeds/all.rss.xml">RSS</a>.
+          </h3>
+        </div>
+      </footer>
+    </div>
+  </body>
+</html>

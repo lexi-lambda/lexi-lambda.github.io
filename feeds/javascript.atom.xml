@@ -1,0 +1,270 @@
+<?xml version="1.0" encoding="utf-8"?> 
+<feed xmlns="http://www.w3.org/2005/Atom" xml:lang="en">
+ <title type="text">Alexis King's Blog: Posts tagged 'javascript'</title>
+ <link rel="self" href="http://lexi-lambda.github.io/feeds/javascript.atom.xml" />
+ <link href="http://lexi-lambda.github.io/tags/javascript.html" />
+ <id>urn:http-lexi-lambda-github-io:-tags-javascript-html</id>
+ <updated>2016-08-24T22:50:28Z</updated>
+ <entry>
+  <title type="text">Understanding the npm dependency model</title>
+  <link rel="alternate" href="http://lexi-lambda.github.io/blog/2016/08/24/understanding-the-npm-dependency-model/?utm_source=javascript&amp;utm_medium=Atom" />
+  <id>urn:http-lexi-lambda-github-io:-blog-2016-08-24-understanding-the-npm-dependency-model</id>
+  <published>2016-08-24T22:50:28Z</published>
+  <updated>2016-08-24T22:50:28Z</updated>
+  <author>
+   <name>Alexis King</name></author>
+  <content type="html">
+&lt;p&gt;Currently, &lt;a href="https://www.npmjs.com"&gt;npm&lt;/a&gt; is &lt;em&gt;the&lt;/em&gt; package manager for the frontend world. Sure, there are alternatives, but for the time being, npm seems to have won. Even tools like &lt;a href="https://bower.io"&gt;Bower&lt;/a&gt; are being pushed to the wayside in favor of the One True Package Manager, but what’s most interesting to me is npm’s relatively novel approach to dependency management. Unfortunately, in my experience, it is actually not particularly well understood, so consider this an attempt to clarify how exactly it works and how it affects &lt;strong&gt;you&lt;/strong&gt; as a user or package developer.&lt;/p&gt;
+&lt;!-- more--&gt;
+
+&lt;h1 id="first-the-basics"&gt;First, the basics&lt;/h1&gt;
+
+&lt;p&gt;At a high level, npm is not too dissimilar from other package managers for programming languages: packages depend on other packages, and they express those dependencies with &lt;em&gt;version ranges&lt;/em&gt;. npm happens to use the &lt;a href="http://semver.org"&gt;semver&lt;/a&gt; versioning scheme to express those ranges, but the way it performs version resolution is mostly immaterial; what matters is that packages can depend on ranges rather than specific versions of packages.&lt;/p&gt;
+
+&lt;p&gt;This is rather important in any ecosystem, since locking a library to a specific set of dependencies could cause significant problems, but it’s actually much less of a problem in npm’s case compared to other, similar package systems. Indeed, it is often safe for a library author to pin a dependency to a specific version without affecting dependent packages or applications. The tricky bit is determining &lt;em&gt;when&lt;/em&gt; this is safe and when it’s not, and this is what I so frequently find that people get wrong.&lt;/p&gt;
+
+&lt;h1 id="dependency-duplication-and-the-dependency-tree"&gt;Dependency duplication and the dependency tree&lt;/h1&gt;
+
+&lt;p&gt;Most users of npm (or at least most package authors) eventually learn that, unlike other package managers, npm installs a &lt;em&gt;tree&lt;/em&gt; of dependencies. That is, every package installed gets its own set of dependencies rather than forcing every package to share the same canonical set of packages. Obviously, virtually every single package manager in existence has to model a dependency tree at some point, since that’s how dependencies are expressed by programmers.&lt;/p&gt;
+
+&lt;p&gt;For example, consider two packages, &lt;code&gt;foo&lt;/code&gt; and &lt;code&gt;bar&lt;/code&gt;. Each of them have their own set of dependencies, which can be represented as a tree:&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;foo
+├── hello ^0.1.2
+└── world ^1.0.7
+
+bar
+├── hello ^0.2.8
+└── goodbye ^3.4.0&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;Imagine an application that depends on &lt;em&gt;both&lt;/em&gt; &lt;code&gt;foo&lt;/code&gt; and &lt;code&gt;bar&lt;/code&gt;. Obviously, the &lt;code&gt;world&lt;/code&gt; and &lt;code&gt;goodbye&lt;/code&gt; dependencies are totally unrelated, so how npm handles them is relatively uninteresting. However, consider the case of &lt;code&gt;hello&lt;/code&gt;: both packages require conflicting versions.&lt;/p&gt;
+
+&lt;p&gt;Most package managers (including RubyGems/Bundler, pip, and Cabal) would simply barf here, reporting a version conflict. This is because, in most package management models, &lt;strong&gt;only one version of any particular package can be installed at a time&lt;/strong&gt;. In that sense, one of the package manager’s primary responsibilities is to figure out a set of package versions that will satisfy every version constraint simultaneously.&lt;/p&gt;
+
+&lt;p&gt;In contrast, npm has a somewhat easier job: it’s totally okay with installing different versions of the same package because each package gets its own set of dependencies. In the aforementioned example, the resulting directory structure would look something like this:&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;node_modules/
+├── foo/
+│   └── node_modules/
+│       ├── hello/
+│       └── world/
+└── bar/
+    └── node_modules/
+        ├── hello/
+        └── goodbye/&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;Notably, the directory structure very closely mirrors the actual dependency tree. The above diagram is something of a simplification: in practice, each transitive dependency would have its own &lt;code&gt;node_modules&lt;/code&gt; directory and so on, but the directory structure can get pretty messy pretty quickly. (Furthermore, npm 3 performs some optimizations to attempt to share dependencies when it can, but those are ultimately unnecessary to actually understanding the model.)&lt;/p&gt;
+
+&lt;p&gt;This model is, of course, extremely simple. The obvious effect is that every package gets its own little sandbox, which works absolutely marvelously for utility libraries like &lt;code&gt;ramda&lt;/code&gt;, &lt;code&gt;lodash&lt;/code&gt;, or &lt;code&gt;underscore&lt;/code&gt;. If &lt;code&gt;foo&lt;/code&gt; depends on &lt;code&gt;ramda@^0.19.0&lt;/code&gt; but &lt;code&gt;bar&lt;/code&gt; depends on &lt;code&gt;ramda@^0.22.0&lt;/code&gt;, they can both coexist completely peacefully without any problems.&lt;/p&gt;
+
+&lt;p&gt;At first blush, this system is &lt;em&gt;obviously&lt;/em&gt; better than the alternative, flat model, so long as the underlying runtime supports the required module loading scheme. However, it is not without drawbacks.&lt;/p&gt;
+
+&lt;p&gt;The most apparent downside is a significant increase in code size, given the potential for many, many copies of the same package, all with different versions. An increase in code size can often mean more than just a larger program—it can have a significant impact on performance. Larger programs just don’t fit into CPU caches as easily, and merely having to page a program in and out can significantly slow things down. That’s mostly just a tradeoff, though, since you’re sacrificing performance, not program correctness.&lt;/p&gt;
+
+&lt;p&gt;The more insidious problem (and the one that I see crop up quite a lot in the npm ecosystem without much thought) is how dependency isolation can affect cross-package communication.&lt;/p&gt;
+
+&lt;h1 id="dependency-isolation-and-values-that-pass-package-boundaries"&gt;Dependency isolation and values that pass package boundaries&lt;/h1&gt;
+
+&lt;p&gt;The earlier example of using &lt;code&gt;ramda&lt;/code&gt; is a place where npm’s default dependency management scheme really shines, given that Ramda just provides a bunch of plain ol’ functions. Passing these around is totally harmless. In fact, mixing functions from two different versions of Ramda would be totally okay! Unfortunately, not all cases are nearly that simple.&lt;/p&gt;
+
+&lt;p&gt;Consider, for a moment, &lt;code&gt;react&lt;/code&gt;. React components are very much &lt;em&gt;not&lt;/em&gt; plain old data; they are complex values that can be extended, instantiated, and rendered in a variety of ways. React represents component structure and state using an internal, private format, using a mixture of carefully arranged keys and values and some of the more powerful features of JavaScript’s object system. This internal structure might very well change between React versions, so a React component defined with &lt;code&gt;react@0.3.0&lt;/code&gt; likely won’t work quite right with &lt;code&gt;react@15.3.1&lt;/code&gt;.&lt;/p&gt;
+
+&lt;p&gt;With that in mind, consider two packages that define their own React components and export them for consumers to use. Looking at their dependency tree, we might see something like this:&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;awesome-button
+└── react ^0.3.0
+
+amazing-modal
+└── react ^15.3.1&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;Given that these two packages use wildly different versions of React, npm would give each of them their own copy of React, as requested, and packages would happily install. However, if you tried to use these components together, they wouldn’t work at all! A newer version of React simply cannot understand an old version’s component, so you would get a (likely confusing) runtime error.&lt;/p&gt;
+
+&lt;p&gt;What went wrong? Well, dependency isolation works great when a package’s dependencies are purely implementation details, never observable from outside of a package. However, as soon as a package’s dependency becomes exposed as part of its &lt;em&gt;interface&lt;/em&gt;, dependency isolation is not only subtly wrong, it can cause complete failure at runtime. These are cases when traditional dependency management are much better—they will tell you as soon as you attempt to install two packages that they just don’t work together, rather than waiting for you to figure that out for yourself.&lt;/p&gt;
+
+&lt;p&gt;This might not sound &lt;em&gt;too&lt;/em&gt; bad—after all, JavaScript is a very dynamic language, so static guarantees are mostly few and far between, and your tests should catch these problems should they arise—but it can cause unnecessary issues when two packages &lt;em&gt;can&lt;/em&gt; theoretically work together fine, but because npm assigned each one its own copy of a particular package (that is, it wasn’t quite smart enough to figure out it could give them both the same copy), things break down.&lt;/p&gt;
+
+&lt;p&gt;Looking outside of npm specifically and considering this model when applied to other languages, it becomes increasingly clear that this won’t do. This blog post was inspired by &lt;a href="https://www.reddit.com/r/haskell/comments/4zc6y3/why_doesnt_cabal_use_a_model_like_that_of_npm/?ref=share&amp;amp;ref_source=link"&gt;a Reddit thread discussing the npm model applied to Haskell&lt;/a&gt;, and this flaw was touted as a reason why it couldn’t possibly work for such a static language.&lt;/p&gt;
+
+&lt;p&gt;Due to the way the JavaScript ecosystem has evolved, it’s true that most people can often get away with this subtle potential for incorrect behavior without any problems. Specifically, JavaScript tends to rely on duck typing rather than more restrictive checks like &lt;code&gt;instanceof&lt;/code&gt;, so objects that satisfy the same protocol will still be compatible, even if their implementations aren’t &lt;em&gt;quite&lt;/em&gt; the same. However, npm actually provides a robust solution to this problem that allows package authors to explicitly express these “cross-interface” dependencies.&lt;/p&gt;
+
+&lt;h2 id="peer-dependencies"&gt;Peer dependencies&lt;/h2&gt;
+
+&lt;p&gt;Normally, npm package dependencies are listed under a &lt;code&gt;"dependencies"&lt;/code&gt; key in the package’s &lt;code&gt;package.json&lt;/code&gt; file. There is, however, another, less-used key called &lt;code&gt;"peerDependencies"&lt;/code&gt;, which has the same format as the ordinary dependencies list. The difference shows up in how npm performs dependency resolution: rather than getting its own copy of a peer dependency, a package expects that dependency to be provided by its dependent.&lt;/p&gt;
+
+&lt;p&gt;This effectively means that peer dependencies are effectively resolved using the “traditional” dependency resolution mechanism that tools like Bundler and Cabal use: there must be one canonical version that satisfies everyone’s constraint. Since npm 3, things are a little bit less straightforward (specifically, peer dependencies are not automatically installed unless a dependent package explicitly depends on the peer package itself), but the basic idea is the same. This means that package authors must make a choice for each dependency they install: should it be a normal dependency or a peer dependency?&lt;/p&gt;
+
+&lt;p&gt;This is where I think people tend to get a little lost, even those familiar with the peer dependency mechanism. Fortunately, the answer is relatively simple: is the dependency in question visible in &lt;em&gt;any place&lt;/em&gt; in the package’s interface?&lt;/p&gt;
+
+&lt;p&gt;This is sometimes hard to see in JavaScript because the “types” are invisible; that is, they are dynamic and rarely explicitly written out. However, just because the types are dynamic does not mean they are not there at runtime (and in the heads of various programmers), so the rule still holds: if the type of a function in a package’s public interface somehow depends on a dependency, it should be a peer dependency.&lt;/p&gt;
+
+&lt;p&gt;To make this a little more concrete, let’s look at a couple of examples. First off, let’s take a look at some simple cases, starting with some uses of &lt;code&gt;ramda&lt;/code&gt;:&lt;/p&gt;
+
+&lt;div class="brush: js"&gt;
+ &lt;div class="source"&gt;
+  &lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;span class="kr"&gt;import&lt;/span&gt; &lt;span class="p"&gt;{&lt;/span&gt; &lt;span class="nx"&gt;merge&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="nx"&gt;add&lt;/span&gt; &lt;span class="p"&gt;}&lt;/span&gt; &lt;span class="nx"&gt;from&lt;/span&gt; &lt;span class="s1"&gt;&amp;#39;ramda&amp;#39;&lt;/span&gt;
+
+&lt;span class="kr"&gt;export&lt;/span&gt; &lt;span class="kr"&gt;const&lt;/span&gt; &lt;span class="nx"&gt;withDefaultConfig&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="nx"&gt;config&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="p"&gt;=&amp;gt;&lt;/span&gt;
+  &lt;span class="nx"&gt;merge&lt;/span&gt;&lt;span class="p"&gt;({&lt;/span&gt; &lt;span class="nx"&gt;path&lt;/span&gt;&lt;span class="o"&gt;:&lt;/span&gt; &lt;span class="s1"&gt;&amp;#39;.&amp;#39;&lt;/span&gt; &lt;span class="p"&gt;},&lt;/span&gt; &lt;span class="nx"&gt;config&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+
+&lt;span class="kr"&gt;export&lt;/span&gt; &lt;span class="kr"&gt;const&lt;/span&gt; &lt;span class="nx"&gt;add5&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="nx"&gt;add&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="mi"&gt;5&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+&lt;/pre&gt;&lt;/div&gt;
+
+&lt;/div&gt;
+
+&lt;p&gt;The first example here is pretty obvious: in &lt;code&gt;withDefaultConfig&lt;/code&gt;, &lt;code&gt;merge&lt;/code&gt; is used purely as an implementation detail, so it’s safe, and it’s not part of the module’s interface. In &lt;code&gt;add5&lt;/code&gt;, the example is a little trickier: the result of &lt;code&gt;add(5)&lt;/code&gt; is a partially-applied function created by Ramda, so technically, a Ramda-created value is a part of this module’s interface. However, the contract &lt;code&gt;add5&lt;/code&gt; has with the outside world is simply that it is a JavaScript function that adds five to its argument, and it doesn’t depend on any Ramda-specific functionality, so &lt;code&gt;ramda&lt;/code&gt; can safely be a non-peer dependency.&lt;/p&gt;
+
+&lt;p&gt;Now let’s look at another example using the &lt;code&gt;jpeg&lt;/code&gt; image library:&lt;/p&gt;
+
+&lt;div class="brush: js"&gt;
+ &lt;div class="source"&gt;
+  &lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;span class="kr"&gt;import&lt;/span&gt; &lt;span class="p"&gt;{&lt;/span&gt; &lt;span class="nx"&gt;Jpeg&lt;/span&gt; &lt;span class="p"&gt;}&lt;/span&gt; &lt;span class="nx"&gt;from&lt;/span&gt; &lt;span class="s1"&gt;&amp;#39;jpeg&amp;#39;&lt;/span&gt;
+
+&lt;span class="kr"&gt;export&lt;/span&gt; &lt;span class="kr"&gt;const&lt;/span&gt; &lt;span class="nx"&gt;createSquareBuffer&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="nx"&gt;size&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="nx"&gt;cb&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="p"&gt;=&amp;gt;&lt;/span&gt;
+  &lt;span class="nx"&gt;createSquareJpeg&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="nx"&gt;size&lt;/span&gt;&lt;span class="p"&gt;).&lt;/span&gt;&lt;span class="nx"&gt;encode&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="nx"&gt;cb&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+
+&lt;span class="kr"&gt;export&lt;/span&gt; &lt;span class="kr"&gt;const&lt;/span&gt; &lt;span class="nx"&gt;createSquareJpeg&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="nx"&gt;size&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="p"&gt;=&amp;gt;&lt;/span&gt;
+  &lt;span class="k"&gt;new&lt;/span&gt; &lt;span class="nx"&gt;Jpeg&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="nx"&gt;Buffer&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="nx"&gt;alloc&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="nx"&gt;size&lt;/span&gt; &lt;span class="o"&gt;*&lt;/span&gt; &lt;span class="nx"&gt;size&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="mi"&gt;0&lt;/span&gt;&lt;span class="p"&gt;),&lt;/span&gt; &lt;span class="nx"&gt;size&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="nx"&gt;size&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+&lt;/pre&gt;&lt;/div&gt;
+
+&lt;/div&gt;
+
+&lt;p&gt;In this case, the &lt;code&gt;createSquareBuffer&lt;/code&gt; function invokes a callback with an ordinary Node.js &lt;code&gt;Buffer&lt;/code&gt; object, so the &lt;code&gt;jpeg&lt;/code&gt; library is an implementation detail. If that were the only function exposed by this module, &lt;code&gt;jpeg&lt;/code&gt; could safely be a non-peer dependency. However, the &lt;code&gt;createSquareJpeg&lt;/code&gt; function violates that rule: it returns a &lt;code&gt;Jpeg&lt;/code&gt; object, which is an opaque value with a structure defined exclusively by the &lt;code&gt;jpeg&lt;/code&gt; library. Therefore, a package with the above module &lt;em&gt;must&lt;/em&gt; list &lt;code&gt;jpeg&lt;/code&gt; as a peer dependency.&lt;/p&gt;
+
+&lt;p&gt;This sort of restriction works in reverse, too. For example, consider the following module:&lt;/p&gt;
+
+&lt;div class="brush: js"&gt;
+ &lt;div class="source"&gt;
+  &lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;span class="kr"&gt;import&lt;/span&gt; &lt;span class="p"&gt;{&lt;/span&gt; &lt;span class="nx"&gt;writeFile&lt;/span&gt; &lt;span class="p"&gt;}&lt;/span&gt; &lt;span class="nx"&gt;from&lt;/span&gt; &lt;span class="s1"&gt;&amp;#39;fs&amp;#39;&lt;/span&gt;
+
+&lt;span class="kr"&gt;export&lt;/span&gt; &lt;span class="kr"&gt;const&lt;/span&gt; &lt;span class="nx"&gt;writeJpeg&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="nx"&gt;filename&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="nx"&gt;jpeg&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="nx"&gt;cb&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="p"&gt;=&amp;gt;&lt;/span&gt;
+  &lt;span class="nx"&gt;jpeg&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="nx"&gt;encode&lt;/span&gt;&lt;span class="p"&gt;((&lt;/span&gt;&lt;span class="nx"&gt;image&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="p"&gt;=&amp;gt;&lt;/span&gt; &lt;span class="nx"&gt;fs&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="nx"&gt;writeFile&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="nx"&gt;filename&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="nx"&gt;image&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="nx"&gt;cb&lt;/span&gt;&lt;span class="p"&gt;))&lt;/span&gt;
+&lt;/pre&gt;&lt;/div&gt;
+
+&lt;/div&gt;
+
+&lt;p&gt;The above module does not even &lt;em&gt;import&lt;/em&gt; the &lt;code&gt;jpeg&lt;/code&gt; package, yet it implicitly depends on the &lt;code&gt;encode&lt;/code&gt; method of the &lt;code&gt;Jpeg&lt;/code&gt; interface. Therefore, despite not even explicitly using it anywhere in the code, a package containing the above module should include &lt;code&gt;jpeg&lt;/code&gt; as a peer dependency.&lt;/p&gt;
+
+&lt;p&gt;They key is to carefully consider what contract your modules have with their dependents. If those contracts involve other packages in any way, they should be peer dependencies. If they don’t, they should be ordinary dependencies.&lt;/p&gt;
+
+&lt;h1 id="applying-the-npm-model-to-other-programming-languages"&gt;Applying the npm model to other programming languages&lt;/h1&gt;
+
+&lt;p&gt;The npm model of package management is more complicated than that of other languages, but it provides a real advantage: implementation details are kept as implementation details. In other systems, it’s quite possible to find yourself in “dependency hell”, when you personally know that the version conflict reported by your package manager is not a real problem, but because the package system must pick a single canonical version, there’s no way to make progress without adjusting code in your dependencies. This is extremely frustrating.&lt;/p&gt;
+
+&lt;p&gt;This sort of dependency isolation is not the most advanced form of package management in existence—indeed, far from it—but it’s definitely more powerful than most other mainstream systems out there. Of course, most other languages could not adopt the npm model simply by changing the package manager: having a global package namespace can prevent multiple versions of the same package being installed at a &lt;em&gt;runtime&lt;/em&gt; level. The reason npm is able to do what it does is because Node itself supports it.&lt;/p&gt;
+
+&lt;p&gt;That said, the dichotomy between peer and non-peer dependencies is a little confusing, especially to people who aren’t package authors. Figuring out which packages need to go in which group is not always obvious or trivial. Fortunately, other languages might be able to help.&lt;/p&gt;
+
+&lt;p&gt;Returning to Haskell, its strong static type system would potentially allow this distinction to be detected entirely automatically, and Cabal could actually report an error when a package used in an exposed interface was not listed as a peer dependency (much like how it currently prevents importing a transitive dependency without explicitly depending on it). This would allow helper function packages to keep on being implementation details while still maintaining strong interface safety. This would likely take a lot of work to get just right—managing the global nature of typeclass instances would likely make this much more complicated than a naïve approach would accommodate—but it would add a nice layer of flexibility that does not currently exist.&lt;/p&gt;
+
+&lt;p&gt;From the perspective of JavaScript, npm has demonstrated that it can be a capable package manager, despite the monumental burden placed upon it by the ever-growing, ever-changing JS ecosystem. As a package author myself, I would implore other users to carefully consider the peer dependencies feature and work hard to encode their interfaces’ contracts using it—it’s a commonly misunderstood gem of the npm model, and I hope this blog post helped to shed at least a little more light upon it.&lt;/p&gt;</content></entry>
+ <entry>
+  <title type="text">Canonical factories for testing with factory_girl_api</title>
+  <link rel="alternate" href="http://lexi-lambda.github.io/blog/2015/09/23/canonical-factories-for-testing-with-factory-girl-api/?utm_source=javascript&amp;utm_medium=Atom" />
+  <id>urn:http-lexi-lambda-github-io:-blog-2015-09-23-canonical-factories-for-testing-with-factory-girl-api</id>
+  <published>2015-09-23T16:30:12Z</published>
+  <updated>2015-09-23T16:30:12Z</updated>
+  <author>
+   <name>Alexis King</name></author>
+  <content type="html">
+&lt;p&gt;Modern web applications are often built as &lt;em&gt;single-page apps&lt;/em&gt;, which are great for keeping concerns separated, but problematic when tested. Logic needs to be duplicated in front- and back-end test suites, and if the two apps diverge, the tests won&amp;rsquo;t catch the failure. I haven&amp;rsquo;t found a very good solution to this problem aside from brittle, end-to-end integration tests.&lt;/p&gt;
+
+&lt;p&gt;To attempt to address a fraction of this problem, I built &lt;a href="https://github.com/lexi-lambda/factory_girl_api"&gt;factory_girl_api&lt;/a&gt;, a way to share context setup between both sides of the application.&lt;/p&gt;
+&lt;!-- more--&gt;
+
+&lt;h1 id="a-brief-overview-of-factorygirl"&gt;A brief overview of factory_girl&lt;/h1&gt;
+
+&lt;p&gt;In the land of Ruby and Rails, &lt;a href="https://github.com/thoughtbot/factory_girl"&gt;factory_girl&lt;/a&gt; is a convenient gem for managing factories for models. Out of the box, it integrates with Rails&amp;rsquo; default ORM, ActiveRecord, and provides declarative syntax for describing what attributes factories should initialize. For example, a factory declaration used to create a widget might look like this:&lt;/p&gt;
+
+&lt;div class="brush: ruby"&gt;
+ &lt;div class="source"&gt;
+  &lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;span class="no"&gt;FactoryGirl&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;define&lt;/span&gt; &lt;span class="k"&gt;do&lt;/span&gt;
+  &lt;span class="n"&gt;factory&lt;/span&gt; &lt;span class="ss"&gt;:widget&lt;/span&gt; &lt;span class="k"&gt;do&lt;/span&gt;
+    &lt;span class="n"&gt;sequence&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="ss"&gt;:name&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="p"&gt;{&lt;/span&gt; &lt;span class="o"&gt;|&lt;/span&gt;&lt;span class="nb"&gt;id&lt;/span&gt;&lt;span class="o"&gt;|&lt;/span&gt; &lt;span class="s1"&gt;&amp;#39;Widget #&amp;#39;&lt;/span&gt; &lt;span class="o"&gt;+&lt;/span&gt; &lt;span class="nb"&gt;id&lt;/span&gt; &lt;span class="p"&gt;}&lt;/span&gt;
+    &lt;span class="n"&gt;price&lt;/span&gt; &lt;span class="mi"&gt;10&lt;/span&gt;
+
+    &lt;span class="n"&gt;trait&lt;/span&gt; &lt;span class="ss"&gt;:expensive&lt;/span&gt; &lt;span class="k"&gt;do&lt;/span&gt;
+      &lt;span class="n"&gt;price&lt;/span&gt; &lt;span class="mi"&gt;1000&lt;/span&gt;
+    &lt;span class="k"&gt;end&lt;/span&gt;
+  &lt;span class="k"&gt;end&lt;/span&gt;
+&lt;span class="k"&gt;end&lt;/span&gt;
+&lt;/pre&gt;&lt;/div&gt;
+
+&lt;/div&gt;
+
+&lt;p&gt;This makes it easy to create new instances of &lt;code&gt;Widget&lt;/code&gt; and use them for unit tests. For example, this would create and persist a widget with a unique name and a price of 10 units:&lt;/p&gt;
+
+&lt;div class="brush: ruby"&gt;
+ &lt;div class="source"&gt;
+  &lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;span class="n"&gt;widget&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="no"&gt;FactoryGirl&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;create&lt;/span&gt; &lt;span class="ss"&gt;:widget&lt;/span&gt;
+&lt;/pre&gt;&lt;/div&gt;
+
+&lt;/div&gt;
+
+&lt;p&gt;We can also create more expensive widgets by using the &lt;code&gt;:expensive&lt;/code&gt; trait.&lt;/p&gt;
+
+&lt;div class="brush: ruby"&gt;
+ &lt;div class="source"&gt;
+  &lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;span class="n"&gt;expensive_widget&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="no"&gt;FactoryGirl&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;create&lt;/span&gt; &lt;span class="ss"&gt;:widget&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="ss"&gt;:expensive&lt;/span&gt;
+&lt;/pre&gt;&lt;/div&gt;
+
+&lt;/div&gt;
+
+&lt;p&gt;Any number of traits can be specified at once. Additionally, it is possible to override individual attributes manually.&lt;/p&gt;
+
+&lt;div class="brush: ruby"&gt;
+ &lt;div class="source"&gt;
+  &lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;span class="n"&gt;fancy_widget&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="no"&gt;FactoryGirl&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;create&lt;/span&gt; &lt;span class="ss"&gt;:widget&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="ss"&gt;:expensive&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="nb"&gt;name&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt; &lt;span class="s1"&gt;&amp;#39;Fancy Widget&amp;#39;&lt;/span&gt;
+&lt;/pre&gt;&lt;/div&gt;
+
+&lt;/div&gt;
+
+&lt;p&gt;It works well, and it keeps initialization boilerplate out of individual tests.&lt;/p&gt;
+
+&lt;h1 id="testing-on-the-front-end"&gt;Testing on the front-end&lt;/h1&gt;
+
+&lt;p&gt;Trouble arises when we need to write tests for the JavaScript application that use the same models. Suddenly, we need to duplicate the same kind of logic in our front-end tests. We might start out by setting up object state manually:&lt;/p&gt;
+
+&lt;div class="brush: js"&gt;
+ &lt;div class="source"&gt;
+  &lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;span class="kd"&gt;var&lt;/span&gt; &lt;span class="nx"&gt;fancyWidget&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="k"&gt;new&lt;/span&gt; &lt;span class="nx"&gt;Widget&lt;/span&gt;&lt;span class="p"&gt;({&lt;/span&gt;
+  &lt;span class="nx"&gt;name&lt;/span&gt;&lt;span class="o"&gt;:&lt;/span&gt; &lt;span class="s1"&gt;&amp;#39;Fancy Widget&amp;#39;&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;
+  &lt;span class="nx"&gt;price&lt;/span&gt;&lt;span class="o"&gt;:&lt;/span&gt; &lt;span class="mi"&gt;1000&lt;/span&gt;
+&lt;span class="p"&gt;});&lt;/span&gt;
+&lt;/pre&gt;&lt;/div&gt;
+
+&lt;/div&gt;
+
+&lt;p&gt;Things can quickly get out of hand when models grow complex. Even if we use a factory library in JavaScript, it&amp;rsquo;s possible for our front-end factories to diverge from their back-end counterparts. This means our integration tests will fail, but our unit tests will still blindly pass. Having to duplicate all that logic in two places is dangerous. It would be nice to have a &lt;em&gt;single, canonical source&lt;/em&gt; for all of our factories.&lt;/p&gt;
+
+&lt;h2 id="reusing-server-side-factories-with-factorygirlapi"&gt;Reusing server-side factories with factory_girl_api&lt;/h2&gt;
+
+&lt;p&gt;To help alleviate this problem, I created the &lt;a href="https://github.com/lexi-lambda/factory_girl_api"&gt;factory_girl_api&lt;/a&gt; gem for Rails and the &lt;a href="https://github.com/lexi-lambda/angular-factory-girl-api"&gt;angular-factory-girl-api&lt;/a&gt; Bower package for Angular. These packages cooperate with each other to allow server-side factories to be used in JavaScript tests.&lt;/p&gt;
+
+&lt;p&gt;The Angular module provides a service with syntax comparable to factory_girl itself. Both traits and custom attributes are supported:&lt;/p&gt;
+
+&lt;div class="brush: js"&gt;
+ &lt;div class="source"&gt;
+  &lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;span class="nx"&gt;FactoryGirl&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="nx"&gt;create&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="s1"&gt;&amp;#39;widget&amp;#39;&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="s1"&gt;&amp;#39;expensive&amp;#39;&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="p"&gt;{&lt;/span&gt; &lt;span class="nx"&gt;name&lt;/span&gt;&lt;span class="o"&gt;:&lt;/span&gt; &lt;span class="s1"&gt;&amp;#39;Fancy Widget&amp;#39;&lt;/span&gt; &lt;span class="p"&gt;});&lt;/span&gt;
+&lt;/pre&gt;&lt;/div&gt;
+
+&lt;/div&gt;
+
+&lt;p&gt;In this case, however, a round-trip API call must be made to the server in order to call the factory and return the result. Because of this, the Angular version of FactoryGirl returns a promise that is resolved with the serialized version of the model, which can then be used as sample data in unit tests.&lt;/p&gt;
+
+&lt;h2 id="the-problems-with-relying-on-the-server-for-data"&gt;The problems with relying on the server for data&lt;/h2&gt;
+
+&lt;p&gt;In my preliminary use of this tool, it works. In many ways, it&amp;rsquo;s much nicer than duplicating logic in both places. However, I&amp;rsquo;m not &lt;em&gt;completely&lt;/em&gt; convinced it&amp;rsquo;s the right solution yet.&lt;/p&gt;
+
+&lt;p&gt;First of all, it couples the front-end to the back-end, even during unit testing, which is disappointing. It means that a server needs to be running (in test mode) in order for the tests to run at all. For the kinds of projects I work on, this isn&amp;rsquo;t really a bad thing, and the benefits of the reduced duplication far outweigh the downsides.&lt;/p&gt;
+
+&lt;p&gt;My real concern is that this solves a very small facet of the general problem with fragile front-end test suites. Single-page applications usually depend wholly on their integration with back-end APIs. If those APIs change, the tests will continue to happily pass as long as the API is simply mocked, which seems to be the usual solution in the front-end universe. This is, frankly, unacceptable in real application development.&lt;/p&gt;
+
+&lt;h2 id="potential-improvements-and-other-paths-to-success"&gt;Potential improvements and other paths to success&lt;/h2&gt;
+
+&lt;p&gt;I am ultimately unsatisfied with this approach, but writing brittle end-to-end integration tests is not the solution. This &lt;em&gt;kind&lt;/em&gt; of thing may be a step in the right direction: writing tests that aren&amp;rsquo;t really pure unit tests, but also aren&amp;rsquo;t fragile full-stack integration tests. This is a middle-ground that seems infrequently traveled, perhaps due to a lack of tooling (or perhaps because it just doesn&amp;rsquo;t work). I don&amp;rsquo;t know.&lt;/p&gt;
+
+&lt;p&gt;Either way, I&amp;rsquo;m interested in where this is headed, and I&amp;rsquo;ll be curious to see if I run into any roadblocks using the workflow I&amp;rsquo;ve created. If anyone else is interested in playing with these two libraries, the READMEs are much more comprehensive than what I&amp;rsquo;ve covered here. Take a look, and give them a spin!&lt;/p&gt;
+
+&lt;ul&gt;
+ &lt;li&gt;&lt;a href="https://github.com/lexi-lambda/factory_girl_api"&gt;factory_girl_api&lt;/a&gt;&lt;/li&gt;
+ &lt;li&gt;&lt;a href="https://github.com/lexi-lambda/angular-factory-girl-api"&gt;angular-factory-girl-api&lt;/a&gt;&lt;/li&gt;&lt;/ul&gt;</content></entry></feed>

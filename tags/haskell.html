@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <title>Posts tagged 'haskell'</title>
+    <meta name="description" content="Posts tagged 'haskell'">
+    <meta name="author"      content="Alexis King">
+    <meta name="keywords"    content="haskell">
+    <meta name="viewport"    content="width=device-width, initial-scale=1.0">
+    <link rel="icon"      href="/favicon.ico">
+    <link rel="canonical" href="http://lexi-lambda.github.io/tags/haskell.html">
+
+
+    <!-- CSS -->
+    <link rel="stylesheet" type="text/css" href="https://fonts.googleapis.com/css?family=Merriweather+Sans:400,300,300italic,400italic,700,700italic,800,800italic|Merriweather:400,300,300italic,400italic,700,700italic,900,900italic|Fira+Code:300,400,500,600,700">
+    <link rel="stylesheet" type="text/css" href="/css/application.min.css">
+    <link rel="stylesheet" type="text/css" href="/css/pygments.min.css">
+    <!-- Feeds -->
+    <link rel="alternate" type="application/atom+xml"
+          href="/feeds/haskell.atom.xml" title="Atom Feed">
+    <link rel="alternate" type="application/rss+xml"
+          href="/feeds/haskell.rss.xml" title="RSS Feed">
+    <!-- JS -->
+    <!-- <script src="/js/application.min.js"></script> -->
+    <script type="text/javascript">
+      (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+      (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+      m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+      })(window,document,'script','//www.google-analytics.com/analytics.js','ga');
+
+      ga('create', 'UA-65250372-1', 'auto');
+      ga('send', 'pageview');
+    </script>
+  </head>
+  <body>
+    <div id="page-content">
+      <!-- Navigation Bar -->
+      <header>
+        <nav role="navigation" class="navigation-bar">
+          <ul class="navigation-items left">
+            <li id="blog-title-header"><a href="/"><h1>Alexis King</h1></a></li>
+          </ul>
+          <ul class="navigation-items center"></ul>
+          <ul class="navigation-items right">
+            <li><a href="/">Home</a></li>
+            <li><a href="/resume.html">About Me</a></li>
+          </ul>
+        </nav>
+      </header>
+      <section role="main">
+        <!-- Main column -->
+        <div class="content" class="col-md-12">
+
+          <h1>Posts tagged <em>haskell</em></h1>
+
+          <article class="inline">
+  <header>
+    <h2 class="title"><a href='/blog/2021/03/25/an-introduction-to-typeclass-metaprogramming/'>An introduction to typeclass metaprogramming</a></h2>
+    <div class='date-and-tags'>
+      <time datetime="2021-03-25T00:00:00">
+        2021-03-25
+      </time>
+      <span style="margin: 0 3px">⦿</span>
+      <span class="tags"><a href="/tags/haskell.html">haskell</a>, <a href="/tags/types.html">types</a>, <a href="/tags/functional-programming.html">functional programming</a></span>
+    </div>
+  </header>
+
+<p><em>Typeclass metaprogramming</em> is a powerful technique available to Haskell programmers to automatically generate term-level code from static type information. It has been used to great effect in several popular Haskell libraries (such as the <a href="https://hackage.haskell.org/package/servant">servant</a> ecosystem), and it is the core mechanism used to implement generic programming via <a href="https://hackage.haskell.org/package/base-4.14.1.0/docs/GHC-Generics.html">GHC generics</a>. Despite this, remarkably little material exists that explains the technique, relegating it to folk knowledge known only to advanced Haskell programmers.</p>
+
+<p>This blog post attempts to remedy that by providing an overview of the foundational concepts behind typeclass metaprogramming. It does <em>not</em> attempt to be a complete guide to type-level programming in Haskell—such a task could easily fill a book—but it does provide explanations and illustrations of the most essential components. This is also <em>not</em> a blog post for Haskell beginners—familiarity with the essentials of the Haskell type system and several common GHC extensions is assumed—but it does not assume any prior knowledge of type-level programming.</p>
+  <footer class="read-more">
+    <a href="/blog/2021/03/25/an-introduction-to-typeclass-metaprogramming/"><span class="read-more-text">Read more</span> →</a>
+  </footer>
+</article>
+<article class="inline">
+  <header>
+    <h2 class="title"><a href='/blog/2020/11/01/names-are-not-type-safety/'>Names are not type safety</a></h2>
+    <div class='date-and-tags'>
+      <time datetime="2020-11-01T18:00:00">
+        2020-11-01
+      </time>
+      <span style="margin: 0 3px">⦿</span>
+      <span class="tags"><a href="/tags/haskell.html">haskell</a>, <a href="/tags/types.html">types</a>, <a href="/tags/functional-programming.html">functional programming</a></span>
+    </div>
+  </header>
+
+<p>Haskell programmers spend a lot of time talking about <em>type safety</em>. The Haskell school of program construction advocates “capturing invariants in the type system” and “making illegal states unrepresentable,” both of which sound like compelling goals, but are rather vague on the techniques used to achieve them. Almost exactly one year ago, I published <a href="/blog/2019/11/05/parse-don-t-validate/">Parse, Don’t Validate</a> as an initial stab towards bridging that gap.</p>
+
+<p>The ensuing discussions were largely productive and right-minded, but one particular source of confusion quickly became clear: Haskell’s <code>newtype</code> construct. The idea is simple enough—the <code>newtype</code> keyword declares a wrapper type, nominally distinct from but representationally equivalent to the type it wraps—and on the surface this <em>sounds</em> like a simple and straightforward path to type safety. For example, one might consider using a <code>newtype</code> declaration to define a type for an email address:</p>
+
+<div class="brush: haskell">
+ <div class="source">
+  <pre><span></span><span class="kr">newtype</span> <span class="kt">EmailAddress</span> <span class="ow">=</span> <span class="kt">EmailAddress</span> <span class="kt">Text</span>
+</pre></div>
+
+</div>
+
+<p>This technique can provide <em>some</em> value, and when coupled with a smart constructor and an encapsulation boundary, it can even provide some safety. But it is a meaningfully distinct <em>kind</em> of type safety from the one I highlighted a year ago, one that is far weaker. On its own, a newtype is just a name.</p>
+
+<p>And names are not type safety.</p>
+  <footer class="read-more">
+    <a href="/blog/2020/11/01/names-are-not-type-safety/"><span class="read-more-text">Read more</span> →</a>
+  </footer>
+</article>
+<article class="inline">
+  <header>
+    <h2 class="title"><a href='/blog/2020/08/13/types-as-axioms-or-playing-god-with-static-types/'>Types as axioms, or: playing god with static types</a></h2>
+    <div class='date-and-tags'>
+      <time datetime="2020-08-13T13:51:57">
+        2020-08-13
+      </time>
+      <span style="margin: 0 3px">⦿</span>
+      <span class="tags"><a href="/tags/types.html">types</a>, <a href="/tags/functional-programming.html">functional programming</a>, <a href="/tags/haskell.html">haskell</a>, <a href="/tags/typescript.html">typescript</a></span>
+    </div>
+  </header>
+
+<p>Just what exactly <em>is</em> a type?</p>
+
+<p>A common perspective is that types are <em>restrictions</em>. Static types restrict the set of values a variable may contain, capturing some subset of the space of “all possible values.” Under this worldview, a typechecker is sort of like an oracle, predicting which values will end up where when the program runs and making sure they satisfy the constraints the programmer wrote down in the type annotations. Of course, the typechecker can’t <em>really</em> predict the future, so when the typechecker gets it wrong—it can’t “figure out” what a value will be—static types can feel like self-inflicted shackles.</p>
+
+<p>But that is not the <em>only</em> perspective. There is another way—a way that puts you, the programmer, back in the driver’s seat. You make the rules, you call the shots, you set the objectives. You need not be limited any longer by what the designers of your programming language decided the typechecker can and cannot prove. You do not serve the typechecker; the typechecker serves <em>you.</em></p>
+
+<p>…no, I’m not trying to sell you a dubious self-help book for programmers who feel like they’ve lost control of their lives. If the above sounds too good to be true, well… I won’t pretend it’s all actually as easy as I make it sound. Nevertheless, it’s well within the reach of the working programmer, and most remarkably, all it takes is a change in perspective.</p>
+  <footer class="read-more">
+    <a href="/blog/2020/08/13/types-as-axioms-or-playing-god-with-static-types/"><span class="read-more-text">Read more</span> →</a>
+  </footer>
+</article>
+<article class="inline">
+  <header>
+    <h2 class="title"><a href='/blog/2020/01/19/no-dynamic-type-systems-are-not-inherently-more-open/'>No, dynamic type systems are not inherently more open</a></h2>
+    <div class='date-and-tags'>
+      <time datetime="2020-01-19T00:00:00">
+        2020-01-19
+      </time>
+      <span style="margin: 0 3px">⦿</span>
+      <span class="tags"><a href="/tags/types.html">types</a>, <a href="/tags/haskell.html">haskell</a>, <a href="/tags/programming-languages.html">programming languages</a>, <a href="/tags/functional-programming.html">functional programming</a></span>
+    </div>
+  </header>
+
+<p>Internet debates about typing disciplines continue to be plagued by a pervasive myth that dynamic type systems are inherently better at modeling “open world” domains. The argument usually goes like this: the goal of static typing is to pin everything down as much as possible, but in the real world, that just isn’t practical. Real systems should be loosely coupled and worry about data representation as little as possible, so dynamic types lead to a more robust system in the large.</p>
+
+<p>This story sounds compelling, but it isn’t true. The flaw is in the premise: static types are <em>not</em> about “classifying the world” or pinning down the structure of every value in a system. The reality is that static type systems allow specifying exactly how much a component needs to know about the structure of its inputs, and conversely, how much it doesn’t. Indeed, in practice static type systems excel at processing data with only a partially-known structure, as they can be used to ensure application logic doesn’t accidentally assume too much.</p>
+  <footer class="read-more">
+    <a href="/blog/2020/01/19/no-dynamic-type-systems-are-not-inherently-more-open/"><span class="read-more-text">Read more</span> →</a>
+  </footer>
+</article>
+<article class="inline">
+  <header>
+    <h2 class="title"><a href='/blog/2019/11/05/parse-don-t-validate/'>Parse, don’t validate</a></h2>
+    <div class='date-and-tags'>
+      <time datetime="2019-11-05T17:09:58">
+        2019-11-05
+      </time>
+      <span style="margin: 0 3px">⦿</span>
+      <span class="tags"><a href="/tags/functional-programming.html">functional programming</a>, <a href="/tags/haskell.html">haskell</a>, <a href="/tags/types.html">types</a></span>
+    </div>
+  </header>
+
+<p>Historically, I’ve struggled to find a concise, simple way to explain what it means to practice type-driven design. Too often, when someone asks me “How did you come up with this approach?” I find I can’t give them a satisfying answer. I know it didn’t just come to me in a vision—I have an iterative design process that doesn’t require plucking the “right” approach out of thin air—yet I haven’t been very successful in communicating that process to others.</p>
+
+<p>However, about a month ago, <a href="https://twitter.com/lexi_lambda/status/1182242561655746560">I was reflecting on Twitter</a> about the differences I experienced parsing JSON in statically- and dynamically-typed languages, and finally, I realized what I was looking for. Now I have a single, snappy slogan that encapsulates what type-driven design means to me, and better yet, it’s only three words long:</p>
+
+<div style="text-align: center; font-size: larger"><strong>Parse, don’t validate.</strong></div>
+  <footer class="read-more">
+    <a href="/blog/2019/11/05/parse-don-t-validate/"><span class="read-more-text">Read more</span> →</a>
+  </footer>
+</article>
+<article class="inline">
+  <header>
+    <h2 class="title"><a href='/blog/2019/10/19/empathy-and-subjective-experience-in-programming-languages/'>Empathy and subjective experience in programming languages</a></h2>
+    <div class='date-and-tags'>
+      <time datetime="2019-10-19T08:35:44">
+        2019-10-19
+      </time>
+      <span style="margin: 0 3px">⦿</span>
+      <span class="tags"><a href="/tags/haskell.html">haskell</a>, <a href="/tags/programming-languages.html">programming languages</a>, <a href="/tags/philosophy.html">philosophy</a></span>
+    </div>
+  </header>
+
+<p>A stereotype about programmers is that they like to think in black and white. Programmers like things to be good or bad, moral or immoral, responsible or irresponsible. Perhaps there is something romantic in the idea that programmers like to be as binary as the computers they program. Reductionist? Almost certainly, but hey, laugh at yourself a bit: we probably deserve to be made fun of from time to time.</p>
+
+<p>Personally, I have no idea if the trope of the nuance-challenged programmer is accurate, but whether it’s a property of programmers or just humans behind a keyboard, the intensity with which we disagree with one another never ceases to amaze. Ask any group of working programmers what their least favorite programming language is, and there’s a pretty good chance things are going to get heated real fast. Why? What is it about programming that makes us feel so strongly that we are right and others are wrong, even when our experiences contradict those of tens or hundreds of thousands of others?</p>
+
+<p>I think about that question a lot.</p>
+  <footer class="read-more">
+    <a href="/blog/2019/10/19/empathy-and-subjective-experience-in-programming-languages/"><span class="read-more-text">Read more</span> →</a>
+  </footer>
+</article>
+<article class="inline">
+  <header>
+    <h2 class="title"><a href='/blog/2019/09/07/demystifying-monadbasecontrol/'>Demystifying <code>MonadBaseControl</code></a></h2>
+    <div class='date-and-tags'>
+      <time datetime="2019-09-07T18:00:00">
+        2019-09-07
+      </time>
+      <span style="margin: 0 3px">⦿</span>
+      <span class="tags"><a href="/tags/haskell.html">haskell</a></span>
+    </div>
+  </header>
+
+<p><a href="https://hackage.haskell.org/package/monad-control-1.0.2.3/docs/Control-Monad-Trans-Control.html#t:MonadBaseControl"><code>MonadBaseControl</code> from the <code>monad-control</code> package</a> is a confusing typeclass, and its methods have complicated types. For many people, it’s nothing more than scary, impossible-to-understand magic that is, for some reason, needed when lifting certain kinds of operations. Few resources exist that adequately explain how, why, and when it works, which sadly seems to have resulted in some <a href="https://en.wikipedia.org/wiki/Fear,_uncertainty,_and_doubt">FUD</a> about its use.</p>
+
+<p>There’s no doubt that the machinery of <code>MonadBaseControl</code> is complex, and the role it plays in practice is often subtle. However, its essence is actually much simpler than it appears, and I promise it can be understood by mere mortals. In this blog post, I hope to provide a complete survey of <code>MonadBaseControl</code>—how it works, how it’s designed, and how it can go wrong—in a way that is accessible to anyone with a firm grasp of monads and monad transformers. To start, we’ll motivate <code>MonadBaseControl</code> by reinventing it ourselves.</p>
+  <footer class="read-more">
+    <a href="/blog/2019/09/07/demystifying-monadbasecontrol/"><span class="read-more-text">Read more</span> →</a>
+  </footer>
+</article>
+<article class="inline">
+  <header>
+    <h2 class="title"><a href='/blog/2018/02/10/an-opinionated-guide-to-haskell-in-2018/'>An opinionated guide to Haskell in 2018</a></h2>
+    <div class='date-and-tags'>
+      <time datetime="2018-02-10T08:00:00">
+        2018-02-10
+      </time>
+      <span style="margin: 0 3px">⦿</span>
+      <span class="tags"><a href="/tags/haskell.html">haskell</a></span>
+    </div>
+  </header>
+
+<p>For me, this month marks the end of an era in my life: as of February 2018, I am no longer employed writing Haskell. It’s been a fascinating two years, and while I am excitedly looking forward to what I’ll be doing next, it’s likely I will continue to write Haskell in my spare time. I’ll probably even write it again professionally in the future.</p>
+
+<p>In the meantime, in the interest of both sharing with others the small amount of wisdom I’ve gained and preserving it for my future self, I’ve decided to write a long, rather dry overview of a few select parts of the Haskell workflow I developed and the ecosystem I settled into. This guide is, as the title notes, <em>opinionated</em>—it is what I used in my day-to-day work, nothing more—and I don’t claim that anything here is the only way to write Haskell, nor even the best way. It is merely what I found helpful and productive. Take from it as much or as little as you’d like.</p>
+  <footer class="read-more">
+    <a href="/blog/2018/02/10/an-opinionated-guide-to-haskell-in-2018/"><span class="read-more-text">Read more</span> →</a>
+  </footer>
+</article>
+<article class="inline">
+  <header>
+    <h2 class="title"><a href='/blog/2017/08/28/hackett-progress-report-documentation-quality-of-life-and-snake/'>Hackett progress report: documentation, quality of life, and snake</a></h2>
+    <div class='date-and-tags'>
+      <time datetime="2017-08-28T08:00:00">
+        2017-08-28
+      </time>
+      <span style="margin: 0 3px">⦿</span>
+      <span class="tags"><a href="/tags/hackett.html">hackett</a>, <a href="/tags/racket.html">racket</a>, <a href="/tags/haskell.html">haskell</a></span>
+    </div>
+  </header>
+
+<p>Three months ago, <a href="/blog/2017/05/27/realizing-hackett-a-metaprogrammable-haskell/">I wrote a blog post describing my new, prototype implementation of my programming language, Hackett</a>. At the time, some things looked promising—the language already included algebraic datatypes, typeclasses, laziness, and even a mini, proof of concept web server. It was, however, clearly still rather rough around the edges—error messages were poor, features were sometimes brittle, the REPL experience was less than ideal, and there was no documentation to speak of. In the time since, while the language is still experimental, I have tackled a handful of those issues, and I am excited to announce <a href="https://pkg-build.racket-lang.org/doc/hackett@hackett-doc/"><strong>the first (albeit quite incomplete) approach to Hackett’s documentation</strong></a>.</p>
+
+<p>I’d recommend clicking that link above and at least skimming around before reading the rest of this blog post, as its remainder will describe some of the pieces that didn’t end up in the documentation: the development process, the project’s status, a small demo, and some other details from behind the scenes.</p>
+  <footer class="read-more">
+    <a href="/blog/2017/08/28/hackett-progress-report-documentation-quality-of-life-and-snake/"><span class="read-more-text">Read more</span> →</a>
+  </footer>
+</article>
+<article class="inline">
+  <header>
+    <h2 class="title"><a href='/blog/2017/06/29/unit-testing-effectful-haskell-with-monad-mock/'>Unit testing effectful Haskell with monad-mock</a></h2>
+    <div class='date-and-tags'>
+      <time datetime="2017-06-29T12:08:49">
+        2017-06-29
+      </time>
+      <span style="margin: 0 3px">⦿</span>
+      <span class="tags"><a href="/tags/haskell.html">haskell</a>, <a href="/tags/testing.html">testing</a></span>
+    </div>
+  </header>
+
+<p>Nearly eight months ago, <a href="/blog/2016/10/03/using-types-to-unit-test-in-haskell/">I wrote a blog post about unit testing effectful Haskell code</a> using a library called test-fixture. That library has served us well, but it wasn’t as easy to use as I would have liked, and it worked better with certain patterns than others. Since then, I’ve learned more about Haskell and more about testing, and I’m pleased to announce that I am releasing an entirely new testing library, <a href="https://hackage.haskell.org/package/monad-mock">monad-mock</a>.</p>
+  <footer class="read-more">
+    <a href="/blog/2017/06/29/unit-testing-effectful-haskell-with-monad-mock/"><span class="read-more-text">Read more</span> →</a>
+  </footer>
+</article>
+<footer>
+ <ul class="pagination">
+  <li class="page-item disabled"><a class="page-link" href="#">
+    <quote>&larr;</quote></a></li>
+  <li class="page-item active"><a class="page-link" href="/tags/haskell.html">1</a></li>
+  <li class="page-item"><a class="page-link" href="/tags/haskell-2.html">2</a></li>
+  <li class="page-item"><a class="page-link" href="/tags/haskell-2.html">
+    <quote>&rarr;</quote></a></li></ul></footer>
+        </div>
+      </section>
+      <footer>
+        <div class="content">
+          <h2 id="copyright-notice">© 2021, Alexis King</h2>
+          <h3>
+            Built with <a href="https://github.com/greghendershott/frog">Frog</a>, the
+            <strong>fr</strong>ozen bl<strong>og</strong> tool.
+          </h3>
+          <h3>
+            Feeds are available via <a href="/feeds/all.atom.xml">Atom</a>
+            or <a href="/feeds/all.rss.xml">RSS</a>.
+          </h3>
+        </div>
+      </footer>
+    </div>
+  </body>
+</html>

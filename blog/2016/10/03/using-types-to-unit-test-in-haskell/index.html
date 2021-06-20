@@ -1,0 +1,585 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <title>Using types to unit-test in Haskell</title>
+    <meta name="description" content="Object-oriented programming languages make unit testing easy by providing obvious boundaries between units of code in the form of classes and interfaces. These boundaries make it easy to stub out parts of a system to test functionality in isolation, which...">
+    <meta name="author"      content="Alexis King">
+    <meta name="keywords"    content="haskell, testing">
+    <meta name="viewport"    content="width=device-width, initial-scale=1.0">
+    <link rel="icon"      href="/favicon.ico">
+    <link rel="canonical" href="http://lexi-lambda.github.io/blog/2016/10/03/using-types-to-unit-test-in-haskell/">
+    <link rel="next" href="/blog/2016/08/24/understanding-the-npm-dependency-model/">
+    <link rel="prev" href="/blog/2017/01/02/rascal-a-haskell-with-more-parentheses/">
+    <!-- CSS -->
+    <link rel="stylesheet" type="text/css" href="https://fonts.googleapis.com/css?family=Merriweather+Sans:400,300,300italic,400italic,700,700italic,800,800italic|Merriweather:400,300,300italic,400italic,700,700italic,900,900italic|Fira+Code:300,400,500,600,700">
+    <link rel="stylesheet" type="text/css" href="/css/application.min.css">
+    <link rel="stylesheet" type="text/css" href="/css/pygments.min.css">
+    <!-- Feeds -->
+    <link rel="alternate" type="application/atom+xml"
+          href="/feeds/all.atom.xml" title="Atom Feed">
+    <link rel="alternate" type="application/rss+xml"
+          href="/feeds/all.rss.xml" title="RSS Feed">
+    <!-- JS -->
+    <!-- <script src="/js/application.min.js"></script> -->
+    <script type="text/javascript">
+      (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+      (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+      m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+      })(window,document,'script','//www.google-analytics.com/analytics.js','ga');
+
+      ga('create', 'UA-65250372-1', 'auto');
+      ga('send', 'pageview');
+    </script>
+  </head>
+  <body>
+    <div id="page-content">
+      <!-- Navigation Bar -->
+      <header>
+        <nav role="navigation" class="navigation-bar">
+          <ul class="navigation-items left">
+            <li id="blog-title-header"><a href="/"><h1>Alexis King</h1></a></li>
+          </ul>
+          <ul class="navigation-items center"></ul>
+          <ul class="navigation-items right">
+            <li><a href="/">Home</a></li>
+            <li><a href="/resume.html">About Me</a></li>
+          </ul>
+        </nav>
+      </header>
+      <section role="main">
+        <!-- Main column -->
+        <div class="content" class="col-md-12">
+
+
+
+          <article class="main">
+  <header>
+    <h1 class="title">Using types to unit-test in Haskell</h1>
+    <div class='date-and-tags'>
+      <time datetime="2016-10-03T01:20:43">
+        2016-10-03
+      </time>
+      <span style="margin: 0 3px">⦿</span>
+      <span class="tags"><a href="/tags/haskell.html">haskell</a>, <a href="/tags/testing.html">testing</a></span>
+    </div>
+  </header>
+
+<p>Object-oriented programming languages make unit testing easy by providing obvious boundaries between units of code in the form of classes and interfaces. These boundaries make it easy to stub out parts of a system to test functionality in isolation, which makes it possible to write fast, deterministic test suites that are robust in the face of change. When writing Haskell, it can be unclear how to accomplish the same goals: even inside pure code, it can become difficult to test a particular code path without also testing all its collaborators.</p>
+
+<p>Fortunately, by taking advantage of Haskell’s expressive type system, it’s possible to not only achieve parity with object-oriented testing techniques, but also to provide stronger static guarantees as well. Furthermore, it’s all possible without resorting to extra-linguistic hacks that static object-oriented languages sometimes use for mocking, such as dynamic bytecode generation.</p>
+<!-- more-->
+
+<h1 id="first-an-aside-on-testing-philosophy">First, an aside on testing philosophy</h1>
+
+<p>Testing methodology is a controversial topic within the larger programming community, and there are a multitude of different approaches. This blog post is about <em>unit testing</em>, an already nebulous term with a number of different definitions. For the purposes of this post, I will define a unit test as a test that stubs out collaborators of the code under test in some way. Accomplishing that in Haskell is what this is primarily about.</p>
+
+<p>I want to be clear that I do not think that unit tests are the only way to write tests, nor the best way, nor even always an applicable way. Depending on your domain, rigorous unit testing might not even make sense, and other forms of tests (end-to-end, integration, benchmarks, etc.) might fulfill your needs.</p>
+
+<p>In practice, though, implementing those other kinds of tests seems to be well-documented in Haskell compared to pure, object-oriented style unit testing. As my Haskell applications have grown, I have found myself wanting a more fine-grained testing tool that allows me to both test a piece of my codebase in isolation and also use my domain-specific types. This blog post is about that.</p>
+
+<p>With that disclaimer out of the way, let’s talk about testing in Haskell.</p>
+
+<h1 id="drawing-seams-using-types">Drawing seams using types</h1>
+
+<p>One of the primary attributes of unit tests in object-oriented languages, especially statically-typed ones, is the concept of “seams” within a codebase. These are internal boundaries between components of a system. Some boundaries are obvious—interactions with a database, manipulation of the file system, and performing I/O over the network, to name a few examples—but others are more subtle. Especially in larger codebases, it can be helpful to isolate two related but distinct pieces of functionality as much as possible, which makes them easier to reason about, even if they’re actually part of the same codebase.</p>
+
+<p>In OO languages, these seams are often marked using interfaces, whether explicitly (in the case of static languages) or implicitly (in the case of dynamic ones). By programming to an interface, it’s possible to create “fake” implementations of that interface for use in unit tests, effectively making it possible to stub out code that isn’t directly relevant to the code being tested.</p>
+
+<p>In Haskell, representing these seams is a lot less obvious. Consider a fairly trivial function that reverses a file’s contents on the file system:</p>
+
+<div class="brush: haskell">
+ <div class="source">
+  <pre><span></span><span class="nf">reverseFile</span> <span class="ow">::</span> <span class="kt">FilePath</span> <span class="ow">-&gt;</span> <span class="kt">IO</span> <span class="nb">()</span>
+<span class="nf">reverseFile</span> <span class="n">path</span> <span class="ow">=</span> <span class="kr">do</span>
+  <span class="n">contents</span> <span class="ow">&lt;-</span> <span class="n">readFile</span> <span class="n">path</span>
+  <span class="n">writeFile</span> <span class="n">path</span> <span class="p">(</span><span class="n">reverse</span> <span class="n">contents</span><span class="p">)</span>
+</pre></div>
+
+</div>
+
+<p>This function is impossible to test without testing against a real file system. It simply performs I/O directly, and there’s no way to “mock out” the file system for testing purposes. Now, admittedly, this function is so trivial that a unit test might not seem worth the cost, but consider a slightly more complicated function that interacts with a database:</p>
+
+<div class="brush: haskell">
+ <div class="source">
+  <pre><span></span><span class="nf">renderUserProfile</span> <span class="ow">::</span> <span class="kt">Id</span> <span class="kt">User</span> <span class="ow">-&gt;</span> <span class="kt">IO</span> <span class="kt">HTML</span>
+<span class="nf">renderUserProfile</span> <span class="n">userId</span> <span class="ow">=</span> <span class="kr">do</span>
+  <span class="n">user</span> <span class="ow">&lt;-</span> <span class="n">fetchUser</span> <span class="n">userId</span>
+  <span class="n">posts</span> <span class="ow">&lt;-</span> <span class="n">fetchRecentPosts</span> <span class="n">userId</span>
+
+  <span class="n">return</span> <span class="o">$</span> <span class="n">div</span>
+    <span class="p">[</span> <span class="n">h1</span> <span class="p">(</span><span class="n">userName</span> <span class="n">user</span> <span class="o">&lt;&gt;</span> <span class="s">"’s Profile"</span><span class="p">)</span>
+    <span class="p">,</span> <span class="n">h2</span> <span class="s">"Recent Posts"</span>
+    <span class="p">,</span> <span class="n">ul</span> <span class="p">(</span><span class="n">map</span> <span class="p">(</span><span class="n">li</span> <span class="o">.</span> <span class="n">postTitle</span><span class="p">)</span> <span class="n">posts</span><span class="p">)</span>
+    <span class="p">]</span>
+</pre></div>
+
+</div>
+
+<p>It might now be a bit more clear that it could be useful to test the above function without running a real database and doing all the necessary context setup before each test case. Indeed, it would be nice if a test could just provide stubbed implementations for <code>fetchUser</code> and <code>fetchRecentPosts</code>, then make assertions about the output.</p>
+
+<p>One way to solve this problem is to pass the results of those two functions to <code>renderUserProfile</code> as arguments, turning it into a pure function that could be easily tested. This becomes obnoxious for functions of even just slightly more complexity, though (it is not unreasonable to imagine needing a handful of different queries to render a user’s profile page), and it requires significantly restructuring code simply because the tests need it.</p>
+
+<p>The above code is not only difficult to test, however—it has another problem, too. Specifically, both functions return <code>IO</code> values, which means they can effectively do <em>anything</em>. Haskell has a very strong type system for typing terms, but it doesn’t provide any guarantees about effects beyond a simple yes/no answer about function purity. Even though the <code>renderUserProfile</code> function should really only need to interact with the database, it could theoretically delete files, send emails, make HTTP requests, or do any number of other things.</p>
+
+<p>Fortunately, it’s possible to solve <em>both</em> problems—a lack of testability and a lack of type safety—using the same general technique. This approach is reminiscent of the interface-based seams of object-oriented languages, but unlike most object-oriented approaches, it provides additional type safety guarantees without the need to explicitly modify the code to support some kind of dependency injection.</p>
+
+<h2 id="making-implicit-interfaces-explicit">Making implicit interfaces explicit</h2>
+
+<p>Statically typed, object-oriented languages provide interfaces as a language construct to encode certain kinds of contracts into the type system, and Haskell has something similar. Typeclasses are, in many ways, an analog to OO interfaces, and they can be used in a similar way. In the above case, let’s write down interfaces that the <code>reverseFile</code> and <code>renderUserProfile</code> functions can use:</p>
+
+<div class="brush: haskell">
+ <div class="source">
+  <pre><span></span><span class="kr">class</span> <span class="kt">Monad</span> <span class="n">m</span> <span class="ow">=&gt;</span> <span class="kt">MonadFS</span> <span class="n">m</span> <span class="kr">where</span>
+  <span class="n">readFile</span> <span class="ow">::</span> <span class="kt">FilePath</span> <span class="ow">-&gt;</span> <span class="n">m</span> <span class="kt">String</span>
+  <span class="n">writeFile</span> <span class="ow">::</span> <span class="kt">FilePath</span> <span class="ow">-&gt;</span> <span class="kt">String</span> <span class="ow">-&gt;</span> <span class="n">m</span> <span class="nb">()</span>
+
+<span class="kr">class</span> <span class="kt">Monad</span> <span class="n">m</span> <span class="ow">=&gt;</span> <span class="kt">MonadDB</span> <span class="n">m</span> <span class="kr">where</span>
+  <span class="n">fetchUser</span> <span class="ow">::</span> <span class="kt">Id</span> <span class="kt">User</span> <span class="ow">-&gt;</span> <span class="n">m</span> <span class="kt">User</span>
+  <span class="n">fetchRecentPosts</span> <span class="ow">::</span> <span class="kt">Id</span> <span class="kt">User</span> <span class="ow">-&gt;</span> <span class="n">m</span> <span class="p">[</span><span class="kt">Post</span><span class="p">]</span>
+</pre></div>
+
+</div>
+
+<p>The really nice thing about these interfaces is that our function implementations don’t have to change <em>at all</em> to take advantage of them. In fact, all we have to change is their types:</p>
+
+<div class="brush: haskell">
+ <div class="source">
+  <pre><span></span><span class="nf">reverseFile</span> <span class="ow">::</span> <span class="kt">MonadFS</span> <span class="n">m</span> <span class="ow">=&gt;</span> <span class="kt">FilePath</span> <span class="ow">-&gt;</span> <span class="n">m</span> <span class="nb">()</span>
+<span class="nf">reverseFile</span> <span class="n">path</span> <span class="ow">=</span> <span class="kr">do</span>
+  <span class="n">contents</span> <span class="ow">&lt;-</span> <span class="n">readFile</span> <span class="n">path</span>
+  <span class="n">writeFile</span> <span class="n">path</span> <span class="p">(</span><span class="n">reverse</span> <span class="n">contents</span><span class="p">)</span>
+
+<span class="nf">renderUserProfile</span> <span class="ow">::</span> <span class="kt">MonadDB</span> <span class="n">m</span> <span class="ow">=&gt;</span> <span class="kt">Id</span> <span class="kt">User</span> <span class="ow">-&gt;</span> <span class="n">m</span> <span class="kt">HTML</span>
+<span class="nf">renderUserProfile</span> <span class="n">userId</span> <span class="ow">=</span> <span class="kr">do</span>
+  <span class="n">user</span> <span class="ow">&lt;-</span> <span class="n">fetchUser</span> <span class="n">userId</span>
+  <span class="n">posts</span> <span class="ow">&lt;-</span> <span class="n">fetchRecentPosts</span> <span class="n">userId</span>
+
+  <span class="n">return</span> <span class="o">$</span> <span class="n">div</span>
+    <span class="p">[</span> <span class="n">h1</span> <span class="p">(</span><span class="n">userName</span> <span class="n">user</span> <span class="o">&lt;&gt;</span> <span class="s">"’s Profile"</span><span class="p">)</span>
+    <span class="p">,</span> <span class="n">h2</span> <span class="s">"Recent Posts"</span>
+    <span class="p">,</span> <span class="n">ul</span> <span class="p">(</span><span class="n">map</span> <span class="p">(</span><span class="n">li</span> <span class="o">.</span> <span class="n">postTitle</span><span class="p">)</span> <span class="n">posts</span><span class="p">)</span>
+    <span class="p">]</span>
+</pre></div>
+
+</div>
+
+<p>This is pretty neat, since we haven’t had to alter our code at all, but we’ve managed to completely decouple ourselves from <code>IO</code>. This has the direct effect of both making our code more abstract (we no longer rely on the “real” file system or a “real” database, which makes our code easier to test) and restricting what our functions can do (just from looking at the type signatures, we know what side-effects they can perform).</p>
+
+<p>Of course, since we’re now coding against an interface, our code doesn’t actually do much of anything. If we want to actually use the functions we’ve written, we’ll have to define instances of <code>MonadFS</code> and <code>MonadDB</code>. When actually running our code, we’ll probably still use <code>IO</code> (or some monad transformer stack with <code>IO</code> at the bottom), so we can define trivial instances for that existing use case:</p>
+
+<div class="brush: haskell">
+ <div class="source">
+  <pre><span></span><span class="kr">instance</span> <span class="kt">MonadFS</span> <span class="kt">IO</span> <span class="kr">where</span>
+  <span class="n">readFile</span> <span class="ow">=</span> <span class="kt">Prelude</span><span class="o">.</span><span class="n">readFile</span>
+  <span class="n">writeFile</span> <span class="ow">=</span> <span class="kt">Prelude</span><span class="o">.</span><span class="n">writeFile</span>
+
+<span class="kr">instance</span> <span class="kt">MonadDB</span> <span class="kt">IO</span> <span class="kr">where</span>
+  <span class="n">fetchUser</span> <span class="ow">=</span> <span class="kt">SQL</span><span class="o">.</span><span class="n">fetchUser</span>
+  <span class="n">fetchRecentPosts</span> <span class="ow">=</span> <span class="kt">SQL</span><span class="o">.</span><span class="n">fetchRecentPosts</span>
+</pre></div>
+
+</div>
+
+<p>Even if we go no further, <strong>this is already incredibly useful</strong>. By restricting the sorts of effects our functions can perform at the type level, it becomes a lot easier to see which code is interacting with what. This can be invaluable when working in a part of a moderately large codebase that you are unfamiliar with. Even if the only instance of these typeclasses is <code>IO</code>, the benefits are immediately apparent.</p>
+
+<p>Of course, this blog post is about testing, so we’re going to go further and take advantage of these seams we’ve now drawn. The question is: how?</p>
+
+<h1 id="testing-with-typeclasses-an-initial-attempt">Testing with typeclasses: an initial attempt</h1>
+
+<p>Given that we now have functions depending on an interface instead of <code>IO</code>, we can create separate instances of our typeclasses for use in tests. Let’s start with the <code>renderUserProfile</code> function. We’ll create a simple wrapper around the <code>Identity</code> type, since we don’t actually care much about the “effects” of our <code>MonadDB</code> methods:</p>
+
+<div class="brush: haskell">
+ <div class="source">
+  <pre><span></span><span class="kr">import</span> <span class="nn">Data.Functor.Identity</span>
+
+<span class="kr">newtype</span> <span class="kt">TestM</span> <span class="n">a</span> <span class="ow">=</span> <span class="kt">TestM</span> <span class="p">(</span><span class="kt">Identity</span> <span class="n">a</span><span class="p">)</span>
+  <span class="kr">deriving</span> <span class="p">(</span><span class="kt">Functor</span><span class="p">,</span> <span class="kt">Applicative</span><span class="p">,</span> <span class="kt">Monad</span><span class="p">)</span>
+
+<span class="nf">unTestM</span> <span class="ow">::</span> <span class="kt">TestM</span> <span class="n">a</span> <span class="ow">-&gt;</span> <span class="n">a</span>
+<span class="nf">unTestM</span> <span class="p">(</span><span class="kt">TestM</span> <span class="p">(</span><span class="kt">Identity</span> <span class="n">x</span><span class="p">))</span> <span class="ow">=</span> <span class="n">x</span>
+</pre></div>
+
+</div>
+
+<p>Now, we’ll create a trivial instance of <code>MonadDB</code> for <code>TestM</code>:</p>
+
+<div class="brush: haskell">
+ <div class="source">
+  <pre><span></span><span class="kr">instance</span> <span class="kt">MonadDB</span> <span class="kt">TestM</span> <span class="kr">where</span>
+  <span class="n">fetchUser</span> <span class="kr">_</span> <span class="ow">=</span> <span class="n">return</span> <span class="kt">User</span> <span class="p">{</span> <span class="n">userName</span> <span class="ow">=</span> <span class="s">"Alyssa"</span> <span class="p">}</span>
+  <span class="n">fetchRecentPosts</span> <span class="kr">_</span> <span class="ow">=</span> <span class="n">return</span>
+    <span class="p">[</span> <span class="kt">Post</span> <span class="p">{</span> <span class="n">postTitle</span> <span class="ow">=</span> <span class="s">"Metacircular Evaluator"</span> <span class="p">}</span> <span class="p">]</span>
+</pre></div>
+
+</div>
+
+<p>With this instance, it’s now possible to write a simple unit test of the <code>renderUserProfile</code> function that doesn’t need a real database running at all:</p>
+
+<div class="brush: haskell">
+ <div class="source">
+  <pre><span></span><span class="nf">spec</span> <span class="ow">=</span> <span class="n">describe</span> <span class="s">"renderUserProfile"</span> <span class="o">$</span> <span class="kr">do</span>
+  <span class="n">it</span> <span class="s">"shows the user’s name"</span> <span class="o">$</span> <span class="kr">do</span>
+    <span class="kr">let</span> <span class="n">result</span> <span class="ow">=</span> <span class="n">unTestM</span> <span class="p">(</span><span class="n">renderUserProfile</span> <span class="p">(</span><span class="n">intToId</span> <span class="mi">1234</span><span class="p">))</span>
+    <span class="n">result</span> <span class="p">`</span><span class="n">shouldContainElement</span><span class="p">`</span> <span class="n">h1</span> <span class="s">"Alyssa’s Profile"</span>
+
+  <span class="n">it</span> <span class="s">"shows a list of the user’s posts"</span> <span class="o">$</span> <span class="kr">do</span>
+    <span class="kr">let</span> <span class="n">result</span> <span class="ow">=</span> <span class="n">unTestM</span> <span class="p">(</span><span class="n">renderUserProfile</span> <span class="p">(</span><span class="n">intToId</span> <span class="mi">1234</span><span class="p">))</span>
+    <span class="n">result</span> <span class="p">`</span><span class="n">shouldContainElement</span><span class="p">`</span> <span class="n">ul</span> <span class="p">[</span> <span class="n">li</span> <span class="s">"Metacircular Evaluator"</span> <span class="p">]</span>
+</pre></div>
+
+</div>
+
+<p>This is pretty nice, and running the above tests reveals a nice property of these kinds of isolated test cases: the test suite runs <em>really, really fast</em>. Communicating with a database, even in extremely simple ways, takes a measurable amount of time, especially with dozens of tests. In contrast, even with hundreds of tests, our unit test suite runs in less than a tenth of a second.</p>
+
+<p>This all seems to be successful, so let’s try and apply the same testing technique to <code>reverseFile</code>.</p>
+
+<h2 id="testing-side-effectful-code">Testing side-effectful code</h2>
+
+<p>Looking at the type signature for <code>reverseFile</code>, we have a small problem:</p>
+
+<div class="brush: haskell">
+ <div class="source">
+  <pre><span></span><span class="nf">reverseFile</span> <span class="ow">::</span> <span class="kt">MonadFS</span> <span class="n">m</span> <span class="ow">=&gt;</span> <span class="kt">FilePath</span> <span class="ow">-&gt;</span> <span class="n">m</span> <span class="nb">()</span>
+</pre></div>
+
+</div>
+
+<p>Specifically, the return type is <code>()</code>. Making any assertions against the result of this function would be completely worthless, given that it’s guaranteed to be the same exact thing each time. Instead, <code>reverseFile</code> is inherently side-effectful, so we want to be able to test that it properly interacts with the file system in the correct way.</p>
+
+<p>In order to do this, a simple wrapper around <code>Identity</code> won’t be enough, but we can replace it with something more powerful: <code>Writer</code>. Specifically, we can use a writer monad to “log” what gets called in order to test side-effects. We’ll start by creating a new <code>TestM</code> type, just like last time:</p>
+
+<div class="brush: haskell">
+ <div class="source">
+  <pre><span></span><span class="kr">newtype</span> <span class="kt">TestM</span> <span class="n">a</span> <span class="ow">=</span> <span class="kt">TestM</span> <span class="p">(</span><span class="kt">Writer</span> <span class="p">[</span><span class="kt">String</span><span class="p">]</span> <span class="n">a</span><span class="p">)</span>
+  <span class="kr">deriving</span> <span class="p">(</span><span class="kt">Functor</span><span class="p">,</span> <span class="kt">Applicative</span><span class="p">,</span> <span class="kt">Monad</span><span class="p">,</span> <span class="kt">MonadWriter</span> <span class="p">[</span><span class="kt">String</span><span class="p">])</span>
+
+<span class="nf">logTestM</span> <span class="ow">::</span> <span class="kt">TestM</span> <span class="n">a</span> <span class="ow">-&gt;</span> <span class="p">[</span><span class="kt">String</span><span class="p">]</span>
+<span class="nf">logTestM</span> <span class="p">(</span><span class="kt">TestM</span> <span class="n">w</span><span class="p">)</span> <span class="ow">=</span> <span class="n">execWriter</span> <span class="n">w</span>
+</pre></div>
+
+</div>
+
+<p>Using this slightly more powerful type, we can write a useful instance of <code>MonadFS</code> that will track the argument given to <code>writeFile</code>:</p>
+
+<div class="brush: haskell">
+ <div class="source">
+  <pre><span></span><span class="kr">instance</span> <span class="kt">MonadFS</span> <span class="kt">TestM</span> <span class="kr">where</span>
+  <span class="n">readFile</span> <span class="kr">_</span> <span class="ow">=</span> <span class="n">return</span> <span class="s">"hello"</span>
+  <span class="n">writeFile</span> <span class="kr">_</span> <span class="n">contents</span> <span class="ow">=</span> <span class="n">tell</span> <span class="p">[</span><span class="n">contents</span><span class="p">]</span>
+</pre></div>
+
+</div>
+
+<p>Again, the instance is quite simple, but it now enables us to write a straightforward unit test for <code>reverseFile</code>:</p>
+
+<div class="brush: haskell">
+ <div class="source">
+  <pre><span></span><span class="nf">spec</span> <span class="ow">=</span> <span class="n">describe</span> <span class="s">"reverseFile"</span> <span class="o">$</span>
+  <span class="n">it</span> <span class="s">"reverses a file’s contents on the filesystem"</span> <span class="o">$</span> <span class="kr">do</span>
+    <span class="kr">let</span> <span class="n">calls</span> <span class="ow">=</span> <span class="n">logTestM</span> <span class="p">(</span><span class="n">reverseFile</span> <span class="s">"foo.txt"</span><span class="p">)</span>
+    <span class="n">calls</span> <span class="p">`</span><span class="n">shouldBe</span><span class="p">`</span> <span class="p">[</span><span class="s">"olleh"</span><span class="p">]</span>
+</pre></div>
+
+</div>
+
+<p>Again, quite simple to both implement and use, and the test itself is blindingly fast. There’s another problem, though, which is that we have technically left part of <code>reverseFile</code> untested: we’ve completely ignored the <code>path</code> argument.</p>
+
+<p>In this contrived example, it may seem silly to test something so trivial, but in real code, it’s quite possible that one would care very much about testing multiple different aspects about a single function. When testing <code>renderUserProfile</code>, this was not hard, since we could reuse the same <code>TestM</code> type and <code>MonadDB</code> instance for both test cases, but in the <code>reverseFile</code> example, we’ve ignored the path entirely.</p>
+
+<p>We <em>could</em> adjust our <code>MonadFS</code> instance to also track the path provided to each method, but this has a few problems. First, it means every test case would depend on all the various properties we are testing, which would mean updating every test case when we add a new one. It would also be simply impossible if we needed to track multiple types—in this particular case, it turns out that <code>String</code> and <code>FilePath</code> are actually the same type, but in practice, there may be a handful of disparate, incompatible types.</p>
+
+<p>Both of the above issues could be fixed by creating a sum type and manually filtering out the relevant elements in each test case, but a much more intuitive approach would be to simply have a separate instance for each case. Unfortunately, in Haskell, creating a new instance means creating an entirely new type. To illustrate how much duplication that would entail, we could create the following type and instance for testing proper propagation of the <code>path</code> argument:</p>
+
+<div class="brush: haskell">
+ <div class="source">
+  <pre><span></span><span class="kr">newtype</span> <span class="kt">TestM&#39;</span> <span class="n">a</span> <span class="ow">=</span> <span class="kt">TestM&#39;</span> <span class="p">(</span><span class="kt">Writer</span> <span class="p">[</span><span class="kt">FilePath</span><span class="p">]</span> <span class="n">a</span><span class="p">)</span>
+  <span class="kr">deriving</span> <span class="p">(</span><span class="kt">Functor</span><span class="p">,</span> <span class="kt">Applicative</span><span class="p">,</span> <span class="kt">Monad</span><span class="p">,</span> <span class="kt">MonadWriter</span> <span class="p">[</span><span class="kt">FilePath</span><span class="p">])</span>
+
+<span class="nf">logTestM&#39;</span> <span class="ow">::</span> <span class="kt">TestM&#39;</span> <span class="n">a</span> <span class="ow">-&gt;</span> <span class="p">[</span><span class="kt">FilePath</span><span class="p">]</span>
+<span class="nf">logTestM&#39;</span> <span class="p">(</span><span class="kt">TestM&#39;</span> <span class="n">w</span><span class="p">)</span> <span class="ow">=</span> <span class="n">execWriter</span> <span class="n">w</span>
+
+<span class="kr">instance</span> <span class="kt">MonadFS</span> <span class="kt">TestM&#39;</span> <span class="kr">where</span>
+  <span class="n">readFile</span> <span class="n">path</span> <span class="ow">=</span> <span class="n">tell</span> <span class="p">[</span><span class="n">path</span><span class="p">]</span> <span class="o">&gt;&gt;</span> <span class="n">return</span> <span class="s">""</span>
+  <span class="n">writeFile</span> <span class="n">path</span> <span class="kr">_</span> <span class="ow">=</span> <span class="n">tell</span> <span class="p">[</span><span class="n">path</span><span class="p">]</span>
+</pre></div>
+
+</div>
+
+<p>Now it’s possible to add an extra test case that asserts that the proper path is provided to the two filesystem functions:</p>
+
+<div class="brush: haskell">
+ <div class="source">
+  <pre><span></span><span class="nf">spec</span> <span class="ow">=</span> <span class="n">describe</span> <span class="s">"reverseFile"</span> <span class="o">$</span> <span class="kr">do</span>
+  <span class="n">it</span> <span class="s">"reverses a file’s contents on the filesystem"</span> <span class="o">$</span> <span class="kr">do</span>
+    <span class="kr">let</span> <span class="n">calls</span> <span class="ow">=</span> <span class="n">logTestM</span> <span class="p">(</span><span class="n">reverseFile</span> <span class="s">"foo.txt"</span><span class="p">)</span>
+    <span class="n">calls</span> <span class="p">`</span><span class="n">shouldBe</span><span class="p">`</span> <span class="p">[</span><span class="s">"olleh"</span><span class="p">]</span>
+
+  <span class="n">it</span> <span class="s">"operates on the file at the provided path"</span> <span class="o">$</span> <span class="kr">do</span>
+    <span class="kr">let</span> <span class="n">paths</span> <span class="ow">=</span> <span class="n">logTestM&#39;</span> <span class="p">(</span><span class="n">reverseFile</span> <span class="s">"foo.txt"</span><span class="p">)</span>
+    <span class="n">paths</span> <span class="p">`</span><span class="n">shouldBe</span><span class="p">`</span> <span class="p">[</span><span class="s">"foo.txt"</span><span class="p">,</span> <span class="s">"foo.txt"</span><span class="p">]</span>
+</pre></div>
+
+</div>
+
+<p>This works, but it’s ultimately unacceptably complicated. Our test harness code is now significantly larger than the actual tests themselves, and the amount of boilerplate is frustrating. Verbose test suites are especially bad, since forcing programmers to jump through hoops just to implement a single test reduces the likelihood that people will actually write good tests, if they write tests at all. In contrast, if writing tests is easy, then people will naturally write more of them.</p>
+
+<p>The above strategy to writing tests is not good enough, but it does reveal a particular problem: in Haskell, typeclass instances are not first-class values that can be manipulated and abstracted over, they are static constructs that can only be managed by the compiler, and users do not have a direct way to modify them. With some cleverness, however, we can actually create an approximation of first-class typeclass dictionaries, which will allow us to dramatically simplify the above testing mechanism.</p>
+
+<h1 id="creating-first-class-typeclass-instances">Creating first-class typeclass instances</h1>
+
+<p>In order to provide an easy way to construct instances, we need a way to represent instances as ordinary Haskell values. This is not terribly difficult, given that instances are conceptually just records containing a collection of functions. For example, we could create a datatype that represents an instance of the <code>MonadFS</code> typeclass:</p>
+
+<div class="brush: haskell">
+ <div class="source">
+  <pre><span></span><span class="kr">data</span> <span class="kt">MonadFSInst</span> <span class="n">m</span> <span class="ow">=</span> <span class="kt">MonadFSInst</span>
+  <span class="p">{</span> <span class="n">_readFile</span> <span class="ow">::</span> <span class="kt">FilePath</span> <span class="ow">-&gt;</span> <span class="n">m</span> <span class="kt">String</span>
+  <span class="p">,</span> <span class="n">_writeFile</span> <span class="ow">::</span> <span class="kt">FilePath</span> <span class="ow">-&gt;</span> <span class="kt">String</span> <span class="ow">-&gt;</span> <span class="n">m</span> <span class="nb">()</span>
+  <span class="p">}</span>
+</pre></div>
+
+</div>
+
+<p>To avoid namespace clashes with the actual method identifiers, the record fields are prefixed with an underscore, but otherwise, the translation is remarkably straightforward. Using this record type, we can easily create values that represent the two instances we defined above:</p>
+
+<div class="brush: haskell">
+ <div class="source">
+  <pre><span></span><span class="nf">contentInst</span> <span class="ow">::</span> <span class="kt">MonadWriter</span> <span class="p">[</span><span class="kt">String</span><span class="p">]</span> <span class="n">m</span> <span class="ow">=&gt;</span> <span class="kt">MonadFSInst</span> <span class="n">m</span>
+<span class="nf">contentInst</span> <span class="ow">=</span> <span class="kt">MonadFSInst</span>
+  <span class="p">{</span> <span class="n">_readFile</span> <span class="ow">=</span> <span class="nf">\</span><span class="kr">_</span> <span class="ow">-&gt;</span> <span class="n">return</span> <span class="s">"hello"</span>
+  <span class="p">,</span> <span class="n">_writeFile</span> <span class="ow">=</span> <span class="nf">\</span><span class="kr">_</span> <span class="n">contents</span> <span class="ow">-&gt;</span> <span class="n">tell</span> <span class="p">[</span><span class="n">contents</span><span class="p">]</span>
+  <span class="p">}</span>
+
+<span class="nf">pathInst</span> <span class="ow">::</span> <span class="kt">MonadWriter</span> <span class="p">[</span><span class="kt">FilePath</span><span class="p">]</span> <span class="n">m</span> <span class="ow">=&gt;</span> <span class="kt">MonadFSInst</span> <span class="n">m</span>
+<span class="nf">pathInst</span> <span class="ow">=</span> <span class="kt">MonadFSInst</span>
+  <span class="p">{</span> <span class="n">_readFile</span> <span class="ow">=</span> <span class="nf">\</span><span class="n">path</span> <span class="ow">-&gt;</span> <span class="n">tell</span> <span class="p">[</span><span class="n">path</span><span class="p">]</span> <span class="o">&gt;&gt;</span> <span class="n">return</span> <span class="s">""</span>
+  <span class="p">,</span> <span class="n">_writeFile</span> <span class="ow">=</span> <span class="nf">\</span><span class="n">path</span> <span class="kr">_</span> <span class="ow">-&gt;</span> <span class="n">tell</span> <span class="p">[</span><span class="n">path</span><span class="p">]</span>
+  <span class="p">}</span>
+</pre></div>
+
+</div>
+
+<p>These two values represent two different implementations of <code>MonadFS</code>, but since they’re ordinary Haskell values, they can be manipulated and even <em>extended</em> like any other records. This can be extremely useful, since it makes it possible to create a sort of “base” instance, then have individual test cases override individual pieces of functionality piecemeal.</p>
+
+<p>Of course, although we’ve written these two instances, we have no way to actually use them. After all, Haskell does not provide a way to explicitly provide typeclass dictionaries. Fortunately, we can create a sort of “proxy” type that will use a reader to thread the dictionary around explicitly, and the instance can defer to the dictionary’s implementation.</p>
+
+<h2 id="creating-an-instance-proxy">Creating an instance proxy</h2>
+
+<p>To represent our proxy type, we’ll use a combination of a <code>Writer</code> and a <code>ReaderT</code>; the former to implement the logging used by instances, and the latter to actually thread around the dictionary. Our type will look like this:</p>
+
+<div class="brush: haskell">
+ <div class="source">
+  <pre><span></span><span class="kr">newtype</span> <span class="kt">TestM</span> <span class="n">log</span> <span class="n">a</span> <span class="ow">=</span>
+    <span class="kt">TestM</span> <span class="p">(</span><span class="kt">ReaderT</span> <span class="p">(</span><span class="kt">MonadFSInst</span> <span class="p">(</span><span class="kt">TestM</span> <span class="n">log</span><span class="p">))</span> <span class="p">(</span><span class="kt">Writer</span> <span class="n">log</span><span class="p">)</span> <span class="n">a</span><span class="p">)</span>
+  <span class="kr">deriving</span> <span class="p">(</span> <span class="kt">Functor</span><span class="p">,</span> <span class="kt">Applicative</span><span class="p">,</span> <span class="kt">Monad</span>
+           <span class="p">,</span> <span class="kt">MonadReader</span> <span class="p">(</span><span class="kt">MonadFSInst</span> <span class="p">(</span><span class="kt">TestM</span> <span class="n">log</span><span class="p">))</span>
+           <span class="p">,</span> <span class="kt">MonadWriter</span> <span class="n">log</span>
+           <span class="p">)</span>
+
+<span class="nf">logTestM</span> <span class="ow">::</span> <span class="kt">MonadFSInst</span> <span class="p">(</span><span class="kt">TestM</span> <span class="n">log</span><span class="p">)</span> <span class="ow">-&gt;</span> <span class="kt">TestM</span> <span class="n">log</span> <span class="n">a</span> <span class="ow">-&gt;</span> <span class="n">log</span>
+<span class="nf">logTestM</span> <span class="n">inst</span> <span class="p">(</span><span class="kt">TestM</span> <span class="n">m</span><span class="p">)</span> <span class="ow">=</span> <span class="n">execWriter</span> <span class="p">(</span><span class="n">runReaderT</span> <span class="n">m</span> <span class="n">inst</span><span class="p">)</span>
+</pre></div>
+
+</div>
+
+<p>This might look rather complicated, and it is, but let’s break down exactly what it’s doing.</p>
+
+<ol>
+ <li>
+  <p>The <code>TestM</code> type includes two type parameters. The first is the type of value that will be logged (hence the name <code>log</code>), which corresponds to the argument to <code>Writer</code> from previous incarnations of <code>TestM</code>. Unlike those types, though, we want this version to work with any <code>Monoid</code>, so we’ll make it a type parameter. The second parameter is simply the type of the current monadic value, as before.</p></li>
+ <li>
+  <p>The type itself is defined as a wrapper around a small monad transformer stack, the first of which is <code>ReaderT</code>. The state threaded around by the reader is, in this case, the instance dictionary, which is <code>MonadFSInst</code>.</p>
+  <p> However, recall that <code>MonadFSInst</code> accepts a type variable—the type of a monad itself—so we must provide <code>TestM log</code> as an argument to <code>MonadFSInst</code>. This slight bit of indirection allows us to tie the knot between the mutually dependent instances and proxy type.</p></li>
+ <li>
+  <p>The base monad in the transformer stack is <code>Writer</code>, which is used to actually implement the logging functionality, just like in prior cases. The only difference now is that the <code>log</code> type parameter now determines what the writer actually produces.</p></li>
+ <li>
+  <p>Finally, as before, we use <code>GeneralizedNewtypeDeriving</code> to derive all the relevant <code>mtl</code> classes, adding the somewhat wordy <code>MonadReader</code> constraint to the list.</p></li></ol>
+
+<p>Using this single type, we can now implement a <code>MonadFS</code> instance that defers to the dictionary carried around within <code>TestM</code>’s reader state:</p>
+
+<div class="brush: haskell">
+ <div class="source">
+  <pre><span></span><span class="kr">instance</span> <span class="kt">Monoid</span> <span class="n">log</span> <span class="ow">=&gt;</span> <span class="kt">MonadFS</span> <span class="p">(</span><span class="kt">TestM</span> <span class="n">log</span><span class="p">)</span> <span class="kr">where</span>
+  <span class="n">readFile</span> <span class="n">path</span> <span class="ow">=</span> <span class="kr">do</span>
+    <span class="n">f</span> <span class="ow">&lt;-</span> <span class="n">asks</span> <span class="n">_readFile</span>
+    <span class="n">f</span> <span class="n">path</span>
+  <span class="n">writeFile</span> <span class="n">path</span> <span class="n">contents</span> <span class="ow">=</span> <span class="kr">do</span>
+    <span class="n">f</span> <span class="ow">&lt;-</span> <span class="n">asks</span> <span class="n">_writeFile</span>
+    <span class="n">f</span> <span class="n">path</span> <span class="n">contents</span>
+</pre></div>
+
+</div>
+
+<p>This may seem somewhat boilerplate-y, and it is to some extent, but the important consideration is that this boilerplate only needs to be written <em>once</em>. With this in place, it’s now possible to write an arbitrary number of first-class instances that use the above mechanism without extending the mechanism at all.</p>
+
+<p>To see what actually using this code would look like, let’s update the <code>reverseFile</code> tests to use the new <code>TestM</code> implementation, as well as the <code>contentInst</code> and <code>pathInst</code> dictionaries from earlier:</p>
+
+<div class="brush: haskell">
+ <div class="source">
+  <pre><span></span><span class="nf">spec</span> <span class="ow">=</span> <span class="n">describe</span> <span class="s">"reverseFile"</span> <span class="o">$</span> <span class="kr">do</span>
+  <span class="n">it</span> <span class="s">"reverses a file’s contents on the filesystem"</span> <span class="o">$</span> <span class="kr">do</span>
+    <span class="kr">let</span> <span class="n">calls</span> <span class="ow">=</span> <span class="n">logTestM</span> <span class="n">contentInst</span> <span class="p">(</span><span class="n">reverseFile</span> <span class="s">"foo.txt"</span><span class="p">)</span>
+    <span class="n">calls</span> <span class="p">`</span><span class="n">shouldBe</span><span class="p">`</span> <span class="p">[</span><span class="s">"olleh"</span><span class="p">]</span>
+
+  <span class="n">it</span> <span class="s">"operates on the file at the provided path"</span> <span class="o">$</span> <span class="kr">do</span>
+    <span class="kr">let</span> <span class="n">paths</span> <span class="ow">=</span> <span class="n">logTestM</span> <span class="n">pathInst</span> <span class="p">(</span><span class="n">reverseFile</span> <span class="s">"foo.txt"</span><span class="p">)</span>
+    <span class="n">paths</span> <span class="p">`</span><span class="n">shouldBe</span><span class="p">`</span> <span class="p">[</span><span class="s">"foo.txt"</span><span class="p">,</span> <span class="s">"foo.txt"</span><span class="p">]</span>
+</pre></div>
+
+</div>
+
+<p>We can do a little bit better, though. Really, the definitions of <code>contentInst</code> and <code>pathInst</code> are specific to each test case. With ordinary typeclass instances, we cannot scope them to any particular block, but since <code>MonadFSInst</code> is just an ordinary Haskell datatype, we can manipulate them just like any other Haskell values. Therefore, we can just inline those instances’ definitions into the test cases themselves to keep them closer to the actual tests.</p>
+
+<div class="brush: haskell">
+ <div class="source">
+  <pre><span></span><span class="nf">spec</span> <span class="ow">=</span> <span class="n">describe</span> <span class="s">"reverseFile"</span> <span class="o">$</span> <span class="kr">do</span>
+  <span class="n">it</span> <span class="s">"reverses a file’s contents on the filesystem"</span> <span class="o">$</span> <span class="kr">do</span>
+    <span class="kr">let</span> <span class="n">contentInst</span> <span class="ow">=</span> <span class="kt">MonadFSInst</span>
+          <span class="p">{</span> <span class="n">_readFile</span> <span class="ow">=</span> <span class="nf">\</span><span class="kr">_</span> <span class="ow">-&gt;</span> <span class="n">return</span> <span class="s">"hello"</span>
+          <span class="p">,</span> <span class="n">_writeFile</span> <span class="ow">=</span> <span class="nf">\</span><span class="kr">_</span> <span class="n">contents</span> <span class="ow">-&gt;</span> <span class="n">tell</span> <span class="p">[</span><span class="n">contents</span><span class="p">]</span>
+          <span class="p">}</span>
+    <span class="kr">let</span> <span class="n">calls</span> <span class="ow">=</span> <span class="n">logTestM</span> <span class="n">contentInst</span> <span class="p">(</span><span class="n">reverseFile</span> <span class="s">"foo.txt"</span><span class="p">)</span>
+    <span class="n">calls</span> <span class="p">`</span><span class="n">shouldBe</span><span class="p">`</span> <span class="p">[</span><span class="s">"olleh"</span><span class="p">]</span>
+
+  <span class="n">it</span> <span class="s">"operates on the file at the provided path"</span> <span class="o">$</span> <span class="kr">do</span>
+    <span class="kr">let</span> <span class="n">pathInst</span> <span class="ow">=</span> <span class="kt">MonadFSInst</span>
+          <span class="p">{</span> <span class="n">_readFile</span> <span class="ow">=</span> <span class="nf">\</span><span class="n">path</span> <span class="ow">-&gt;</span> <span class="n">tell</span> <span class="p">[</span><span class="n">path</span><span class="p">]</span> <span class="o">&gt;&gt;</span> <span class="n">return</span> <span class="s">""</span>
+          <span class="p">,</span> <span class="n">_writeFile</span> <span class="ow">=</span> <span class="nf">\</span><span class="n">path</span> <span class="kr">_</span> <span class="ow">-&gt;</span> <span class="n">tell</span> <span class="p">[</span><span class="n">path</span><span class="p">]</span>
+          <span class="p">}</span>
+    <span class="kr">let</span> <span class="n">paths</span> <span class="ow">=</span> <span class="n">logTestM</span> <span class="n">pathInst</span> <span class="p">(</span><span class="n">reverseFile</span> <span class="s">"foo.txt"</span><span class="p">)</span>
+    <span class="n">paths</span> <span class="p">`</span><span class="n">shouldBe</span><span class="p">`</span> <span class="p">[</span><span class="s">"foo.txt"</span><span class="p">,</span> <span class="s">"foo.txt"</span><span class="p">]</span>
+</pre></div>
+
+</div>
+
+<p>This is pretty good. We’re now able to create inline instances of our <code>MonadFS</code> typeclass, which allows us to write extremely concise unit tests using ordinary Haskell typeclasses as system seams. We’ve managed to cut down on the boilerplate considerably, though we still have a couple problems. For one, this example only uses a single typeclass containing only two methods. A real <code>MonadFS</code> typeclass would likely have at least a dozen methods for performing various filesystem operations, and writing out the instance dictionaries for every single method, even the ones that aren’t used within the code under test, would be pretty frustratingly verbose.</p>
+
+<p>This problem is solvable, though. Since instances are just ordinary Haskell records, we can create a “base” instance that just throws an exception whenever the method is called:</p>
+
+<div class="brush: haskell">
+ <div class="source">
+  <pre><span></span><span class="nf">baseInst</span> <span class="ow">::</span> <span class="kt">MonadFSInst</span> <span class="n">m</span>
+<span class="nf">baseInst</span> <span class="ow">=</span> <span class="kt">MonadFSInst</span>
+  <span class="p">{</span> <span class="n">_readFile</span> <span class="ow">=</span> <span class="ne">error</span> <span class="s">"unimplemented instance method ‘_readFile’"</span>
+  <span class="p">,</span> <span class="n">_writeFile</span> <span class="ow">=</span> <span class="ne">error</span> <span class="s">"unimplemented instance method ‘_writeFile’"</span>
+  <span class="p">}</span>
+</pre></div>
+
+</div>
+
+<p>Then code that only uses <code>readFile</code> could only override that particular method, for example:</p>
+
+<div class="brush: haskell">
+ <div class="source">
+  <pre><span></span><span class="kr">let</span> <span class="n">myInst</span> <span class="ow">=</span> <span class="n">baseInst</span> <span class="p">{</span> <span class="n">_readFile</span> <span class="ow">=</span> <span class="o">...</span> <span class="p">}</span>
+</pre></div>
+
+</div>
+
+<p>Normally, of course, this would be a terrible idea. However, since this is all just test code, it can be extremely useful in quickly figuring out what methods need to be stubbed out for a particular test case. Since all the code actually gets run at test time, attempts to use unimplemented instance methods will immediately raise an error, informing the programmer which methods need to be implemented to make the test pass. This can also help to significantly cut down on the amount of effort it takes to implement each test.</p>
+
+<p>Another problem is that our approach is specialized exclusively to <code>MonadFS</code>. What about functions that use both <code>MonadFS</code> <em>and</em> <code>MonadDB</code>, for example? Fortunately, that is not hard to solve, either. We can adapt the <code>MonadFSInst</code> type to include fields for all of the typeclasses relevant to our system, turning it into a generic test fixture of sorts:</p>
+
+<div class="brush: haskell">
+ <div class="source">
+  <pre><span></span><span class="kr">data</span> <span class="kt">FixtureInst</span> <span class="n">m</span> <span class="ow">=</span> <span class="kt">FixtureInst</span>
+  <span class="p">{</span> <span class="c1">-- MonadFS</span>
+    <span class="n">_readFile</span> <span class="ow">::</span> <span class="kt">FilePath</span> <span class="ow">-&gt;</span> <span class="n">m</span> <span class="kt">String</span>
+  <span class="p">,</span> <span class="n">_writeFile</span> <span class="ow">::</span> <span class="kt">FilePath</span> <span class="ow">-&gt;</span> <span class="kt">String</span> <span class="ow">-&gt;</span> <span class="n">m</span> <span class="nb">()</span>
+
+    <span class="c1">-- MonadDB</span>
+  <span class="p">,</span> <span class="n">_fetchUser</span> <span class="ow">::</span> <span class="kt">Id</span> <span class="kt">User</span> <span class="ow">-&gt;</span> <span class="n">m</span> <span class="kt">User</span>
+  <span class="p">,</span> <span class="n">_fetchRecentPosts</span> <span class="ow">::</span> <span class="kt">Id</span> <span class="kt">User</span> <span class="ow">-&gt;</span> <span class="n">m</span> <span class="p">[</span><span class="kt">Post</span><span class="p">]</span>
+  <span class="p">}</span>
+</pre></div>
+
+</div>
+
+<p>Updating <code>TestM</code> to use <code>FixtureInst</code> instead of <code>MonadFSInst</code> is trivial, and all the rest of the infrastructure still works. However, this means that every time a new typeclass is added, three things need to be updated:</p>
+
+<ol>
+ <li>Its methods need to be added to the <code>FixtureInst</code> record.</li>
+ <li>Those methods need to be given error-raising defaults in the <code>baseInst</code> value.</li>
+ <li>An actual instance of the typeclass needs to be written for <code>TestM</code> that defers to the <code>FixtureInst</code> value.</li></ol>
+
+<p>Furthermore, most of this manual manipulation of methods is required every time a particular typeclass changes, whether that means adding a method, removing a method, renaming a method, or changing a method’s type. This is especially frustrating given that all this code is really just mechanical boilerplate that could all be derived by the set of typeclasses being tested.</p>
+
+<p>That last point is especially important: aside from the instances themselves, every piece of boilerplate above is obviously possible to generate from existing types alone. With that piece of information in mind, we can do even better: we can use Template Haskell.</p>
+
+<h1 id="removing-the-boilerplate-using-test-fixture">Removing the boilerplate using <code>test-fixture</code></h1>
+
+<p>The above code was not only rather boilerplate-heavy, it was pretty complicated. Fortunately, you don’t actually have to write it. Enter the library <a href="http://hackage.haskell.org/package/test-fixture"><code>test-fixture</code></a>:</p>
+
+<div class="brush: haskell">
+ <div class="source">
+  <pre><span></span><span class="kr">import</span> <span class="nn">Control.Monad.TestFixture</span>
+<span class="kr">import</span> <span class="nn">Control.Monad.TestFixture.TH</span>
+
+<span class="nf">mkFixture</span> <span class="s">"FixtureInst"</span> <span class="p">[</span><span class="kt">&#39;&#39;MonadFS</span><span class="p">,</span> <span class="kt">&#39;&#39;MonadDB</span><span class="p">]</span>
+
+<span class="nf">spec</span> <span class="ow">=</span> <span class="n">describe</span> <span class="s">"reverseFile"</span> <span class="o">$</span> <span class="kr">do</span>
+  <span class="n">it</span> <span class="s">"reverses a file’s contents on the filesystem"</span> <span class="o">$</span> <span class="kr">do</span>
+    <span class="kr">let</span> <span class="n">contentInst</span> <span class="ow">=</span> <span class="n">def</span>
+          <span class="p">{</span> <span class="n">_readFile</span> <span class="ow">=</span> <span class="nf">\</span><span class="kr">_</span> <span class="ow">-&gt;</span> <span class="n">return</span> <span class="s">"hello"</span>
+          <span class="p">,</span> <span class="n">_writeFile</span> <span class="ow">=</span> <span class="nf">\</span><span class="kr">_</span> <span class="n">contents</span> <span class="ow">-&gt;</span> <span class="n">log</span> <span class="n">contents</span>
+          <span class="p">}</span>
+    <span class="kr">let</span> <span class="n">calls</span> <span class="ow">=</span> <span class="n">logTestFixture</span> <span class="p">(</span><span class="n">reverseFile</span> <span class="s">"foo.txt"</span><span class="p">)</span> <span class="n">contentInst</span>
+    <span class="n">calls</span> <span class="p">`</span><span class="n">shouldBe</span><span class="p">`</span> <span class="p">[</span><span class="s">"olleh"</span><span class="p">]</span>
+
+  <span class="n">it</span> <span class="s">"operates on the file at the provided path"</span> <span class="o">$</span> <span class="kr">do</span>
+    <span class="kr">let</span> <span class="n">pathInst</span> <span class="ow">=</span> <span class="n">def</span>
+          <span class="p">{</span> <span class="n">_readFile</span> <span class="ow">=</span> <span class="nf">\</span><span class="n">path</span> <span class="ow">-&gt;</span> <span class="n">log</span> <span class="n">path</span> <span class="o">&gt;&gt;</span> <span class="n">return</span> <span class="s">""</span>
+          <span class="p">,</span> <span class="n">_writeFile</span> <span class="ow">=</span> <span class="nf">\</span><span class="n">path</span> <span class="kr">_</span> <span class="ow">-&gt;</span> <span class="n">log</span> <span class="n">path</span>
+          <span class="p">}</span>
+    <span class="kr">let</span> <span class="n">paths</span> <span class="ow">=</span> <span class="n">logTestFixture</span> <span class="p">(</span><span class="n">reverseFile</span> <span class="s">"foo.txt"</span><span class="p">)</span> <span class="n">pathInst</span>
+    <span class="n">paths</span> <span class="p">`</span><span class="n">shouldBe</span><span class="p">`</span> <span class="p">[</span><span class="s">"foo.txt"</span><span class="p">,</span> <span class="s">"foo.txt"</span><span class="p">]</span>
+</pre></div>
+
+</div>
+
+<p><strong>That’s it.</strong> The above code automatically generates everything you need to write fast, simple, deterministic unit tests in Haskell. The <code>mkFixture</code> function is a Template Haskell macro that expands into a definition quite similar to the <code>FixtureInst</code> type we wrote by hand, but since it’s automatically generated from the typeclass definitions, it never needs to be updated.</p>
+
+<p>The <code>logTestFixture</code> function replaces the <code>logTestM</code> function we wrote by hand, but it works exactly the same. The <code>Control.Monad.TestFixture</code> library also exports a <code>log</code> function that is a synonym for <code>tell . singleton</code>, but using <code>tell</code> directly still works if you prefer.</p>
+
+<p>The <code>mkFixture</code> function also generates a <code>Default</code> instance, which replaces the <code>baseInst</code> value defined earlier. It functions the same way, though, producing useful error messages that refer to the names of unimplemented typeclass methods that have not been stubbed out.</p>
+
+<p>This blog post is not a <code>test-fixture</code> tutorial—indeed, it is much more complicated than a <code>test-fixture</code> tutorial would be, since it covers what the library is really doing under the hood—but if you’re interested, I would highly recommend you take a look at the <a href="http://hackage.haskell.org/package/test-fixture"><code>test-fixture</code> documentation on Hackage</a>.</p>
+
+<h1 id="conclusion-credits-and-similar-techniques">Conclusion, credits, and similar techniques</h1>
+
+<p>This blog post came about as the result of a need my coworkers and I found when writing Haskell code; we wanted a way to write unit tests quickly and easily, but we didn’t find much advice from the rest of the Haskell ecosystem. The <code>test-fixture</code> library is the result of that exploratory work, and we currently use it to test a significant portion of our Haskell code.</p>
+
+<p>It would be extremely unfair to suggest that I was the inventor of this technique or the inventor of the library. Two of my coworkers, <a href="https://github.com/jxv">Joe Vargas</a> and <a href="https://github.com/aztecrex">Greg Wiley</a>, came up with the general approach and wrote <code>Control.Monad.TestFixture</code>, and I simply wrote the Template Haskell macro to eliminate the boilerplate. With that in mind, I think I can say with some fairness that I think this technique is a joy to use when unit testing is a desirable goal, and I would definitely recommend it if you are interested in doing isolated testing in Haskell.</p>
+
+<p>The general technique of using typeclasses to emulate effects was in part inspired by the well-known <code>mtl</code> library. An alternate approach to writing unit-testable Haskell code is using free monads, but overall, I prefer this approach over free monads because the typeclass constraints add type safety in ways that free monads do not (at least not without additional boilerplate), and this approach also lends itself well to static analysis-based boilerplate reduction techniques. It has its own tradeoffs, though, so if you’ve had success with free monads, then I certainly make no claim this is a superior approach, just one that I’ve personally found pleasant.</p>
+
+<p>As a final note, if you <em>do</em> check out <code>test-fixture</code>, feel free to leave feedback by opening issues on <a href="https://github.com/cjdev/test-fixture/issues">the GitHub issue tracker</a>—even things like confusing documentation are worth a bug report.</p>
+  <footer>
+    <ul class="pager">
+      <li class="previous">
+        <a href="/blog/2017/01/02/rascal-a-haskell-with-more-parentheses/">&larr; <em>Rascal: a Haskell with more parentheses</em></a>
+      </li>
+      <li class="next">
+        <a href="/blog/2016/08/24/understanding-the-npm-dependency-model/"><em>Understanding the npm dependency model</em> &rarr;</a>
+      </li>
+    </ul>
+  </footer>
+</article>
+        </div>
+      </section>
+      <footer>
+        <div class="content">
+          <h2 id="copyright-notice">© 2021, Alexis King</h2>
+          <h3>
+            Built with <a href="https://github.com/greghendershott/frog">Frog</a>, the
+            <strong>fr</strong>ozen bl<strong>og</strong> tool.
+          </h3>
+          <h3>
+            Feeds are available via <a href="/feeds/all.atom.xml">Atom</a>
+            or <a href="/feeds/all.rss.xml">RSS</a>.
+          </h3>
+        </div>
+      </footer>
+    </div>
+  </body>
+</html>

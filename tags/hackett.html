@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <title>Posts tagged 'hackett'</title>
+    <meta name="description" content="Posts tagged 'hackett'">
+    <meta name="author"      content="Alexis King">
+    <meta name="keywords"    content="hackett">
+    <meta name="viewport"    content="width=device-width, initial-scale=1.0">
+    <link rel="icon"      href="/favicon.ico">
+    <link rel="canonical" href="http://lexi-lambda.github.io/tags/hackett.html">
+
+
+    <!-- CSS -->
+    <link rel="stylesheet" type="text/css" href="https://fonts.googleapis.com/css?family=Merriweather+Sans:400,300,300italic,400italic,700,700italic,800,800italic|Merriweather:400,300,300italic,400italic,700,700italic,900,900italic|Fira+Code:300,400,500,600,700">
+    <link rel="stylesheet" type="text/css" href="/css/application.min.css">
+    <link rel="stylesheet" type="text/css" href="/css/pygments.min.css">
+    <!-- Feeds -->
+    <link rel="alternate" type="application/atom+xml"
+          href="/feeds/hackett.atom.xml" title="Atom Feed">
+    <link rel="alternate" type="application/rss+xml"
+          href="/feeds/hackett.rss.xml" title="RSS Feed">
+    <!-- JS -->
+    <!-- <script src="/js/application.min.js"></script> -->
+    <script type="text/javascript">
+      (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+      (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+      m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+      })(window,document,'script','//www.google-analytics.com/analytics.js','ga');
+
+      ga('create', 'UA-65250372-1', 'auto');
+      ga('send', 'pageview');
+    </script>
+  </head>
+  <body>
+    <div id="page-content">
+      <!-- Navigation Bar -->
+      <header>
+        <nav role="navigation" class="navigation-bar">
+          <ul class="navigation-items left">
+            <li id="blog-title-header"><a href="/"><h1>Alexis King</h1></a></li>
+          </ul>
+          <ul class="navigation-items center"></ul>
+          <ul class="navigation-items right">
+            <li><a href="/">Home</a></li>
+            <li><a href="/resume.html">About Me</a></li>
+          </ul>
+        </nav>
+      </header>
+      <section role="main">
+        <!-- Main column -->
+        <div class="content" class="col-md-12">
+
+          <h1>Posts tagged <em>hackett</em></h1>
+
+          <article class="inline">
+  <header>
+    <h2 class="title"><a href='/blog/2018/04/15/reimplementing-hackett-s-type-language-expanding-to-custom-core-forms-in-racket/'>Reimplementing Hackett’s type language: expanding to custom core forms in Racket</a></h2>
+    <div class='date-and-tags'>
+      <time datetime="2018-04-15T00:00:00">
+        2018-04-15
+      </time>
+      <span style="margin: 0 3px">⦿</span>
+      <span class="tags"><a href="/tags/racket.html">racket</a>, <a href="/tags/hackett.html">hackett</a>, <a href="/tags/macros.html">macros</a></span>
+    </div>
+  </header>
+
+<p>In the past couple of weeks, I <a href="https://github.com/lexi-lambda/hackett/commit/ba64193da38f63dab2523f42c1b7614cdfa8c935">completely rewrote the implementation of Hackett’s type language</a> to improve the integration between the type representation and Racket’s macro system. The new type language effectively implements a way to reuse as much of the Racket macroexpanding infrastructure as possible while expanding a completely custom language, which uses a custom set of core forms. The fundamental technique used to do so is not novel, and it seems to be periodically rediscovered every so often, but it has never been published or documented anywhere, and getting it right involves understanding a great number of subtleties about the Racket macro system. While I cannot entirely eliminate the need to understand those subtleties, in this blog post, I hope to make the secret sauce considerably less secret.</p>
+  <footer class="read-more">
+    <a href="/blog/2018/04/15/reimplementing-hackett-s-type-language-expanding-to-custom-core-forms-in-racket/"><span class="read-more-text">Read more</span> →</a>
+  </footer>
+</article>
+<article class="inline">
+  <header>
+    <h2 class="title"><a href='/blog/2017/10/27/a-space-of-their-own-adding-a-type-namespace-to-hackett/'>A space of their own: adding a type namespace to Hackett</a></h2>
+    <div class='date-and-tags'>
+      <time datetime="2017-10-27T17:41:17">
+        2017-10-27
+      </time>
+      <span style="margin: 0 3px">⦿</span>
+      <span class="tags"><a href="/tags/hackett.html">hackett</a>, <a href="/tags/racket.html">racket</a>, <a href="/tags/programming-languages.html">programming languages</a></span>
+    </div>
+  </header>
+
+<p>As previously discussed on this blog, <a href="https://github.com/lexi-lambda/hackett">my programming language, Hackett</a>, is a fusion of two languages, Haskell and Racket. What happens when two distinctly different programming languages collide? Hackett recently faced that very problem when it came to the question of namespacing: Haskell has two namespaces, one for values and another for types, but Racket is a staunch Lisp&ndash;1 with a single namespace for all bindings. Which convention should Hackett adopt?</p>
+
+<p>For now, at least, the answer is that Hackett will emulate Haskell: <strong>Hackett now has two namespaces</strong>. Of course, Hackett is embedded in Racket, so what did it take to add an entirely new namespace to a language that possesses only one? The answer was a little more than I had hoped, but it was still remarkably simple given the problem: after two weeks of hacking, I’ve managed to get something working.</p>
+  <footer class="read-more">
+    <a href="/blog/2017/10/27/a-space-of-their-own-adding-a-type-namespace-to-hackett/"><span class="read-more-text">Read more</span> →</a>
+  </footer>
+</article>
+<article class="inline">
+  <header>
+    <h2 class="title"><a href='/blog/2017/08/28/hackett-progress-report-documentation-quality-of-life-and-snake/'>Hackett progress report: documentation, quality of life, and snake</a></h2>
+    <div class='date-and-tags'>
+      <time datetime="2017-08-28T08:00:00">
+        2017-08-28
+      </time>
+      <span style="margin: 0 3px">⦿</span>
+      <span class="tags"><a href="/tags/hackett.html">hackett</a>, <a href="/tags/racket.html">racket</a>, <a href="/tags/haskell.html">haskell</a></span>
+    </div>
+  </header>
+
+<p>Three months ago, <a href="/blog/2017/05/27/realizing-hackett-a-metaprogrammable-haskell/">I wrote a blog post describing my new, prototype implementation of my programming language, Hackett</a>. At the time, some things looked promising—the language already included algebraic datatypes, typeclasses, laziness, and even a mini, proof of concept web server. It was, however, clearly still rather rough around the edges—error messages were poor, features were sometimes brittle, the REPL experience was less than ideal, and there was no documentation to speak of. In the time since, while the language is still experimental, I have tackled a handful of those issues, and I am excited to announce <a href="https://pkg-build.racket-lang.org/doc/hackett@hackett-doc/"><strong>the first (albeit quite incomplete) approach to Hackett’s documentation</strong></a>.</p>
+
+<p>I’d recommend clicking that link above and at least skimming around before reading the rest of this blog post, as its remainder will describe some of the pieces that didn’t end up in the documentation: the development process, the project’s status, a small demo, and some other details from behind the scenes.</p>
+  <footer class="read-more">
+    <a href="/blog/2017/08/28/hackett-progress-report-documentation-quality-of-life-and-snake/"><span class="read-more-text">Read more</span> →</a>
+  </footer>
+</article>
+<article class="inline">
+  <header>
+    <h2 class="title"><a href='/blog/2017/08/12/user-programmable-infix-operators-in-racket/'>User-programmable infix operators in Racket</a></h2>
+    <div class='date-and-tags'>
+      <time datetime="2017-08-12T16:26:05">
+        2017-08-12
+      </time>
+      <span style="margin: 0 3px">⦿</span>
+      <span class="tags"><a href="/tags/racket.html">racket</a>, <a href="/tags/hackett.html">hackett</a>, <a href="/tags/macros.html">macros</a></span>
+    </div>
+  </header>
+
+<p>Lisps are not known for infix operators, quite the opposite; infix operators generally involve more syntax and parsing than Lispers are keen to support. However, in <a href="https://github.com/lexi-lambda/hackett">Hackett</a>, all functions are curried, and variable-arity functions do not exist. Infix operators are almost necessary for that to be palatable, and though there are other reasons to want them, it may not be obvious how to support them without making the reader considerably more complex.</p>
+
+<p>Fortunately, if we require users to syntactically specify where they wish to use infix expressions, support for infix operators is not only possible, but can support be done <em>without</em> modifying the stock <code>#lang racket</code> reader. Futhermore, the resulting technique makes it possible for fixity information to be specified locally in a way that cooperates nicely with the Racket macro system, allowing the parsing of infix expressions to be manipulated at compile-time by users’ macros.</p>
+  <footer class="read-more">
+    <a href="/blog/2017/08/12/user-programmable-infix-operators-in-racket/"><span class="read-more-text">Read more</span> →</a>
+  </footer>
+</article>
+<article class="inline">
+  <header>
+    <h2 class="title"><a href='/blog/2017/05/27/realizing-hackett-a-metaprogrammable-haskell/'>Realizing Hackett, a metaprogrammable Haskell</a></h2>
+    <div class='date-and-tags'>
+      <time datetime="2017-05-27T15:30:00">
+        2017-05-27
+      </time>
+      <span style="margin: 0 3px">⦿</span>
+      <span class="tags"><a href="/tags/hackett.html">hackett</a>, <a href="/tags/racket.html">racket</a>, <a href="/tags/haskell.html">haskell</a>, <a href="/tags/programming-languages.html">programming languages</a></span>
+    </div>
+  </header>
+
+<p><a href="/blog/2017/01/02/rascal-a-haskell-with-more-parentheses/">Almost five months ago, I wrote a blog post about my new programming language, Hackett</a>, a fanciful sketch of a programming language from a far-off land with Haskell’s type system and Racket’s macros. At that point in time, I had a little prototype that barely worked, that I barely understood, and was a little bit of a technical dead-end. People saw the post, they got excited, but development sort of stopped.</p>
+
+<p>Then, almost two months ago, I took a second stab at the problem in earnest. I read a lot, I asked a lot of people for help, and eventually I got something sort of working. Suddenly, <a href="https://github.com/lexi-lambda/hackett">Hackett is not only real, it’s working, and you can try it out yourself</a>!</p>
+  <footer class="read-more">
+    <a href="/blog/2017/05/27/realizing-hackett-a-metaprogrammable-haskell/"><span class="read-more-text">Read more</span> →</a>
+  </footer>
+</article>
+<article class="inline">
+  <header>
+    <h2 class="title"><a href='/blog/2017/01/05/rascal-is-now-hackett-plus-some-answers-to-questions/'>Rascal is now Hackett, plus some answers to questions</a></h2>
+    <div class='date-and-tags'>
+      <time datetime="2017-01-05T05:25:32">
+        2017-01-05
+      </time>
+      <span style="margin: 0 3px">⦿</span>
+      <span class="tags"><a href="/tags/hackett.html">hackett</a>, <a href="/tags/racket.html">racket</a>, <a href="/tags/haskell.html">haskell</a>, <a href="/tags/programming-languages.html">programming languages</a></span>
+    </div>
+  </header>
+
+<p>Since I published <a href="/blog/2017/01/02/rascal-a-haskell-with-more-parentheses/">my blog post introducing Rascal</a>, I’ve gotten some <em>amazing</em> feedback, more than I had ever anticipated! One of the things that was pointed out, though, is that <a href="http://www.rascal-mpl.org">Rascal is a language that already exists</a>. Given that the name “Rascal” came from a mixture of “Racket” and “Haskell”, I always had an alternative named planned, and that’s “Hackett”. So, to avoid confusion as much as possible, <a href="https://github.com/lexi-lambda/hackett"><strong>Rascal is now known as Hackett</strong></a>.</p>
+
+<p>With that out of the way, I also want to answer some of the other questions I received, both to hopefully clear up some confusion and to have something I can point to if I get the same questions in the future.</p>
+  <footer class="read-more">
+    <a href="/blog/2017/01/05/rascal-is-now-hackett-plus-some-answers-to-questions/"><span class="read-more-text">Read more</span> →</a>
+  </footer>
+</article>
+<article class="inline">
+  <header>
+    <h2 class="title"><a href='/blog/2017/01/02/rascal-a-haskell-with-more-parentheses/'>Rascal: a Haskell with more parentheses</a></h2>
+    <div class='date-and-tags'>
+      <time datetime="2017-01-02T09:16:42">
+        2017-01-02
+      </time>
+      <span style="margin: 0 3px">⦿</span>
+      <span class="tags"><a href="/tags/hackett.html">hackett</a>, <a href="/tags/racket.html">racket</a>, <a href="/tags/haskell.html">haskell</a>, <a href="/tags/programming-languages.html">programming languages</a>, <a href="/tags/functional-programming.html">functional programming</a></span>
+    </div>
+  </header>
+
+<blockquote>
+ <p><strong>Note</strong>: since the writing of this blog post, Rascal has been renamed to Hackett. You can read about why in <a href="/blog/2017/01/05/rascal-is-now-hackett-plus-some-answers-to-questions/">the followup blog post</a>.</p></blockquote>
+
+<p>“Hey! You got your Haskell in my Racket!”</p>
+
+<p>“No, you got <em>your</em> Racket in <em>my</em> Haskell!”</p>
+
+<p>Welcome to the <a href="https://github.com/lexi-lambda/hackett">Rascal</a> programming language.</p>
+  <footer class="read-more">
+    <a href="/blog/2017/01/02/rascal-a-haskell-with-more-parentheses/"><span class="read-more-text">Read more</span> →</a>
+  </footer>
+</article>
+        </div>
+      </section>
+      <footer>
+        <div class="content">
+          <h2 id="copyright-notice">© 2021, Alexis King</h2>
+          <h3>
+            Built with <a href="https://github.com/greghendershott/frog">Frog</a>, the
+            <strong>fr</strong>ozen bl<strong>og</strong> tool.
+          </h3>
+          <h3>
+            Feeds are available via <a href="/feeds/all.atom.xml">Atom</a>
+            or <a href="/feeds/all.rss.xml">RSS</a>.
+          </h3>
+        </div>
+      </footer>
+    </div>
+  </body>
+</html>

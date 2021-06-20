@@ -1,0 +1,298 @@
+<?xml version="1.0" encoding="utf-8"?> 
+<feed xmlns="http://www.w3.org/2005/Atom" xml:lang="en">
+ <title type="text">Alexis King's Blog: Posts tagged 'elm'</title>
+ <link rel="self" href="http://lexi-lambda.github.io/feeds/elm.atom.xml" />
+ <link href="http://lexi-lambda.github.io/tags/elm.html" />
+ <id>urn:http-lexi-lambda-github-io:-tags-elm-html</id>
+ <updated>2015-11-06T19:58:40Z</updated>
+ <entry>
+  <title type="text">Functionally updating record types in Elm</title>
+  <link rel="alternate" href="http://lexi-lambda.github.io/blog/2015/11/06/functionally-updating-record-types-in-elm/?utm_source=elm&amp;utm_medium=Atom" />
+  <id>urn:http-lexi-lambda-github-io:-blog-2015-11-06-functionally-updating-record-types-in-elm</id>
+  <published>2015-11-06T19:58:40Z</published>
+  <updated>2015-11-06T19:58:40Z</updated>
+  <author>
+   <name>Alexis King</name></author>
+  <content type="html">
+&lt;p&gt;&lt;a href="http://elm-lang.org"&gt;Elm&lt;/a&gt; is a wonderful language for building web apps, and I love so much of its approach to language design. Elm does so many things &lt;em&gt;right&lt;/em&gt; straight out of the box, and that&amp;rsquo;s a real breath of fresh air in the intersection of functional programming and web development. Still, it gets one thing wrong, and unfortunately, that one thing is incredibly important. Elm took the &amp;ldquo;functions&amp;rdquo; out of &amp;ldquo;functional record types&amp;rdquo;.&lt;/p&gt;
+&lt;!-- more--&gt;
+
+&lt;p&gt;Almost any software program, at its core, is all about data. Maybe it&amp;rsquo;s about computing data, maybe it&amp;rsquo;s about manipulating data, or maybe it&amp;rsquo;s about displaying data, but at the end of the day, some sort of data model is going to be needed. The functional model is a breathtakingly elegant system for handling data and shuttling it around throughout a program, and &lt;a href="https://en.wikipedia.org/wiki/Functional_reactive_programming"&gt;functional reactive programming&lt;/a&gt;, which Elm uses to model event-like interactions, makes this model work even better. The really important thing, though, is what tools Elm actually gives you to model your data.&lt;/p&gt;
+
+&lt;h1 id="a-brief-primer-on-elm-records"&gt;A brief primer on Elm records&lt;/h1&gt;
+
+&lt;p&gt;Elm supports all the core datatypes one would expect—numbers, strings, booleans, optionals, etc.—and it allows users to define their own types with ADTs. However, Elm also provides another datatype, which it calls &amp;ldquo;records&amp;rdquo;. Records are similar to objects in JavaScript: they&amp;rsquo;re effectively key-value mappings. They&amp;rsquo;re cool data structures, and they work well. Here&amp;rsquo;s an example of creating a &lt;code&gt;Point&lt;/code&gt; datatype in Elm:&lt;/p&gt;
+
+&lt;div class="brush: elm"&gt;
+ &lt;div class="source"&gt;
+  &lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;span class="kr"&gt;type&lt;/span&gt; &lt;span class="kr"&gt;alias&lt;/span&gt; &lt;span class="kt"&gt;Point&lt;/span&gt; &lt;span class="nf"&gt;=&lt;/span&gt;
+  &lt;span class="p"&gt;{&lt;/span&gt; &lt;span class="nv"&gt;x&lt;/span&gt; &lt;span class="nf"&gt;:&lt;/span&gt; &lt;span class="kt"&gt;Float&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="nv"&gt;y&lt;/span&gt; &lt;span class="nf"&gt;:&lt;/span&gt; &lt;span class="kt"&gt;Float&lt;/span&gt; &lt;span class="p"&gt;}&lt;/span&gt;
+&lt;/pre&gt;&lt;/div&gt;
+
+&lt;/div&gt;
+
+&lt;p&gt;Notice that &lt;code&gt;Point&lt;/code&gt; is declared as a type &lt;em&gt;alias&lt;/em&gt;, not as a separate type like an ADT. This is because record types are truly encoded in the type system as values with named fields, not as disparate types. This allows for some fun tricks, but that&amp;rsquo;s outside the scope of this blog post.&lt;/p&gt;
+
+&lt;h1 id="the-good"&gt;The good&lt;/h1&gt;
+
+&lt;p&gt;What I&amp;rsquo;d like to discuss is what it looks like to &lt;em&gt;manipulate&lt;/em&gt; these data structures. Constructing them is completely painless, and reading from them is super simple. This is where the record system gets everything very &lt;em&gt;right&lt;/em&gt;.&lt;/p&gt;
+
+&lt;div class="brush: elm"&gt;
+ &lt;div class="source"&gt;
+  &lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;span class="nv"&gt;origin&lt;/span&gt; &lt;span class="nf"&gt;:&lt;/span&gt; &lt;span class="kt"&gt;Point&lt;/span&gt;
+&lt;span class="nv"&gt;origin&lt;/span&gt; &lt;span class="nf"&gt;=&lt;/span&gt; &lt;span class="p"&gt;{&lt;/span&gt; &lt;span class="nv"&gt;x&lt;/span&gt; &lt;span class="nf"&gt;=&lt;/span&gt; &lt;span class="mi"&gt;0&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="nv"&gt;y&lt;/span&gt; &lt;span class="nf"&gt;=&lt;/span&gt; &lt;span class="mi"&gt;0&lt;/span&gt; &lt;span class="p"&gt;}&lt;/span&gt;
+
+&lt;span class="nv"&gt;distanceBetween&lt;/span&gt; &lt;span class="nf"&gt;:&lt;/span&gt; &lt;span class="kt"&gt;Point&lt;/span&gt; &lt;span class="nf"&gt;-&amp;gt;&lt;/span&gt; &lt;span class="kt"&gt;Point&lt;/span&gt; &lt;span class="nf"&gt;-&amp;gt;&lt;/span&gt; &lt;span class="kt"&gt;Float&lt;/span&gt;
+&lt;span class="nv"&gt;distanceBetween&lt;/span&gt; &lt;span class="nv"&gt;a&lt;/span&gt; &lt;span class="nv"&gt;b&lt;/span&gt; &lt;span class="nf"&gt;=&lt;/span&gt;
+  &lt;span class="kr"&gt;let&lt;/span&gt; &lt;span class="nv"&gt;dx&lt;/span&gt; &lt;span class="nf"&gt;=&lt;/span&gt; &lt;span class="nv"&gt;a&lt;/span&gt;&lt;span class="nf"&gt;.&lt;/span&gt;&lt;span class="nv"&gt;x&lt;/span&gt; &lt;span class="nf"&gt;-&lt;/span&gt; &lt;span class="nv"&gt;b&lt;/span&gt;&lt;span class="nf"&gt;.&lt;/span&gt;&lt;span class="nv"&gt;x&lt;/span&gt;
+      &lt;span class="nv"&gt;dy&lt;/span&gt; &lt;span class="nf"&gt;=&lt;/span&gt; &lt;span class="nv"&gt;a&lt;/span&gt;&lt;span class="nf"&gt;.&lt;/span&gt;&lt;span class="nv"&gt;y&lt;/span&gt; &lt;span class="nf"&gt;-&lt;/span&gt; &lt;span class="nv"&gt;b&lt;/span&gt;&lt;span class="nf"&gt;.&lt;/span&gt;&lt;span class="nv"&gt;y&lt;/span&gt;
+  &lt;span class="kr"&gt;in&lt;/span&gt; &lt;span class="nv"&gt;sqrt&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="nv"&gt;dx&lt;/span&gt;&lt;span class="nf"&gt;*&lt;/span&gt;&lt;span class="nv"&gt;dx&lt;/span&gt; &lt;span class="nf"&gt;+&lt;/span&gt; &lt;span class="nv"&gt;dy&lt;/span&gt;&lt;span class="nf"&gt;*&lt;/span&gt;&lt;span class="nv"&gt;dy&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+&lt;/pre&gt;&lt;/div&gt;
+
+&lt;/div&gt;
+
+&lt;p&gt;The syntax is clean and simple. Most importantly, however, the record system is functional (in the &amp;ldquo;functional programming&amp;rdquo; sense). In a functional system, it&amp;rsquo;s useful to express concepts in terms of function composition, and this is very easy to do in Elm. Creating a function to access a field would normally be clunky if you always needed to do &lt;code&gt;record.field&lt;/code&gt; to access the value. Fortunately, Elm provides some sugar:&lt;/p&gt;
+
+&lt;div class="brush: elm"&gt;
+ &lt;div class="source"&gt;
+  &lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;span class="c1"&gt;-- These two expressions are equivalent:&lt;/span&gt;
+&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="nf"&gt;\&lt;/span&gt;&lt;span class="nv"&gt;record&lt;/span&gt; &lt;span class="nf"&gt;-&amp;gt;&lt;/span&gt; &lt;span class="nv"&gt;record&lt;/span&gt;&lt;span class="nf"&gt;.&lt;/span&gt;&lt;span class="nv"&gt;field&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+&lt;span class="nf"&gt;.&lt;/span&gt;&lt;span class="nv"&gt;field&lt;/span&gt;
+&lt;/pre&gt;&lt;/div&gt;
+
+&lt;/div&gt;
+
+&lt;p&gt;Using the &lt;code&gt;.field&lt;/code&gt; shorthand allows writing some other functions in terms of composition, as most functional programmers would desire:&lt;/p&gt;
+
+&lt;div class="brush: elm"&gt;
+ &lt;div class="source"&gt;
+  &lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;span class="nv"&gt;doubledX&lt;/span&gt; &lt;span class="nf"&gt;:&lt;/span&gt; &lt;span class="kt"&gt;Point&lt;/span&gt; &lt;span class="nf"&gt;-&amp;gt;&lt;/span&gt; &lt;span class="kt"&gt;Float&lt;/span&gt;
+&lt;span class="nv"&gt;doubledX&lt;/span&gt; &lt;span class="nf"&gt;=&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="nf"&gt;(*)&lt;/span&gt; &lt;span class="mi"&gt;2&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="nf"&gt;&amp;lt;&amp;lt;&lt;/span&gt; &lt;span class="nf"&gt;.&lt;/span&gt;&lt;span class="nv"&gt;x&lt;/span&gt;
+&lt;/pre&gt;&lt;/div&gt;
+
+&lt;/div&gt;
+
+&lt;p&gt;This satisfies me.&lt;/p&gt;
+
+&lt;h1 id="the-bad"&gt;The bad&lt;/h1&gt;
+
+&lt;p&gt;So if everything in Elm is so great, what am I complaining about? Well, while the syntax to access fields is convenient, the syntax to &lt;em&gt;functionally set&lt;/em&gt; fields is questionably clunky. Consider a function that accepts a point and returns a new point with its &lt;code&gt;x&lt;/code&gt; field set to &lt;code&gt;0&lt;/code&gt;:&lt;/p&gt;
+
+&lt;div class="brush: elm"&gt;
+ &lt;div class="source"&gt;
+  &lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;span class="nv"&gt;zeroedX&lt;/span&gt; &lt;span class="nf"&gt;:&lt;/span&gt; &lt;span class="kt"&gt;Point&lt;/span&gt; &lt;span class="nf"&gt;-&amp;gt;&lt;/span&gt; &lt;span class="kt"&gt;Point&lt;/span&gt;
+&lt;span class="nv"&gt;zeroedX&lt;/span&gt; &lt;span class="nv"&gt;point&lt;/span&gt; &lt;span class="nf"&gt;=&lt;/span&gt; &lt;span class="p"&gt;{&lt;/span&gt; &lt;span class="nv"&gt;point&lt;/span&gt; &lt;span class="nf"&gt;|&lt;/span&gt; &lt;span class="nv"&gt;x&lt;/span&gt; &lt;span class="nf"&gt;&amp;lt;-&lt;/span&gt; &lt;span class="mi"&gt;0&lt;/span&gt; &lt;span class="p"&gt;}&lt;/span&gt;
+&lt;/pre&gt;&lt;/div&gt;
+
+&lt;/div&gt;
+
+&lt;p&gt;This doesn&amp;rsquo;t look too bad, does it? It&amp;rsquo;s clear and concise. To me, though, there&amp;rsquo;s something deeply wrong here&amp;hellip; this function has a lot of redundancy! It seems to me like we should be able to write this function more clearly in a point-free style. The &lt;code&gt;.field&lt;/code&gt; shorthand &amp;ldquo;functionalizes&amp;rdquo; the record getter syntax, so there must be a function version of the update syntax, right? Maybe it would look something like this:&lt;/p&gt;
+
+&lt;div class="brush: elm"&gt;
+ &lt;div class="source"&gt;
+  &lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;span class="nv"&gt;zeroedX&lt;/span&gt; &lt;span class="nf"&gt;:&lt;/span&gt; &lt;span class="kt"&gt;Point&lt;/span&gt; &lt;span class="nf"&gt;-&amp;gt;&lt;/span&gt; &lt;span class="kt"&gt;Point&lt;/span&gt;
+&lt;span class="nv"&gt;zeroedX&lt;/span&gt; &lt;span class="nf"&gt;=&lt;/span&gt; &lt;span class="err"&gt;!&lt;/span&gt;&lt;span class="nv"&gt;x&lt;/span&gt; &lt;span class="mi"&gt;0&lt;/span&gt;
+&lt;/pre&gt;&lt;/div&gt;
+
+&lt;/div&gt;
+
+&lt;p&gt;But alas, there is no such syntax.&lt;/p&gt;
+
+&lt;p&gt;Now you may ask&amp;hellip; why does it matter? This seems trivial, and in fact, the explicit updater syntax may actually be more readable by virtue of how explicit it is. You&amp;rsquo;d be right, because so far, these examples have been horribly contrived. But let&amp;rsquo;s consider a slightly more useful example: &lt;em&gt;functionally updating&lt;/em&gt; a record.&lt;/p&gt;
+
+&lt;p&gt;What&amp;rsquo;s the difference? Well, say I wanted to take a point and increment its &lt;code&gt;x&lt;/code&gt; field by one. Well, I can easily write a function for that:&lt;/p&gt;
+
+&lt;div class="brush: elm"&gt;
+ &lt;div class="source"&gt;
+  &lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;span class="nv"&gt;incrementX&lt;/span&gt; &lt;span class="nf"&gt;:&lt;/span&gt; &lt;span class="kt"&gt;Point&lt;/span&gt; &lt;span class="nf"&gt;-&amp;gt;&lt;/span&gt; &lt;span class="kt"&gt;Point&lt;/span&gt;
+&lt;span class="nv"&gt;incrementX&lt;/span&gt; &lt;span class="nv"&gt;point&lt;/span&gt; &lt;span class="nf"&gt;=&lt;/span&gt; &lt;span class="p"&gt;{&lt;/span&gt; &lt;span class="nv"&gt;point&lt;/span&gt; &lt;span class="nf"&gt;|&lt;/span&gt; &lt;span class="nv"&gt;x&lt;/span&gt; &lt;span class="nf"&gt;&amp;lt;-&lt;/span&gt; &lt;span class="nv"&gt;point&lt;/span&gt;&lt;span class="nf"&gt;.&lt;/span&gt;&lt;span class="nv"&gt;x&lt;/span&gt; &lt;span class="nf"&gt;+&lt;/span&gt; &lt;span class="mi"&gt;1&lt;/span&gt; &lt;span class="p"&gt;}&lt;/span&gt;
+&lt;/pre&gt;&lt;/div&gt;
+
+&lt;/div&gt;
+
+&lt;p&gt;Not terrible, though a &lt;em&gt;little&lt;/em&gt; verbose. Still, what if we want to also add a function that &lt;em&gt;decrements&lt;/em&gt; &lt;code&gt;x&lt;/code&gt;?&lt;/p&gt;
+
+&lt;div class="brush: elm"&gt;
+ &lt;div class="source"&gt;
+  &lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;span class="nv"&gt;decrementX&lt;/span&gt; &lt;span class="nf"&gt;:&lt;/span&gt; &lt;span class="kt"&gt;Point&lt;/span&gt; &lt;span class="nf"&gt;-&amp;gt;&lt;/span&gt; &lt;span class="kt"&gt;Point&lt;/span&gt;
+&lt;span class="nv"&gt;decrementX&lt;/span&gt; &lt;span class="nv"&gt;point&lt;/span&gt; &lt;span class="nf"&gt;=&lt;/span&gt; &lt;span class="p"&gt;{&lt;/span&gt; &lt;span class="nv"&gt;point&lt;/span&gt; &lt;span class="nf"&gt;|&lt;/span&gt; &lt;span class="nv"&gt;x&lt;/span&gt; &lt;span class="nf"&gt;&amp;lt;-&lt;/span&gt; &lt;span class="nv"&gt;point&lt;/span&gt;&lt;span class="nf"&gt;.&lt;/span&gt;&lt;span class="nv"&gt;x&lt;/span&gt; &lt;span class="nf"&gt;-&lt;/span&gt; &lt;span class="mi"&gt;1&lt;/span&gt; &lt;span class="p"&gt;}&lt;/span&gt;
+&lt;/pre&gt;&lt;/div&gt;
+
+&lt;/div&gt;
+
+&lt;p&gt;Oh, gosh. That&amp;rsquo;s basically the exact same definition but with the operation flipped. Plus we probably want these operations for &lt;code&gt;y&lt;/code&gt;, too. Fortunately, there&amp;rsquo;s an easy solution: just pass a function in to &lt;em&gt;transform&lt;/em&gt; the value! We can define an &lt;code&gt;updateX&lt;/code&gt; function that allows us to do that easily, then we can define our derived operations in terms of that:&lt;/p&gt;
+
+&lt;div class="brush: elm"&gt;
+ &lt;div class="source"&gt;
+  &lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;span class="nv"&gt;updateX&lt;/span&gt; &lt;span class="nf"&gt;:&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="kt"&gt;Float&lt;/span&gt; &lt;span class="nf"&gt;-&amp;gt;&lt;/span&gt; &lt;span class="kt"&gt;Float&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="nf"&gt;-&amp;gt;&lt;/span&gt; &lt;span class="kt"&gt;Point&lt;/span&gt; &lt;span class="nf"&gt;-&amp;gt;&lt;/span&gt; &lt;span class="kt"&gt;Point&lt;/span&gt;
+&lt;span class="nv"&gt;updateX&lt;/span&gt; &lt;span class="nv"&gt;f&lt;/span&gt; &lt;span class="nv"&gt;point&lt;/span&gt; &lt;span class="nf"&gt;=&lt;/span&gt; &lt;span class="p"&gt;{&lt;/span&gt; &lt;span class="nv"&gt;point&lt;/span&gt; &lt;span class="nf"&gt;|&lt;/span&gt; &lt;span class="nv"&gt;x&lt;/span&gt; &lt;span class="nf"&gt;&amp;lt;-&lt;/span&gt; &lt;span class="nv"&gt;f&lt;/span&gt; &lt;span class="nv"&gt;point&lt;/span&gt;&lt;span class="nf"&gt;.&lt;/span&gt;&lt;span class="nv"&gt;x&lt;/span&gt; &lt;span class="p"&gt;}&lt;/span&gt;
+
+&lt;span class="nv"&gt;incrementX&lt;/span&gt; &lt;span class="nf"&gt;:&lt;/span&gt; &lt;span class="kt"&gt;Point&lt;/span&gt; &lt;span class="nf"&gt;-&amp;gt;&lt;/span&gt; &lt;span class="kt"&gt;Point&lt;/span&gt;
+&lt;span class="nv"&gt;incrementX&lt;/span&gt; &lt;span class="nf"&gt;=&lt;/span&gt; &lt;span class="nv"&gt;updateX&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="nf"&gt;(+)&lt;/span&gt; &lt;span class="mi"&gt;1&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+
+&lt;span class="nv"&gt;decrementX&lt;/span&gt; &lt;span class="nf"&gt;:&lt;/span&gt; &lt;span class="kt"&gt;Point&lt;/span&gt; &lt;span class="nf"&gt;-&amp;gt;&lt;/span&gt; &lt;span class="kt"&gt;Point&lt;/span&gt;
+&lt;span class="nv"&gt;decrementX&lt;/span&gt; &lt;span class="nf"&gt;=&lt;/span&gt; &lt;span class="nv"&gt;updateX&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="nf"&gt;\&lt;/span&gt;&lt;span class="nv"&gt;x&lt;/span&gt; &lt;span class="nf"&gt;-&amp;gt;&lt;/span&gt; &lt;span class="nv"&gt;x&lt;/span&gt; &lt;span class="nf"&gt;-&lt;/span&gt; &lt;span class="mi"&gt;1&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+&lt;/pre&gt;&lt;/div&gt;
+
+&lt;/div&gt;
+
+&lt;p&gt;Not only is that much cleaner, but we can now use it to implement all sorts of other operations that allow us to add, subtract, multiply, or divide the &lt;code&gt;x&lt;/code&gt; field. Now we just need to generalize our solution to work with the &lt;code&gt;x&lt;/code&gt; &lt;em&gt;and&lt;/em&gt; &lt;code&gt;y&lt;/code&gt; fields!&lt;/p&gt;
+
+&lt;p&gt;Oh, wait. &lt;strong&gt;We can&amp;rsquo;t.&lt;/strong&gt;&lt;/p&gt;
+
+&lt;h1 id="the-ugly"&gt;The ugly&lt;/h1&gt;
+
+&lt;p&gt;This is where everything breaks down completely. Elm does not offer enough abstraction to reduce this level of crazy duplication:&lt;/p&gt;
+
+&lt;div class="brush: elm"&gt;
+ &lt;div class="source"&gt;
+  &lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;span class="nv"&gt;updateX&lt;/span&gt; &lt;span class="nf"&gt;:&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="kt"&gt;Float&lt;/span&gt; &lt;span class="nf"&gt;-&amp;gt;&lt;/span&gt; &lt;span class="kt"&gt;Float&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="nf"&gt;-&amp;gt;&lt;/span&gt; &lt;span class="kt"&gt;Point&lt;/span&gt; &lt;span class="nf"&gt;-&amp;gt;&lt;/span&gt; &lt;span class="kt"&gt;Point&lt;/span&gt;
+&lt;span class="nv"&gt;updateX&lt;/span&gt; &lt;span class="nv"&gt;f&lt;/span&gt; &lt;span class="nv"&gt;point&lt;/span&gt; &lt;span class="nf"&gt;=&lt;/span&gt; &lt;span class="p"&gt;{&lt;/span&gt; &lt;span class="nv"&gt;point&lt;/span&gt; &lt;span class="nf"&gt;|&lt;/span&gt; &lt;span class="nv"&gt;x&lt;/span&gt; &lt;span class="nf"&gt;&amp;lt;-&lt;/span&gt; &lt;span class="nv"&gt;f&lt;/span&gt; &lt;span class="nv"&gt;point&lt;/span&gt;&lt;span class="nf"&gt;.&lt;/span&gt;&lt;span class="nv"&gt;x&lt;/span&gt; &lt;span class="p"&gt;}&lt;/span&gt;
+
+&lt;span class="nv"&gt;incrementX&lt;/span&gt; &lt;span class="nf"&gt;:&lt;/span&gt; &lt;span class="kt"&gt;Point&lt;/span&gt; &lt;span class="nf"&gt;-&amp;gt;&lt;/span&gt; &lt;span class="kt"&gt;Point&lt;/span&gt;
+&lt;span class="nv"&gt;incrementX&lt;/span&gt; &lt;span class="nf"&gt;=&lt;/span&gt; &lt;span class="nv"&gt;updateX&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="nf"&gt;(+)&lt;/span&gt; &lt;span class="mi"&gt;1&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+
+&lt;span class="nv"&gt;decrementX&lt;/span&gt; &lt;span class="nf"&gt;:&lt;/span&gt; &lt;span class="kt"&gt;Point&lt;/span&gt; &lt;span class="nf"&gt;-&amp;gt;&lt;/span&gt; &lt;span class="kt"&gt;Point&lt;/span&gt;
+&lt;span class="nv"&gt;decrementX&lt;/span&gt; &lt;span class="nf"&gt;=&lt;/span&gt; &lt;span class="nv"&gt;updateX&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="nf"&gt;\&lt;/span&gt;&lt;span class="nv"&gt;x&lt;/span&gt; &lt;span class="nf"&gt;-&amp;gt;&lt;/span&gt; &lt;span class="nv"&gt;x&lt;/span&gt; &lt;span class="nf"&gt;-&lt;/span&gt; &lt;span class="mi"&gt;1&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+
+&lt;span class="nv"&gt;updateY&lt;/span&gt; &lt;span class="nf"&gt;:&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="kt"&gt;Float&lt;/span&gt; &lt;span class="nf"&gt;-&amp;gt;&lt;/span&gt; &lt;span class="kt"&gt;Float&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="nf"&gt;-&amp;gt;&lt;/span&gt; &lt;span class="kt"&gt;Point&lt;/span&gt; &lt;span class="nf"&gt;-&amp;gt;&lt;/span&gt; &lt;span class="kt"&gt;Point&lt;/span&gt;
+&lt;span class="nv"&gt;updateY&lt;/span&gt; &lt;span class="nv"&gt;f&lt;/span&gt; &lt;span class="nv"&gt;point&lt;/span&gt; &lt;span class="nf"&gt;=&lt;/span&gt; &lt;span class="p"&gt;{&lt;/span&gt; &lt;span class="nv"&gt;point&lt;/span&gt; &lt;span class="nf"&gt;|&lt;/span&gt; &lt;span class="nv"&gt;y&lt;/span&gt; &lt;span class="nf"&gt;&amp;lt;-&lt;/span&gt; &lt;span class="nv"&gt;f&lt;/span&gt; &lt;span class="nv"&gt;point&lt;/span&gt;&lt;span class="nf"&gt;.&lt;/span&gt;&lt;span class="nv"&gt;y&lt;/span&gt; &lt;span class="p"&gt;}&lt;/span&gt;
+
+&lt;span class="nv"&gt;incrementY&lt;/span&gt; &lt;span class="nf"&gt;:&lt;/span&gt; &lt;span class="kt"&gt;Point&lt;/span&gt; &lt;span class="nf"&gt;-&amp;gt;&lt;/span&gt; &lt;span class="kt"&gt;Point&lt;/span&gt;
+&lt;span class="nv"&gt;incrementY&lt;/span&gt; &lt;span class="nf"&gt;=&lt;/span&gt; &lt;span class="nv"&gt;updateY&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="nf"&gt;(+)&lt;/span&gt; &lt;span class="mi"&gt;1&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+
+&lt;span class="nv"&gt;decrementY&lt;/span&gt; &lt;span class="nf"&gt;:&lt;/span&gt; &lt;span class="kt"&gt;Point&lt;/span&gt; &lt;span class="nf"&gt;-&amp;gt;&lt;/span&gt; &lt;span class="kt"&gt;Point&lt;/span&gt;
+&lt;span class="nv"&gt;decrementY&lt;/span&gt; &lt;span class="nf"&gt;=&lt;/span&gt; &lt;span class="nv"&gt;updateY&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="nf"&gt;\&lt;/span&gt;&lt;span class="nv"&gt;x&lt;/span&gt; &lt;span class="nf"&gt;-&amp;gt;&lt;/span&gt; &lt;span class="nv"&gt;x&lt;/span&gt; &lt;span class="nf"&gt;-&lt;/span&gt; &lt;span class="mi"&gt;1&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+&lt;/pre&gt;&lt;/div&gt;
+
+&lt;/div&gt;
+
+&lt;p&gt;We sure can give it a shot, though. At the very least, we &lt;em&gt;can&lt;/em&gt; implement the increment and decrement functions in a more general way by passing in an updater function:&lt;/p&gt;
+
+&lt;div class="brush: elm"&gt;
+ &lt;div class="source"&gt;
+  &lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;span class="nv"&gt;increment&lt;/span&gt; &lt;span class="nf"&gt;:&lt;/span&gt; &lt;span class="p"&gt;((&lt;/span&gt;&lt;span class="kt"&gt;Float&lt;/span&gt; &lt;span class="nf"&gt;-&amp;gt;&lt;/span&gt; &lt;span class="kt"&gt;Float&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="nf"&gt;-&amp;gt;&lt;/span&gt; &lt;span class="nv"&gt;a&lt;/span&gt; &lt;span class="nf"&gt;-&amp;gt;&lt;/span&gt; &lt;span class="nv"&gt;a&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="nf"&gt;-&amp;gt;&lt;/span&gt; &lt;span class="nv"&gt;a&lt;/span&gt; &lt;span class="nf"&gt;-&amp;gt;&lt;/span&gt; &lt;span class="nv"&gt;a&lt;/span&gt;
+&lt;span class="nv"&gt;increment&lt;/span&gt; &lt;span class="nv"&gt;update&lt;/span&gt; &lt;span class="nf"&gt;=&lt;/span&gt; &lt;span class="nv"&gt;update&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="nf"&gt;(+)&lt;/span&gt; &lt;span class="mi"&gt;1&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+&lt;/pre&gt;&lt;/div&gt;
+
+&lt;/div&gt;
+
+&lt;p&gt;Now, with &lt;code&gt;updateX&lt;/code&gt; and &lt;code&gt;updateY&lt;/code&gt;, we can increment either field very clearly and expressively. If we shorten the names to &lt;code&gt;uX&lt;/code&gt; and &lt;code&gt;uY&lt;/code&gt;, then the resulting code is actually very readable:&lt;/p&gt;
+
+&lt;div class="brush: elm"&gt;
+ &lt;div class="source"&gt;
+  &lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;span class="nv"&gt;pointAbove&lt;/span&gt; &lt;span class="nf"&gt;=&lt;/span&gt; &lt;span class="nv"&gt;uY&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="nf"&gt;\&lt;/span&gt;&lt;span class="nv"&gt;x&lt;/span&gt; &lt;span class="nf"&gt;-&amp;gt;&lt;/span&gt; &lt;span class="nv"&gt;x&lt;/span&gt; &lt;span class="nf"&gt;+&lt;/span&gt; &lt;span class="mi"&gt;1&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+&lt;span class="nv"&gt;pointBelow&lt;/span&gt; &lt;span class="nf"&gt;=&lt;/span&gt; &lt;span class="nv"&gt;uY&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="nf"&gt;\&lt;/span&gt;&lt;span class="nv"&gt;x&lt;/span&gt; &lt;span class="nf"&gt;-&amp;gt;&lt;/span&gt; &lt;span class="nv"&gt;x&lt;/span&gt; &lt;span class="nf"&gt;-&lt;/span&gt; &lt;span class="mi"&gt;1&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+&lt;/pre&gt;&lt;/div&gt;
+
+&lt;/div&gt;
+
+&lt;p&gt;It&amp;rsquo;s almost like English now: &amp;ldquo;update Y using this transformation&amp;rdquo;. This is actually pretty satisfactory. The trouble arises when you have a struct with many fields:&lt;/p&gt;
+
+&lt;div class="brush: elm"&gt;
+ &lt;div class="source"&gt;
+  &lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;span class="kr"&gt;type&lt;/span&gt; &lt;span class="kr"&gt;alias&lt;/span&gt; &lt;span class="kt"&gt;PlayerStats&lt;/span&gt; &lt;span class="nf"&gt;=&lt;/span&gt;
+  &lt;span class="p"&gt;{&lt;/span&gt; &lt;span class="nv"&gt;health&lt;/span&gt; &lt;span class="nf"&gt;:&lt;/span&gt; &lt;span class="kt"&gt;Integer&lt;/span&gt;
+  &lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="nv"&gt;strength&lt;/span&gt; &lt;span class="nf"&gt;:&lt;/span&gt; &lt;span class="kt"&gt;Integer&lt;/span&gt;
+  &lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="nv"&gt;charisma&lt;/span&gt; &lt;span class="nf"&gt;:&lt;/span&gt; &lt;span class="kt"&gt;Integer&lt;/span&gt;
+  &lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="nv"&gt;intellect&lt;/span&gt; &lt;span class="nf"&gt;:&lt;/span&gt; &lt;span class="kt"&gt;Integer&lt;/span&gt;
+  &lt;span class="c1"&gt;-- etc.&lt;/span&gt;
+  &lt;span class="p"&gt;}&lt;/span&gt;
+&lt;/pre&gt;&lt;/div&gt;
+
+&lt;/div&gt;
+
+&lt;p&gt;It might be very convenient to have generic functional updaters in this case. One could imagine a game that has &lt;code&gt;Potion&lt;/code&gt; items:&lt;/p&gt;
+
+&lt;div class="brush: elm"&gt;
+ &lt;div class="source"&gt;
+  &lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;span class="kr"&gt;type&lt;/span&gt; &lt;span class="kt"&gt;Potion&lt;/span&gt; &lt;span class="nf"&gt;=&lt;/span&gt; &lt;span class="kt"&gt;Potion&lt;/span&gt; &lt;span class="kt"&gt;String&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="kt"&gt;PlayerStats&lt;/span&gt; &lt;span class="nf"&gt;-&amp;gt;&lt;/span&gt; &lt;span class="kt"&gt;PlayerStats&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+&lt;/pre&gt;&lt;/div&gt;
+
+&lt;/div&gt;
+
+&lt;p&gt;And then some different kinds of potions:&lt;/p&gt;
+
+&lt;div class="brush: elm"&gt;
+ &lt;div class="source"&gt;
+  &lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;span class="nv"&gt;potions&lt;/span&gt; &lt;span class="nf"&gt;=&lt;/span&gt;
+  &lt;span class="p"&gt;[&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="kt"&gt;Potion&lt;/span&gt; &lt;span class="s"&gt;"Health Potion"&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="nv"&gt;uHealth&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="nf"&gt;(+)&lt;/span&gt; &lt;span class="mi"&gt;1&lt;/span&gt;&lt;span class="p"&gt;))),&lt;/span&gt;
+  &lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="kt"&gt;Potion&lt;/span&gt; &lt;span class="s"&gt;"Greater Intellect Potion"&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="nv"&gt;uIntellect&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="nf"&gt;(+)&lt;/span&gt; &lt;span class="mi"&gt;3&lt;/span&gt;&lt;span class="p"&gt;)))&lt;/span&gt;
+  &lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="kt"&gt;Potion&lt;/span&gt; &lt;span class="s"&gt;"Potion of Weakness"&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="nv"&gt;uStrength&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="nf"&gt;\&lt;/span&gt;&lt;span class="nv"&gt;x&lt;/span&gt; &lt;span class="nf"&gt;-&amp;gt;&lt;/span&gt; &lt;span class="nv"&gt;x&lt;/span&gt; &lt;span class="nf"&gt;//&lt;/span&gt; &lt;span class="mi"&gt;5&lt;/span&gt;&lt;span class="p"&gt;)))&lt;/span&gt;
+  &lt;span class="p"&gt;]&lt;/span&gt;
+&lt;/pre&gt;&lt;/div&gt;
+
+&lt;/div&gt;
+
+&lt;p&gt;This is a really elegant way to think about items that can affect a player&amp;rsquo;s stats! Unfortunately, it also means you have to define updater functions for &lt;em&gt;every single field in the record&lt;/em&gt;. This can get tedious rather quickly:&lt;/p&gt;
+
+&lt;div class="brush: elm"&gt;
+ &lt;div class="source"&gt;
+  &lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;span class="nv"&gt;uHealth&lt;/span&gt; &lt;span class="nf"&gt;:&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="kt"&gt;Integer&lt;/span&gt; &lt;span class="nf"&gt;-&amp;gt;&lt;/span&gt; &lt;span class="kt"&gt;Integer&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="nf"&gt;-&amp;gt;&lt;/span&gt; &lt;span class="kt"&gt;PlayerStats&lt;/span&gt; &lt;span class="nf"&gt;-&amp;gt;&lt;/span&gt; &lt;span class="kt"&gt;PlayerStats&lt;/span&gt;
+&lt;span class="nv"&gt;uHealth&lt;/span&gt; &lt;span class="nv"&gt;f&lt;/span&gt; &lt;span class="nv"&gt;stats&lt;/span&gt; &lt;span class="nf"&gt;=&lt;/span&gt; &lt;span class="p"&gt;{&lt;/span&gt; &lt;span class="nv"&gt;stats&lt;/span&gt; &lt;span class="nf"&gt;|&lt;/span&gt; &lt;span class="nv"&gt;health&lt;/span&gt; &lt;span class="nf"&gt;&amp;lt;-&lt;/span&gt; &lt;span class="nv"&gt;f&lt;/span&gt; &lt;span class="nv"&gt;stats&lt;/span&gt;&lt;span class="nf"&gt;.&lt;/span&gt;&lt;span class="nv"&gt;health&lt;/span&gt; &lt;span class="p"&gt;}&lt;/span&gt;
+
+&lt;span class="nv"&gt;uStrength&lt;/span&gt; &lt;span class="nf"&gt;:&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="kt"&gt;Integer&lt;/span&gt; &lt;span class="nf"&gt;-&amp;gt;&lt;/span&gt; &lt;span class="kt"&gt;Integer&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="nf"&gt;-&amp;gt;&lt;/span&gt; &lt;span class="kt"&gt;PlayerStats&lt;/span&gt; &lt;span class="nf"&gt;-&amp;gt;&lt;/span&gt; &lt;span class="kt"&gt;PlayerStats&lt;/span&gt;
+&lt;span class="nv"&gt;uStrength&lt;/span&gt; &lt;span class="nv"&gt;f&lt;/span&gt; &lt;span class="nv"&gt;stats&lt;/span&gt; &lt;span class="nf"&gt;=&lt;/span&gt; &lt;span class="p"&gt;{&lt;/span&gt; &lt;span class="nv"&gt;stats&lt;/span&gt; &lt;span class="nf"&gt;|&lt;/span&gt; &lt;span class="nv"&gt;strength&lt;/span&gt; &lt;span class="nf"&gt;&amp;lt;-&lt;/span&gt; &lt;span class="nv"&gt;f&lt;/span&gt; &lt;span class="nv"&gt;stats&lt;/span&gt;&lt;span class="nf"&gt;.&lt;/span&gt;&lt;span class="nv"&gt;strength&lt;/span&gt; &lt;span class="p"&gt;}&lt;/span&gt;
+
+&lt;span class="nv"&gt;uCharisma&lt;/span&gt; &lt;span class="nf"&gt;:&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="kt"&gt;Integer&lt;/span&gt; &lt;span class="nf"&gt;-&amp;gt;&lt;/span&gt; &lt;span class="kt"&gt;Integer&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="nf"&gt;-&amp;gt;&lt;/span&gt; &lt;span class="kt"&gt;PlayerStats&lt;/span&gt; &lt;span class="nf"&gt;-&amp;gt;&lt;/span&gt; &lt;span class="kt"&gt;PlayerStats&lt;/span&gt;
+&lt;span class="nv"&gt;uCharisma&lt;/span&gt; &lt;span class="nv"&gt;f&lt;/span&gt; &lt;span class="nv"&gt;stats&lt;/span&gt; &lt;span class="nf"&gt;=&lt;/span&gt; &lt;span class="p"&gt;{&lt;/span&gt; &lt;span class="nv"&gt;stats&lt;/span&gt; &lt;span class="nf"&gt;|&lt;/span&gt; &lt;span class="nv"&gt;charisma&lt;/span&gt; &lt;span class="nf"&gt;&amp;lt;-&lt;/span&gt; &lt;span class="nv"&gt;f&lt;/span&gt; &lt;span class="nv"&gt;stats&lt;/span&gt;&lt;span class="nf"&gt;.&lt;/span&gt;&lt;span class="nv"&gt;charisma&lt;/span&gt; &lt;span class="p"&gt;}&lt;/span&gt;
+
+&lt;span class="c1"&gt;-- etc.&lt;/span&gt;
+&lt;/pre&gt;&lt;/div&gt;
+
+&lt;/div&gt;
+
+&lt;p&gt;This is pretty icky. Could there be a better way?&lt;/p&gt;
+
+&lt;h1 id="trying-to-create-a-more-general-abstraction"&gt;Trying to create a more general abstraction&lt;/h1&gt;
+
+&lt;p&gt;Interestingly, this pattern doesn&amp;rsquo;t &lt;em&gt;need&lt;/em&gt; to be this bad. There are better ways to do this. Let&amp;rsquo;s revisit our updater functions.&lt;/p&gt;
+
+&lt;p&gt;Really, &lt;code&gt;update&lt;/code&gt; can be defined in terms of two other primitive operations: a read and a (functional) write. What would it look like if we implemented it that way instead of requiring special updater functions to be defined? Well, it would look like this:&lt;/p&gt;
+
+&lt;div class="brush: elm"&gt;
+ &lt;div class="source"&gt;
+  &lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;span class="nv"&gt;update&lt;/span&gt; &lt;span class="nf"&gt;:&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="nv"&gt;a&lt;/span&gt; &lt;span class="nf"&gt;-&amp;gt;&lt;/span&gt; &lt;span class="nv"&gt;b&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="nf"&gt;-&amp;gt;&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="nv"&gt;b&lt;/span&gt; &lt;span class="nf"&gt;-&amp;gt;&lt;/span&gt; &lt;span class="nv"&gt;a&lt;/span&gt; &lt;span class="nf"&gt;-&amp;gt;&lt;/span&gt; &lt;span class="nv"&gt;a&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="nf"&gt;-&amp;gt;&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="nv"&gt;b&lt;/span&gt; &lt;span class="nf"&gt;-&amp;gt;&lt;/span&gt; &lt;span class="nv"&gt;b&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="nf"&gt;-&amp;gt;&lt;/span&gt; &lt;span class="nv"&gt;a&lt;/span&gt; &lt;span class="nf"&gt;-&amp;gt;&lt;/span&gt; &lt;span class="nv"&gt;a&lt;/span&gt;
+&lt;span class="nv"&gt;update&lt;/span&gt; &lt;span class="nv"&gt;get&lt;/span&gt; &lt;span class="nv"&gt;set&lt;/span&gt; &lt;span class="nv"&gt;f&lt;/span&gt; &lt;span class="nv"&gt;x&lt;/span&gt; &lt;span class="nf"&gt;=&lt;/span&gt; &lt;span class="nv"&gt;set&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="nv"&gt;f&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="nv"&gt;get&lt;/span&gt; &lt;span class="nv"&gt;x&lt;/span&gt;&lt;span class="p"&gt;))&lt;/span&gt; &lt;span class="nv"&gt;x&lt;/span&gt;
+&lt;/pre&gt;&lt;/div&gt;
+
+&lt;/div&gt;
+
+&lt;p&gt;The type definition is a little long, but it&amp;rsquo;s really pretty simple. We just supply a getter and a setter, then a function to do the transformation, and finally a record to actually transform. Of course, as you can see from the type, this function isn&amp;rsquo;t actually specific to records: it can be used with any value for which a getter and setter can be provided.&lt;/p&gt;
+
+&lt;p&gt;The trouble here is that writing field setters isn&amp;rsquo;t any easier in Elm than writing field updaters. They still look pretty verbose:&lt;/p&gt;
+
+&lt;div class="brush: elm"&gt;
+ &lt;div class="source"&gt;
+  &lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;span class="nv"&gt;sHealth&lt;/span&gt; &lt;span class="nf"&gt;:&lt;/span&gt; &lt;span class="kt"&gt;Integer&lt;/span&gt; &lt;span class="nf"&gt;-&amp;gt;&lt;/span&gt; &lt;span class="kt"&gt;PlayerStats&lt;/span&gt; &lt;span class="nf"&gt;-&amp;gt;&lt;/span&gt; &lt;span class="kt"&gt;PlayerStats&lt;/span&gt;
+&lt;span class="nv"&gt;sHealth&lt;/span&gt; &lt;span class="nv"&gt;x&lt;/span&gt; &lt;span class="nv"&gt;stats&lt;/span&gt; &lt;span class="nf"&gt;=&lt;/span&gt; &lt;span class="p"&gt;{&lt;/span&gt; &lt;span class="nv"&gt;stats&lt;/span&gt; &lt;span class="nf"&gt;|&lt;/span&gt; &lt;span class="nv"&gt;health&lt;/span&gt; &lt;span class="nf"&gt;&amp;lt;-&lt;/span&gt; &lt;span class="nv"&gt;x&lt;/span&gt; &lt;span class="p"&gt;}&lt;/span&gt;
+
+&lt;span class="nv"&gt;uHealth&lt;/span&gt; &lt;span class="nf"&gt;:&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="kt"&gt;Integer&lt;/span&gt; &lt;span class="nf"&gt;-&amp;gt;&lt;/span&gt; &lt;span class="kt"&gt;Integer&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="nf"&gt;-&amp;gt;&lt;/span&gt; &lt;span class="kt"&gt;PlayerStats&lt;/span&gt; &lt;span class="nf"&gt;-&amp;gt;&lt;/span&gt; &lt;span class="kt"&gt;PlayerStats&lt;/span&gt;
+&lt;span class="nv"&gt;uHealth&lt;/span&gt; &lt;span class="nf"&gt;=&lt;/span&gt; &lt;span class="nv"&gt;update&lt;/span&gt; &lt;span class="nf"&gt;.&lt;/span&gt;&lt;span class="nv"&gt;health&lt;/span&gt; &lt;span class="nv"&gt;sHealth&lt;/span&gt;
+&lt;/pre&gt;&lt;/div&gt;
+
+&lt;/div&gt;
+
+&lt;p&gt;So, at the end of it all, this isn&amp;rsquo;t really a better abstraction. Still remember my fantasy &lt;code&gt;!field&lt;/code&gt; setter shorthand half a blog post ago? Now perhaps it makes a little more sense. &lt;em&gt;If&lt;/em&gt; such a syntax existed, then defining the updater would be incredibly simple:&lt;/p&gt;
+
+&lt;div class="brush: elm"&gt;
+ &lt;div class="source"&gt;
+  &lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;span class="nv"&gt;uHealth&lt;/span&gt; &lt;span class="nf"&gt;:&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="kt"&gt;Integer&lt;/span&gt; &lt;span class="nf"&gt;-&amp;gt;&lt;/span&gt; &lt;span class="kt"&gt;Integer&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="nf"&gt;-&amp;gt;&lt;/span&gt; &lt;span class="kt"&gt;PlayerStats&lt;/span&gt; &lt;span class="nf"&gt;-&amp;gt;&lt;/span&gt; &lt;span class="kt"&gt;PlayerStats&lt;/span&gt;
+&lt;span class="nv"&gt;uHealth&lt;/span&gt; &lt;span class="nf"&gt;=&lt;/span&gt; &lt;span class="nv"&gt;update&lt;/span&gt; &lt;span class="nf"&gt;.&lt;/span&gt;&lt;span class="nv"&gt;health&lt;/span&gt; &lt;span class="err"&gt;!&lt;/span&gt;&lt;span class="nv"&gt;health&lt;/span&gt;
+&lt;/pre&gt;&lt;/div&gt;
+
+&lt;/div&gt;
+
+&lt;p&gt;Still, no syntax, no easy updaters, and by extension, no easy, declarative description of behavior without quite a bit of boilerplate.&lt;/p&gt;
+
+&lt;h1 id="conclusions-and-related-work"&gt;Conclusions and related work&lt;/h1&gt;
+
+&lt;p&gt;Elm is a very promising language, and it seems to be in fairly rapid development. So far, its author, &lt;a href="https://twitter.com/czaplic"&gt;Evan Czaplicki&lt;/a&gt;, has taken a very cautious approach to implementing language features, especially potentially redundant ones. This caution is why things like operator slicing, &amp;ldquo;where&amp;rdquo; clauses, and special updater syntax have not yet made it into the language. Maybe at some point these will be deemed important enough to include, but for the time being, they&amp;rsquo;ve been excluded.&lt;/p&gt;
+
+&lt;p&gt;I obviously think that having this sort of thing is incredibly important to being able to write expressive code without a huge amount of overhead. However, I also do &lt;em&gt;not&lt;/em&gt; want to give the impression that I think adding special setter syntax is the only way to do it.&lt;/p&gt;
+
+&lt;p&gt;Seasoned functional programmers will surely have noticed that many of these concepts sound a lot like lenses, and Elm actually already has a lens-like library authored by Evan himself, called &lt;a href="https://github.com/evancz/focus"&gt;Focus&lt;/a&gt;. This, however, does not actually solve the problem: it requires manual description of setters just like the purely function based approach does. Really, lenses are just the logical next step in the line of abstraction I&amp;rsquo;ve already laid out above.&lt;/p&gt;
+
+&lt;p&gt;Interestingly, PureScript and Elm, the two Haskell-likes-on-the-frontend that I&amp;rsquo;ve paid attention to (though PureScript is much closer to Haskell than Elm), both have this very same problem. Haskell itself solves it with macros via Template Haskell. My favorite language, Racket, solves it with its own macro system. Is there another way to do these things that doesn&amp;rsquo;t involve introducing a heavyweight macro system? Definitely. But I think this is a &lt;em&gt;necessary feature&lt;/em&gt;, not a &amp;ldquo;nice to have&amp;rdquo;, so if a macro system is out of the picture, then a simpler, less flexible solution is the obvious logical alternative.&lt;/p&gt;
+
+&lt;p&gt;I really like Elm, and most of my experiences with it have been more than enough to convince me that it is a fantastic language for the job. Unfortunately, the issue of functional record updaters has been quite the frustrating obstacle in my otherwise frictionless ride. I will continue to happily use Elm over other, far less accommodating tools, but I hope that issues like these will be smoothed out as the language and its ecosystem matures.&lt;/p&gt;</content></entry></feed>

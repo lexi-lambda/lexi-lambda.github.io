@@ -1,0 +1,196 @@
+<?xml version="1.0" encoding="utf-8"?> 
+<feed xmlns="http://www.w3.org/2005/Atom" xml:lang="en">
+ <title type="text">Alexis King's Blog: Posts tagged '12factor'</title>
+ <link rel="self" href="http://lexi-lambda.github.io/feeds/12factor.atom.xml" />
+ <link href="http://lexi-lambda.github.io/tags/12factor.html" />
+ <id>urn:http-lexi-lambda-github-io:-tags-12factor-html</id>
+ <updated>2015-08-30T16:05:37Z</updated>
+ <entry>
+  <title type="text">Managing application configuration with Envy</title>
+  <link rel="alternate" href="http://lexi-lambda.github.io/blog/2015/08/30/managing-application-configuration-with-envy/?utm_source=12factor&amp;utm_medium=Atom" />
+  <id>urn:http-lexi-lambda-github-io:-blog-2015-08-30-managing-application-configuration-with-envy</id>
+  <published>2015-08-30T16:05:37Z</published>
+  <updated>2015-08-30T16:05:37Z</updated>
+  <author>
+   <name>Alexis King</name></author>
+  <content type="html">
+&lt;p&gt;Application configuration can be a pain. Modern web apps don&amp;rsquo;t live on dedicated boxes, they run on VPSes somewhere in the amorphous &amp;ldquo;cloud&amp;rdquo;, and keeping configuration out of your application&amp;rsquo;s repository can seem like more trouble than it&amp;rsquo;s worth. Fortunately, &lt;a href="http://12factor.net"&gt;The Twelve-Factor App&lt;/a&gt; provides a set of standards for keeping web apps sane, and &lt;a href="http://12factor.net/config"&gt;one of those guidelines advises keeping configuration in the environment&lt;/a&gt;.&lt;/p&gt;
+
+&lt;p&gt;&lt;a href="https://github.com/lexi-lambda/envy"&gt;Envy&lt;/a&gt; is the declarative bridge between Racket code and the outside world of the environment.&lt;/p&gt;
+&lt;!-- more--&gt;
+
+&lt;h1 id="introducing-envy"&gt;Introducing Envy&lt;/h1&gt;
+
+&lt;p&gt;I built Envy to distill the common tasks needed when working with environment variables into a single, declarative interface that eliminates boilerplate and makes it easy to see which environment variables an application depends on (instead of having them littered throughout the codebase). Using it is simple. Just require &lt;code&gt;envy&lt;/code&gt; and you&amp;rsquo;re good to go.&lt;/p&gt;
+
+&lt;p&gt;The best way to use Envy is to create a &amp;ldquo;manifest&amp;rdquo; module that declares all the environment variables your application might use. For example, the following module is a manifest that describes an application that uses three environment variables:&lt;/p&gt;
+
+&lt;div class="brush: racket"&gt;
+ &lt;div class="source"&gt;
+  &lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;span class="c1"&gt;; environment.rkt&lt;/span&gt;
+&lt;span class="kn"&gt;#lang &lt;/span&gt;&lt;span class="nn"&gt;typed/racket/base&lt;/span&gt;
+
+&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="k"&gt;require&lt;/span&gt; &lt;span class="n"&gt;envy&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+
+&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;define/provide-environment&lt;/span&gt;
+  &lt;span class="n"&gt;api-token&lt;/span&gt;
+  &lt;span class="p"&gt;[&lt;/span&gt;&lt;span class="n"&gt;log-level&lt;/span&gt; &lt;span class="n"&gt;:&lt;/span&gt; &lt;span class="n"&gt;Symbol&lt;/span&gt; &lt;span class="kd"&gt;#:default&lt;/span&gt; &lt;span class="o"&gt;&amp;#39;&lt;/span&gt;&lt;span class="ss"&gt;info&lt;/span&gt;&lt;span class="p"&gt;]&lt;/span&gt;
+  &lt;span class="p"&gt;[&lt;/span&gt;&lt;span class="n"&gt;parallel?&lt;/span&gt; &lt;span class="n"&gt;:&lt;/span&gt; &lt;span class="n"&gt;Boolean&lt;/span&gt;&lt;span class="p"&gt;])&lt;/span&gt;
+&lt;/pre&gt;&lt;/div&gt;
+
+&lt;/div&gt;
+
+&lt;p&gt;When this module is required, Envy will automatically do the following:&lt;/p&gt;
+
+&lt;ol&gt;
+ &lt;li&gt;
+  &lt;p&gt;Envy will check the values of three environment variables: &lt;code&gt;API_TOKEN&lt;/code&gt;, &lt;code&gt;LOG_LEVEL&lt;/code&gt;, and &lt;code&gt;PARALLEL&lt;/code&gt;.&lt;/p&gt;&lt;/li&gt;
+ &lt;li&gt;
+  &lt;p&gt;If either &lt;code&gt;API_TOKEN&lt;/code&gt; or &lt;code&gt;PARALLEL&lt;/code&gt; is not set, an error will be raised:&lt;/p&gt;
+  &lt;pre&gt;&lt;code&gt;envy: The required environment variable "API_TOKEN" is not defined.&lt;/code&gt;&lt;/pre&gt;&lt;/li&gt;
+ &lt;li&gt;
+  &lt;p&gt;The values for &lt;code&gt;LOG_LEVEL&lt;/code&gt; and &lt;code&gt;PARALLEL&lt;/code&gt; will be parsed to match their type annotations.&lt;/p&gt;&lt;/li&gt;
+ &lt;li&gt;
+  &lt;p&gt;If &lt;code&gt;LOG_LEVEL&lt;/code&gt; is not set, it will use the default value, &lt;code&gt;'info&lt;/code&gt;.&lt;/p&gt;&lt;/li&gt;
+ &lt;li&gt;
+  &lt;p&gt;The values will be stored in &lt;code&gt;api-token&lt;/code&gt;, &lt;code&gt;log-level&lt;/code&gt;, and &lt;code&gt;parallel?&lt;/code&gt;, all of which will be provided by the enclosing module.&lt;/p&gt;&lt;/li&gt;&lt;/ol&gt;
+
+&lt;p&gt;Now just &lt;code&gt;(require (prefix-in env: "environment.rkt"))&lt;/code&gt;, and the environment variables are guaranteed to be available in your application&amp;rsquo;s code.&lt;/p&gt;
+
+&lt;h1 id="working-with-typed-racket"&gt;Working with Typed Racket&lt;/h1&gt;
+
+&lt;p&gt;As you may have noticed by the example above, Envy is built with Typed Racket in mind. In fact, &lt;code&gt;define/provide-environment&lt;/code&gt; will &lt;em&gt;only&lt;/em&gt; work within a Typed Racket module, but that doesn&amp;rsquo;t mean Envy can&amp;rsquo;t be used with plain Racket—the manifest module can always be required by any kind of Racket module.&lt;/p&gt;
+
+&lt;p&gt;However, when using Typed Racket, Envy provides additional bonuses. Environment variables are inherently untyped—they&amp;rsquo;re all just strings—but Envy assigns the proper type to each environment variable automatically, so no casting is necessary.&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;&amp;gt; parallel?
+- : Boolean
+#t&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;Envy really shines when using optional environment variables with the &lt;code&gt;#:default&lt;/code&gt; option. The type of the value given to &lt;code&gt;#:default&lt;/code&gt; doesn&amp;rsquo;t need to be the same type of the environment variable itself, and if it isn&amp;rsquo;t, Envy will assign the value a union type.&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;&amp;gt; (define-environment
+    [num-threads : Positive-Integer #:default #f])
+&amp;gt; num-threads
+- : (U Positive-Integer #f)
+#f&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;This added level of type-safety means it&amp;rsquo;s easy to manage optional variables that don&amp;rsquo;t have reasonable defaults: the type system will enforce that all code considers the possibility that such variables do not exist.&lt;/p&gt;
+
+&lt;h1 id="and-more"&gt;And more&amp;hellip;&lt;/h1&gt;
+
+&lt;p&gt;To see the full set of features that Envy already provides, &lt;a href="https://lexi-lambda.github.io/envy/envy.html"&gt;take a look at the documentation&lt;/a&gt;. That said, this is just the first release based on my initial use-cases, but I&amp;rsquo;m sure there are more features Envy could have to accommodate common application configuration patterns. If you have an idea that could make Envy better, &lt;a href="https://github.com/lexi-lambda/envy/issues"&gt;open an issue and make a suggestion&lt;/a&gt;! I already have plans for a &lt;code&gt;#lang envy&lt;/code&gt; DSL, which will hopefully cut the boilerplate out in its entirety.&lt;/p&gt;
+
+&lt;p&gt;And finally, to give credit where credit is due, Envy is heavily inspired by &lt;a href="https://github.com/eval/envied"&gt;Envied&lt;/a&gt; (both in name and function), an environment variable manager for Ruby, which I&amp;rsquo;ve used to great effect.&lt;/p&gt;
+
+&lt;p&gt;Try it out!&lt;/p&gt;
+
+&lt;ul&gt;
+ &lt;li&gt;&lt;code&gt;raco pkg install envy&lt;/code&gt;&lt;/li&gt;
+ &lt;li&gt;&lt;a href="https://github.com/lexi-lambda/envy"&gt;Envy on GitHub&lt;/a&gt;&lt;/li&gt;
+ &lt;li&gt;&lt;a href="https://lexi-lambda.github.io/envy/envy.html"&gt;Envy documentation&lt;/a&gt;&lt;/li&gt;&lt;/ul&gt;</content></entry>
+ <entry>
+  <title type="text">Deploying Racket applications on Heroku</title>
+  <link rel="alternate" href="http://lexi-lambda.github.io/blog/2015/08/22/deploying-racket-applications-on-heroku/?utm_source=12factor&amp;utm_medium=Atom" />
+  <id>urn:http-lexi-lambda-github-io:-blog-2015-08-22-deploying-racket-applications-on-heroku</id>
+  <published>2015-08-22T14:47:49Z</published>
+  <updated>2015-08-22T14:47:49Z</updated>
+  <author>
+   <name>Alexis King</name></author>
+  <content type="html">
+&lt;p&gt;&lt;a href="https://www.heroku.com"&gt;Heroku&lt;/a&gt; is a &amp;ldquo;platform as a service&amp;rdquo; that provides an incredibly simple way to deploy simple internet applications, and I take liberal advantage of its free tier for testing out simple applications. It has support for a variety of languages built-in, but Racket is not currently among them. Fortunately, Heroku provides an interface for adding custom build processes for arbitrary types of applications, called “buildpacks”. I&amp;rsquo;ve built one for Racket apps, and with just a little bit of configuration, it’s possible to get a Racket webserver running on Heroku.&lt;/p&gt;
+&lt;!-- more--&gt;
+
+&lt;h1 id="building-the-server"&gt;Building the server&lt;/h1&gt;
+
+&lt;p&gt;Racket&amp;rsquo;s &lt;a href="http://docs.racket-lang.org/web-server/index.html"&gt;web-server&lt;/a&gt; package makes building and running a simple server incredibly easy. Here&amp;rsquo;s all the code we&amp;rsquo;ll need to get going:&lt;/p&gt;
+
+&lt;div class="brush: racket"&gt;
+ &lt;div class="source"&gt;
+  &lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;span class="kn"&gt;#lang &lt;/span&gt;&lt;span class="nn"&gt;racket&lt;/span&gt;
+
+&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="k"&gt;require&lt;/span&gt; &lt;span class="n"&gt;web-server/servlet&lt;/span&gt;
+         &lt;span class="n"&gt;web-server/servlet-env&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+
+&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="k"&gt;define&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;start&lt;/span&gt; &lt;span class="n"&gt;req&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+  &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;response/xexpr&lt;/span&gt;
+   &lt;span class="o"&gt;&amp;#39;&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="ss"&gt;html&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="ss"&gt;head&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="ss"&gt;title&lt;/span&gt; &lt;span class="s2"&gt;"Racket Heroku App"&lt;/span&gt;&lt;span class="p"&gt;))&lt;/span&gt;
+          &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="ss"&gt;body&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="ss"&gt;h1&lt;/span&gt; &lt;span class="s2"&gt;"It works!"&lt;/span&gt;&lt;span class="p"&gt;)))))&lt;/span&gt;
+
+&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;serve/servlet&lt;/span&gt; &lt;span class="n"&gt;start&lt;/span&gt; &lt;span class="kd"&gt;#:servlet-path&lt;/span&gt; &lt;span class="s2"&gt;"/"&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+&lt;/pre&gt;&lt;/div&gt;
+
+&lt;/div&gt;
+
+&lt;p&gt;Running the above file will start up the server on the default port, 8080. When running on Heroku, however, we&amp;rsquo;re required to bind to the port that Heroku provides via the &lt;code&gt;PORT&lt;/code&gt; environment variable. We can access this using the Racket &lt;code&gt;&lt;a href="http://docs.racket-lang.org/reference/envvars.html#(def._((lib._racket/private/misc..rkt)._getenv))" style="color: inherit"&gt;getenv&lt;/a&gt;&lt;/code&gt; function.&lt;/p&gt;
+
+&lt;p&gt;Additionally, the Racket web server specifically binds to localhost, but Heroku doesn&amp;rsquo;t allow that restriction, so we need to pass &lt;code&gt;#f&lt;/code&gt; for the &lt;code&gt;#:listen-ip&lt;/code&gt; argument.&lt;/p&gt;
+
+&lt;div class="brush: racket"&gt;
+ &lt;div class="source"&gt;
+  &lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="k"&gt;define&lt;/span&gt; &lt;span class="n"&gt;port&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="k"&gt;if&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="nb"&gt;getenv&lt;/span&gt; &lt;span class="s2"&gt;"PORT"&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+                 &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="nb"&gt;string-&amp;gt;number&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="nb"&gt;getenv&lt;/span&gt; &lt;span class="s2"&gt;"PORT"&lt;/span&gt;&lt;span class="p"&gt;))&lt;/span&gt;
+                 &lt;span class="mi"&gt;8080&lt;/span&gt;&lt;span class="p"&gt;))&lt;/span&gt;
+&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;serve/servlet&lt;/span&gt; &lt;span class="n"&gt;start&lt;/span&gt;
+               &lt;span class="kd"&gt;#:servlet-path&lt;/span&gt; &lt;span class="s2"&gt;"/"&lt;/span&gt;
+               &lt;span class="kd"&gt;#:listen-ip&lt;/span&gt; &lt;span class="no"&gt;#f&lt;/span&gt;
+               &lt;span class="kd"&gt;#:port&lt;/span&gt; &lt;span class="n"&gt;port&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+&lt;/pre&gt;&lt;/div&gt;
+
+&lt;/div&gt;
+
+&lt;p&gt;Also, by default, &lt;code&gt;serve/servlet&lt;/code&gt; will open a web browser automatically when the program is run, which is very useful for rapid prototyping within something like DrRacket, but we&amp;rsquo;ll want to turn that off.&lt;/p&gt;
+
+&lt;div class="brush: racket"&gt;
+ &lt;div class="source"&gt;
+  &lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;serve/servlet&lt;/span&gt; &lt;span class="n"&gt;start&lt;/span&gt;
+               &lt;span class="kd"&gt;#:servlet-path&lt;/span&gt; &lt;span class="s2"&gt;"/"&lt;/span&gt;
+               &lt;span class="kd"&gt;#:listen-ip&lt;/span&gt; &lt;span class="no"&gt;#f&lt;/span&gt;
+               &lt;span class="kd"&gt;#:port&lt;/span&gt; &lt;span class="n"&gt;port&lt;/span&gt;
+               &lt;span class="kd"&gt;#:command-line?&lt;/span&gt; &lt;span class="no"&gt;#t&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+&lt;/pre&gt;&lt;/div&gt;
+
+&lt;/div&gt;
+
+&lt;p&gt;That&amp;rsquo;s it! Now we have a Racket web server that can run on Heroku. Obviously it&amp;rsquo;s not a very interesting application right now, but that&amp;rsquo;s fine for our purposes.&lt;/p&gt;
+
+&lt;h1 id="setting-up-our-app-for-heroku"&gt;Setting up our app for Heroku&lt;/h1&gt;
+
+&lt;p&gt;The next step is to actually create an app on Heroku. Don&amp;rsquo;t worry—it&amp;rsquo;s free! That said, explaining precisely how Heroku works is outside the scope of this article. Just make an account, then create an app. I called mine &amp;ldquo;racket-heroku-sample&amp;rdquo;. Once you&amp;rsquo;ve created an app and set up Heroku&amp;rsquo;s command-line tool, you can specify the proper buildpack:&lt;/p&gt;
+
+&lt;div class="brush: sh"&gt;
+ &lt;div class="source"&gt;
+  &lt;pre&gt;&lt;span&gt;&lt;/span&gt;$ git init
+$ heroku git:remote -a racket-heroku-sample
+$ heroku buildpacks:set https://github.com/lexi-lambda/heroku-buildpack-racket
+&lt;/pre&gt;&lt;/div&gt;
+
+&lt;/div&gt;
+
+&lt;p&gt;We&amp;rsquo;ll also need to pick a particular Racket version before we deploy our app. At the time of this writing, Racket 6.2.1 is the latest version, so I just set the &lt;code&gt;RACKET_VERSION&lt;/code&gt; environment variable as follows:&lt;/p&gt;
+
+&lt;div class="brush: sh"&gt;
+ &lt;div class="source"&gt;
+  &lt;pre&gt;&lt;span&gt;&lt;/span&gt;$ heroku config:set &lt;span class="nv"&gt;RACKET_VERSION&lt;/span&gt;&lt;span class="o"&gt;=&lt;/span&gt;&lt;span class="m"&gt;6&lt;/span&gt;.2.1
+&lt;/pre&gt;&lt;/div&gt;
+
+&lt;/div&gt;
+
+&lt;p&gt;Now there&amp;rsquo;s just one thing left to do before we can push to Heroku: we need to tell Heroku what command to use to run our application. To do this, we use something called a &amp;ldquo;Procfile&amp;rdquo; that contains information about the process types for our app. Heroku supports multiple processes of different types, but we&amp;rsquo;re just going to have a single web process.&lt;/p&gt;
+
+&lt;p&gt;Specifically, we just want to run our &lt;code&gt;serve.rkt&lt;/code&gt; module. The Racket buildpack installs the repository as a package, so we can run &lt;code&gt;racket&lt;/code&gt; with the &lt;code&gt;-l&lt;/code&gt; flag to specify a module path, which will be more robust than specifying a filesystem path directly. Therefore, our Procfile will look like this:&lt;/p&gt;
+
+&lt;div class="brush: procfile"&gt;
+ &lt;div class="source"&gt;
+  &lt;pre&gt;&lt;span&gt;&lt;/span&gt;web: racket -l sample-heroku-app/server
+&lt;/pre&gt;&lt;/div&gt;
+
+&lt;/div&gt;
+
+&lt;p&gt;Now all that&amp;rsquo;s left to do is push our repository to Heroku&amp;rsquo;s git remote. Once the build completes, we can &lt;a href="https://racket-heroku-sample.herokuapp.com"&gt;navigate to our app&amp;rsquo;s URL and actually see it running live&lt;/a&gt;!&lt;/p&gt;
+
+&lt;h1 id="conclusion"&gt;Conclusion&lt;/h1&gt;
+
+&lt;p&gt;That&amp;rsquo;s all that&amp;rsquo;s needed to get a Racket app up and running on Heroku, but it probably isn&amp;rsquo;t the best way to manage a real application. Usually it&amp;rsquo;s best to use a continuous integration service to automatically deploy certain GitHub branches to Heroku, after running the tests, of course. Also, a real application would obviously be a little more complicated.&lt;/p&gt;
+
+&lt;p&gt;That said, this provides the foundation and shell. If you&amp;rsquo;d like to see the sample app used in this post, you can &lt;a href="https://github.com/lexi-lambda/racket-sample-heroku-app"&gt;find it on GitHub here&lt;/a&gt;. For more details on the buildpack itself, &lt;a href="https://github.com/lexi-lambda/heroku-buildpack-racket"&gt;it&amp;rsquo;s also available on GitHub here&lt;/a&gt;.&lt;/p&gt;</content></entry></feed>

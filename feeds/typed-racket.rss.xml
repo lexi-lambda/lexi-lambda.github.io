@@ -1,0 +1,386 @@
+<?xml version="1.0" encoding="utf-8"?> 
+<rss version="2.0">
+ <channel>
+  <title>Alexis King's Blog: Posts tagged 'typed racket'</title>
+  <description>Alexis King's Blog: Posts tagged 'typed racket'</description>
+  <link>http://lexi-lambda.github.io/tags/typed-racket.html</link>
+  <lastBuildDate>Mon, 21 Dec 2015 17:57:07 UT</lastBuildDate>
+  <pubDate>Mon, 21 Dec 2015 17:57:07 UT</pubDate>
+  <ttl>1800</ttl>
+  <item>
+   <title>ADTs in Typed Racket with macros</title>
+   <link>http://lexi-lambda.github.io/blog/2015/12/21/adts-in-typed-racket-with-macros/?utm_source=typed-racket&amp;utm_medium=RSS</link>
+   <guid isPermaLink="false">urn:http-lexi-lambda-github-io:-blog-2015-12-21-adts-in-typed-racket-with-macros</guid>
+   <pubDate>Mon, 21 Dec 2015 17:57:07 UT</pubDate>
+   <author>Alexis King</author>
+   <description>
+&lt;p&gt;Macros are one of Racket&amp;rsquo;s flagship features, and its macro system really is state of the art. Of course, it can sometimes be difficult to demonstrate &lt;em&gt;why&lt;/em&gt; macros are so highly esteemed, in part because it can be hard to find self-contained examples of using macros in practice. Of course, one thing that macros are perfect for is filling a &amp;ldquo;hole&amp;rdquo; in the language by introducing a feature a language lacks, and one of those features in Typed Racket is &lt;strong&gt;ADTs&lt;/strong&gt;.&lt;/p&gt;
+&lt;!-- more--&gt;
+
+&lt;h1 id="warning-this-is-not-a-macro-tutorial"&gt;Warning: this is not a macro tutorial&lt;/h1&gt;
+
+&lt;p&gt;First, a disclaimer: this post assumes at least some knowledge of Scheme/Racket macros. Ideally, you would be familiar with Racket itself. But if you aren&amp;rsquo;t, fear not: if you get lost, don&amp;rsquo;t worry. Hold on to the bigger picture, and you&amp;rsquo;ll likely learn more than someone who knows enough to follow all the way through. If you &lt;em&gt;are&lt;/em&gt; interested in learning about macros, I must recommend Greg Hendershott&amp;rsquo;s &lt;a href="http://www.greghendershott.com/fear-of-macros/"&gt;Fear of Macros&lt;/a&gt;. It is good. This is not that.&lt;/p&gt;
+
+&lt;p&gt;Now, with that out of the way, let&amp;rsquo;s get started.&lt;/p&gt;
+
+&lt;h1 id="what-were-building"&gt;What we&amp;rsquo;re building&lt;/h1&gt;
+
+&lt;p&gt;&lt;a href="https://en.wikipedia.org/wiki/Algebraic_data_type"&gt;Algebraic data types&lt;/a&gt;, or &lt;em&gt;ADTs&lt;/em&gt;, are a staple of the ML family of functional programming languages. I won&amp;rsquo;t go into detail here—I want to focus on the implementation—but they&amp;rsquo;re a very descriptive way of modeling data that encourages designing functions in terms of pattern-matching, something that Racket is already good at.&lt;/p&gt;
+
+&lt;p&gt;Racket also already has a facility for creating custom data structures in the form of &lt;em&gt;structs&lt;/em&gt;, which are extremely flexible, but also a little verbose. Racket structs are more powerful than we need, but that means we can implement our ADTs in terms of Racket&amp;rsquo;s struct system.&lt;/p&gt;
+
+&lt;p&gt;With that in mind, what should our syntax look like? Well, let&amp;rsquo;s consider a quintessential example of ADTs: modeling a simple tree. For now, let&amp;rsquo;s just consider a tree of integers. For reference, the Haskell syntax for such a data structure would look like this:&lt;/p&gt;
+
+&lt;div class="brush: haskell"&gt;
+ &lt;div class="source"&gt;
+  &lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;span class="kr"&gt;data&lt;/span&gt; &lt;span class="kt"&gt;Tree&lt;/span&gt; &lt;span class="ow"&gt;=&lt;/span&gt; &lt;span class="kt"&gt;Empty&lt;/span&gt;
+          &lt;span class="o"&gt;|&lt;/span&gt; &lt;span class="kt"&gt;Leaf&lt;/span&gt; &lt;span class="kt"&gt;Int&lt;/span&gt;
+          &lt;span class="o"&gt;|&lt;/span&gt; &lt;span class="kt"&gt;Node&lt;/span&gt; &lt;span class="kt"&gt;Tree&lt;/span&gt; &lt;span class="kt"&gt;Tree&lt;/span&gt;
+&lt;/pre&gt;&lt;/div&gt;
+
+&lt;/div&gt;
+
+&lt;p&gt;This already demonstrates a few of the core things we&amp;rsquo;ll need to build:&lt;/p&gt;
+
+&lt;ol&gt;
+ &lt;li&gt;Each ADT has a &lt;em&gt;data type&lt;/em&gt;, in this case &lt;code&gt;Tree&lt;/code&gt;. This name only exists in the world of types, it isn&amp;rsquo;t a value.&lt;/li&gt;
+ &lt;li&gt;Each ADT has various &lt;em&gt;data constructors&lt;/em&gt;, in this case &lt;code&gt;Leaf&lt;/code&gt; and &lt;code&gt;Node&lt;/code&gt;.&lt;/li&gt;
+ &lt;li&gt;Each data constructor may accept any number of arguments, each of which have a specific type.&lt;/li&gt;
+ &lt;li&gt;The types that data constructors may accept include the ADT&amp;rsquo;s datatype itself—that is, definitions can be recursive.&lt;/li&gt;&lt;/ol&gt;
+
+&lt;p&gt;Of course, there&amp;rsquo;s one more important feature we&amp;rsquo;re missing: polymorphism. Our definition of a tree is overly-specific, and really, it should be able to hold any kind of data, not just integers. In Haskell, we can do that by adding a type parameter:&lt;/p&gt;
+
+&lt;div class="brush: haskell"&gt;
+ &lt;div class="source"&gt;
+  &lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;span class="kr"&gt;data&lt;/span&gt; &lt;span class="kt"&gt;Tree&lt;/span&gt; &lt;span class="n"&gt;a&lt;/span&gt; &lt;span class="ow"&gt;=&lt;/span&gt; &lt;span class="kt"&gt;Empty&lt;/span&gt;
+            &lt;span class="o"&gt;|&lt;/span&gt; &lt;span class="kt"&gt;Leaf&lt;/span&gt; &lt;span class="n"&gt;a&lt;/span&gt;
+            &lt;span class="o"&gt;|&lt;/span&gt; &lt;span class="kt"&gt;Node&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="kt"&gt;Tree&lt;/span&gt; &lt;span class="n"&gt;a&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="kt"&gt;Tree&lt;/span&gt; &lt;span class="n"&gt;a&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+&lt;/pre&gt;&lt;/div&gt;
+
+&lt;/div&gt;
+
+&lt;p&gt;With this in mind, we can add a fifth and final point to our list:&lt;/p&gt;
+
+&lt;p&gt; 
+ &lt;ol start="5"&gt;
+  &lt;li&gt;ADTs must be able to be parametrically polymorphic.&lt;/li&gt;&lt;/ol&gt;&lt;/p&gt;
+
+&lt;p&gt;That covers all of our requirements for basic ADTs. Now we&amp;rsquo;re ready to port this idea to Racket.&lt;/p&gt;
+
+&lt;h2 id="describing-adts-in-racket"&gt;Describing ADTs in Racket&lt;/h2&gt;
+
+&lt;p&gt;How should we take the Haskell syntax for an ADT definition and adapt it to Racket&amp;rsquo;s parenthetical s-expressions? By taking some cues from the Haskell implementation, Typed Racket&amp;rsquo;s type syntax, and Racket&amp;rsquo;s naming conventions, a fairly logical syntax emerges:&lt;/p&gt;
+
+&lt;div class="brush: racket"&gt;
+ &lt;div class="source"&gt;
+  &lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;define-datatype&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;Tree&lt;/span&gt; &lt;span class="n"&gt;a&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+  &lt;span class="n"&gt;Empty&lt;/span&gt;
+  &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;Leaf&lt;/span&gt; &lt;span class="n"&gt;a&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+  &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;Node&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;Tree&lt;/span&gt; &lt;span class="n"&gt;a&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;Tree&lt;/span&gt; &lt;span class="n"&gt;a&lt;/span&gt;&lt;span class="p"&gt;)))&lt;/span&gt;
+&lt;/pre&gt;&lt;/div&gt;
+
+&lt;/div&gt;
+
+&lt;p&gt;This looks pretty good. Just like with the Haskell implementation, &lt;code&gt;Tree&lt;/code&gt; should only exist at the type level, and &lt;code&gt;Empty&lt;/code&gt;, &lt;code&gt;Leaf&lt;/code&gt;, and &lt;code&gt;Node&lt;/code&gt; should be constructor functions. Our syntax mirrors Racket function application, too—the proper way to create a leaf would be &lt;code&gt;(Leaf 7)&lt;/code&gt;.&lt;/p&gt;
+
+&lt;p&gt;Now that we can create ADT values, how should we extract the values from them? Well, just like in ML-likes, we can use pattern-matching. We don&amp;rsquo;t need to reinvent the wheel for this one; we should be able to just use Racket&amp;rsquo;s &lt;code&gt;&lt;a href="http://docs.racket-lang.org/reference/match.html#(form._((lib._racket/match..rkt)._match))" style="color: inherit"&gt;match&lt;/a&gt;&lt;/code&gt; with our datatypes. For example, a function that sums all the values in a tree might look like this:&lt;/p&gt;
+
+&lt;div class="brush: racket"&gt;
+ &lt;div class="source"&gt;
+  &lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;:&lt;/span&gt; &lt;span class="n"&gt;tree-sum&lt;/span&gt; &lt;span class="p"&gt;((&lt;/span&gt;&lt;span class="n"&gt;Tree&lt;/span&gt; &lt;span class="n"&gt;Integer&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="k"&gt;-&amp;gt;&lt;/span&gt; &lt;span class="n"&gt;Integer&lt;/span&gt;&lt;span class="p"&gt;))&lt;/span&gt;
+&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="k"&gt;define&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;tree-sum&lt;/span&gt; &lt;span class="n"&gt;tree&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+  &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="k"&gt;match&lt;/span&gt; &lt;span class="n"&gt;tree&lt;/span&gt;
+    &lt;span class="p"&gt;[(&lt;/span&gt;&lt;span class="n"&gt;Empty&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;    &lt;span class="mi"&gt;0&lt;/span&gt;               &lt;span class="p"&gt;]&lt;/span&gt;
+    &lt;span class="p"&gt;[(&lt;/span&gt;&lt;span class="n"&gt;Leaf&lt;/span&gt; &lt;span class="n"&gt;n&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;   &lt;span class="n"&gt;n&lt;/span&gt;               &lt;span class="p"&gt;]&lt;/span&gt;
+    &lt;span class="p"&gt;[(&lt;/span&gt;&lt;span class="n"&gt;Node&lt;/span&gt; &lt;span class="n"&gt;l&lt;/span&gt; &lt;span class="n"&gt;r&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="nb"&gt;+&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;tree-sum&lt;/span&gt; &lt;span class="n"&gt;l&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+                   &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;tree-sum&lt;/span&gt; &lt;span class="n"&gt;r&lt;/span&gt;&lt;span class="p"&gt;))]))&lt;/span&gt;
+&lt;/pre&gt;&lt;/div&gt;
+
+&lt;/div&gt;
+
+&lt;p&gt;Given that Racket&amp;rsquo;s &lt;code&gt;struct&lt;/code&gt; form automatically produces identifiers that cooperate with &lt;code&gt;match&lt;/code&gt;, this shouldn&amp;rsquo;t be hard at all. And with our syntax settled, we&amp;rsquo;re ready to begin implementation.&lt;/p&gt;
+
+&lt;h1 id="implementing-adts-as-syntax"&gt;Implementing ADTs as syntax&lt;/h1&gt;
+
+&lt;p&gt;Now for the fun part. To implement our ADT syntax, we&amp;rsquo;ll employ Racket&amp;rsquo;s industrial-strength macro DSL, &lt;a href="http://docs.racket-lang.org/syntax/stxparse.html"&gt;&lt;code&gt;syntax/parse&lt;/code&gt;&lt;/a&gt;. The &lt;code&gt;syntax/parse&lt;/code&gt; library works like the traditional Scheme &lt;code&gt;syntax-case&lt;/code&gt; on steroids, and one of the most useful features is the ability to define &amp;ldquo;syntax classes&amp;rdquo; that encapsulate reusable parsing rules into declarative components.&lt;/p&gt;
+
+&lt;p&gt;Since this is not a macro tutorial, the following implementation assumes you already know how to use &lt;code&gt;syntax/parse&lt;/code&gt;. However, all of the concepts here are well within the reaches of any intermediate macrologist, so don&amp;rsquo;t be intimidated by some of the more complex topics at play.&lt;/p&gt;
+
+&lt;h2 id="parsing-types-with-a-syntax-class"&gt;Parsing types with a syntax class&lt;/h2&gt;
+
+&lt;p&gt;To implement ADTs, we&amp;rsquo;re going to want to define exactly one syntax class, a class that describes the grammar for a type. As we&amp;rsquo;ve seen, types can be bare identifiers, like &lt;code&gt;Tree&lt;/code&gt;, or they can be identifiers with parameters, like &lt;code&gt;(Tree a)&lt;/code&gt;. We&amp;rsquo;ll want to cover both cases.&lt;/p&gt;
+
+&lt;div class="brush: racket"&gt;
+ &lt;div class="source"&gt;
+  &lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="k"&gt;begin-for-syntax&lt;/span&gt;
+  &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;define-syntax-class&lt;/span&gt; &lt;span class="n"&gt;type&lt;/span&gt;
+    &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;pattern&lt;/span&gt; &lt;span class="n"&gt;name:id&lt;/span&gt; &lt;span class="kd"&gt;#:attr&lt;/span&gt; &lt;span class="p"&gt;[&lt;/span&gt;&lt;span class="n"&gt;param&lt;/span&gt; &lt;span class="mi"&gt;1&lt;/span&gt;&lt;span class="p"&gt;]&lt;/span&gt; &lt;span class="o"&gt;&amp;#39;&lt;/span&gt;&lt;span class="p"&gt;())&lt;/span&gt;
+    &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;pattern&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;name:id&lt;/span&gt; &lt;span class="n"&gt;param&lt;/span&gt; &lt;span class="n"&gt;...+&lt;/span&gt;&lt;span class="p"&gt;))))&lt;/span&gt;
+&lt;/pre&gt;&lt;/div&gt;
+
+&lt;/div&gt;
+
+&lt;p&gt;This syntax class has two rules, one that&amp;rsquo;s a bare identifier, and one that&amp;rsquo;s a list. The ellipsis followed by a plus (&lt;code&gt;...+&lt;/code&gt;) in the second example means &amp;ldquo;one or more&amp;rdquo;, so parsing those parameters will automatically be handled for us. In the bare identifier example, we use &lt;code&gt;#:attr&lt;/code&gt; to give the &lt;code&gt;param&lt;/code&gt; attribute the default value of an empty list, so this syntax class will actually &lt;em&gt;normalize&lt;/em&gt; the input we get in addition to actually parsing it.&lt;/p&gt;
+
+&lt;h2 id="a-first-attempt-at-define-datatype"&gt;A first attempt at &lt;code&gt;define-datatype&lt;/code&gt;&lt;/h2&gt;
+
+&lt;p&gt;Now we can move on to actually implementing &lt;code&gt;define-datatype&lt;/code&gt;. The rules are simple: we need to generate a structure type for each one of the data constructors, and we need to generate a type definition for the parent type itself. This is pretty simple to implement using &lt;code&gt;syntax-parser&lt;/code&gt;, which actually does the parsing for our macro.&lt;/p&gt;
+
+&lt;div class="brush: racket"&gt;
+ &lt;div class="source"&gt;
+  &lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="k"&gt;define-syntax&lt;/span&gt; &lt;span class="n"&gt;define-datatype&lt;/span&gt;
+  &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;syntax-parser&lt;/span&gt;
+    &lt;span class="p"&gt;[(&lt;/span&gt;&lt;span class="k"&gt;_&lt;/span&gt; &lt;span class="n"&gt;type-name:type&lt;/span&gt; &lt;span class="n"&gt;data-constructor:type&lt;/span&gt; &lt;span class="k"&gt;...&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+     &lt;span class="p"&gt;]))&lt;/span&gt;
+&lt;/pre&gt;&lt;/div&gt;
+
+&lt;/div&gt;
+
+&lt;p&gt;This definition will do all the parsing we need. It parses the entire macro &amp;ldquo;invocation&amp;rdquo;, ignoring the first datum with &lt;code&gt;_&lt;/code&gt; (which will just be the identifier &lt;code&gt;define-datatype&lt;/code&gt;), then expecting a &lt;code&gt;type-name&lt;/code&gt;, which uses the &lt;code&gt;type&lt;/code&gt; syntax class we defined above. Next, we expect zero or more &lt;code&gt;data-constructor&lt;/code&gt;s, which also use the &lt;code&gt;type&lt;/code&gt; syntax class. That&amp;rsquo;s all we have to do for parsing. We now have all the information we need to actually output the expansion for the macro.&lt;/p&gt;
+
+&lt;p&gt;Of course, it won&amp;rsquo;t be that easy: this is the difficult part. The first step is to generate a Racket struct for each data constructor. We can do this pretty easily with some simple use of Racket&amp;rsquo;s syntax templating facility. A naïve attempt would look like this:&lt;/p&gt;
+
+&lt;div class="brush: racket"&gt;
+ &lt;div class="source"&gt;
+  &lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="k"&gt;define-syntax&lt;/span&gt; &lt;span class="n"&gt;define-datatype&lt;/span&gt;
+  &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;syntax-parser&lt;/span&gt;
+    &lt;span class="p"&gt;[(&lt;/span&gt;&lt;span class="k"&gt;_&lt;/span&gt; &lt;span class="n"&gt;type-name:type&lt;/span&gt; &lt;span class="n"&gt;data-constructor:type&lt;/span&gt; &lt;span class="k"&gt;...&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+     &lt;span class="o"&gt;#&amp;#39;&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="k"&gt;begin&lt;/span&gt;
+         &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="k"&gt;struct&lt;/span&gt; &lt;span class="n"&gt;data-constructor.name&lt;/span&gt; &lt;span class="p"&gt;([&lt;/span&gt;&lt;span class="n"&gt;f&lt;/span&gt; &lt;span class="n"&gt;:&lt;/span&gt; &lt;span class="n"&gt;data-constructor.param&lt;/span&gt;&lt;span class="p"&gt;]&lt;/span&gt; &lt;span class="k"&gt;...&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+         &lt;span class="k"&gt;...&lt;/span&gt;&lt;span class="p"&gt;))]))&lt;/span&gt;
+&lt;/pre&gt;&lt;/div&gt;
+
+&lt;/div&gt;
+
+&lt;p&gt;This is actually really close to being correct. This will generate a struct definition for each &lt;code&gt;data-constructor&lt;/code&gt;, where each struct has the name of the data constructor and the same number of fields as arguments provided. The trouble is that in Racket structs, all of the fields have &lt;em&gt;names&lt;/em&gt;, but in our ADTs, all the fields are anonymous and by-position. Currently, we&amp;rsquo;re just using the same name for &lt;em&gt;all&lt;/em&gt; the fields, &lt;code&gt;f&lt;/code&gt;, so if any data constructor has two or more fields, we&amp;rsquo;ll get an error.&lt;/p&gt;
+
+&lt;p&gt;Since we don&amp;rsquo;t care about the field names, what we want to do is just generate random names for every field. To do this, we can use a Racket function called &lt;code&gt;generate-temporary&lt;/code&gt;, which generates random identifiers. Our next attempt might look like this:&lt;/p&gt;
+
+&lt;div class="brush: racket"&gt;
+ &lt;div class="source"&gt;
+  &lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;span class="o"&gt;#`&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="k"&gt;begin&lt;/span&gt;
+    &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="k"&gt;struct&lt;/span&gt; &lt;span class="n"&gt;data-constructor.name&lt;/span&gt;
+      &lt;span class="p"&gt;([&lt;/span&gt;&lt;span class="o"&gt;#,&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;generate-temporary&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="n"&gt;:&lt;/span&gt; &lt;span class="n"&gt;data-constructor.param&lt;/span&gt;&lt;span class="p"&gt;]&lt;/span&gt; &lt;span class="k"&gt;...&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+    &lt;span class="k"&gt;...&lt;/span&gt;&lt;span class="p"&gt;))&lt;/span&gt;
+&lt;/pre&gt;&lt;/div&gt;
+
+&lt;/div&gt;
+
+&lt;p&gt;The &lt;code&gt;#,&lt;/code&gt; lets us &amp;ldquo;escape&amp;rdquo; from the template to execute &lt;code&gt;(generate-temporary)&lt;/code&gt; and interpolate its result into the syntax. Unfortunately, this doesn&amp;rsquo;t work. We &lt;em&gt;do&lt;/em&gt; generate a random field name, but the ellipsis will re-use the same generated value when it repeats the fields, rendering our whole effort pointless. We need to generate the field names once per type.&lt;/p&gt;
+
+&lt;h2 id="more-leveraging-syntax-classes"&gt;More leveraging syntax classes&lt;/h2&gt;
+
+&lt;p&gt;As it turns out, this is &lt;em&gt;also&lt;/em&gt; easy to do with syntax classes. We can add an extra attribute to our &lt;code&gt;type&lt;/code&gt; syntax class to generate a random identifier with each one. Again, we can use &lt;code&gt;#:attr&lt;/code&gt; to do that automatically. Our new definition for &lt;code&gt;type&lt;/code&gt; will look like this:&lt;/p&gt;
+
+&lt;div class="brush: racket"&gt;
+ &lt;div class="source"&gt;
+  &lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="k"&gt;begin-for-syntax&lt;/span&gt;
+  &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;define-syntax-class&lt;/span&gt; &lt;span class="n"&gt;type&lt;/span&gt;
+    &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;pattern&lt;/span&gt; &lt;span class="n"&gt;name:id&lt;/span&gt;
+             &lt;span class="kd"&gt;#:attr&lt;/span&gt; &lt;span class="p"&gt;[&lt;/span&gt;&lt;span class="n"&gt;param&lt;/span&gt; &lt;span class="mi"&gt;1&lt;/span&gt;&lt;span class="p"&gt;]&lt;/span&gt; &lt;span class="o"&gt;&amp;#39;&lt;/span&gt;&lt;span class="p"&gt;()&lt;/span&gt;
+             &lt;span class="kd"&gt;#:attr&lt;/span&gt; &lt;span class="p"&gt;[&lt;/span&gt;&lt;span class="n"&gt;field-id&lt;/span&gt; &lt;span class="mi"&gt;1&lt;/span&gt;&lt;span class="p"&gt;]&lt;/span&gt; &lt;span class="o"&gt;&amp;#39;&lt;/span&gt;&lt;span class="p"&gt;())&lt;/span&gt;
+    &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;pattern&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;name:id&lt;/span&gt; &lt;span class="n"&gt;param&lt;/span&gt; &lt;span class="n"&gt;...+&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+             &lt;span class="kd"&gt;#:attr&lt;/span&gt; &lt;span class="p"&gt;[&lt;/span&gt;&lt;span class="n"&gt;field-id&lt;/span&gt; &lt;span class="mi"&gt;1&lt;/span&gt;&lt;span class="p"&gt;]&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="nb"&gt;generate-temporaries&lt;/span&gt; &lt;span class="o"&gt;#&amp;#39;&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;param&lt;/span&gt; &lt;span class="k"&gt;...&lt;/span&gt;&lt;span class="p"&gt;)))))&lt;/span&gt;
+&lt;/pre&gt;&lt;/div&gt;
+
+&lt;/div&gt;
+
+&lt;p&gt;Here we&amp;rsquo;re using &lt;code&gt;generate-temporaries&lt;/code&gt; instead of &lt;code&gt;generate-temporary&lt;/code&gt;, which will conveniently generate a new identifier for each of the elements in the list we provide it. This way, we&amp;rsquo;ll get a fresh identifier for each &lt;code&gt;param&lt;/code&gt;.&lt;/p&gt;
+
+&lt;p&gt;We can now fix our macro to use this &lt;code&gt;field-id&lt;/code&gt; attribute instead of the static field name:&lt;/p&gt;
+
+&lt;div class="brush: racket"&gt;
+ &lt;div class="source"&gt;
+  &lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;span class="o"&gt;#&amp;#39;&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="k"&gt;begin&lt;/span&gt;
+    &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="k"&gt;struct&lt;/span&gt; &lt;span class="n"&gt;data-constructor.name&lt;/span&gt;
+      &lt;span class="p"&gt;([&lt;/span&gt;&lt;span class="n"&gt;data-constructor.field-id&lt;/span&gt; &lt;span class="n"&gt;:&lt;/span&gt; &lt;span class="n"&gt;data-constructor.param&lt;/span&gt;&lt;span class="p"&gt;]&lt;/span&gt; &lt;span class="k"&gt;...&lt;/span&gt;&lt;span class="p"&gt;))&lt;/span&gt;
+    &lt;span class="k"&gt;...&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+&lt;/pre&gt;&lt;/div&gt;
+
+&lt;/div&gt;
+
+&lt;h2 id="creating-the-supertype"&gt;Creating the supertype&lt;/h2&gt;
+
+&lt;p&gt;We&amp;rsquo;re almost done—now we just need to implement our overall type, the one defined by &lt;code&gt;type-name&lt;/code&gt;. This is implemented as a trivial type alias, but we need to ensure that polymorphic types are properly handled. For example, a non-polymorphic type would need to be handled like this:&lt;/p&gt;
+
+&lt;div class="brush: racket"&gt;
+ &lt;div class="source"&gt;
+  &lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;define-type&lt;/span&gt; &lt;span class="n"&gt;Tree&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;U&lt;/span&gt; &lt;span class="n"&gt;Empty&lt;/span&gt; &lt;span class="n"&gt;Leaf&lt;/span&gt; &lt;span class="n"&gt;Node&lt;/span&gt;&lt;span class="p"&gt;))&lt;/span&gt;
+&lt;/pre&gt;&lt;/div&gt;
+
+&lt;/div&gt;
+
+&lt;p&gt;However, a polymorphic type alias would need to include the type parameters in each subtype, like this:&lt;/p&gt;
+
+&lt;div class="brush: racket"&gt;
+ &lt;div class="source"&gt;
+  &lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;define-type&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;Tree&lt;/span&gt; &lt;span class="n"&gt;a&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;U&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;Empty&lt;/span&gt; &lt;span class="n"&gt;a&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;Leaf&lt;/span&gt; &lt;span class="n"&gt;a&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;Node&lt;/span&gt; &lt;span class="n"&gt;a&lt;/span&gt;&lt;span class="p"&gt;)))&lt;/span&gt;
+&lt;/pre&gt;&lt;/div&gt;
+
+&lt;/div&gt;
+
+&lt;p&gt;How can we do this? Well, so far, we&amp;rsquo;ve been very declarative by using syntax patterns, templates, and classes. However, this is a more pernicious problem to solve with our declarative tools. Fortunately, it&amp;rsquo;s very easy to fall back to using &lt;strong&gt;procedural macros&lt;/strong&gt;.&lt;/p&gt;
+
+&lt;p&gt;To build each properly-instantiated type, we&amp;rsquo;ll use a combination of &lt;code&gt;define/with-syntax&lt;/code&gt; and Racket&amp;rsquo;s list comprehensions, &lt;code&gt;for/list&lt;/code&gt;. The &lt;code&gt;define/with-syntax&lt;/code&gt; form binds values to pattern identifiers, which can be used within syntax patterns just like the ones bound by &lt;code&gt;syntax-parser&lt;/code&gt;. This will allow us to break up our result into multiple steps. Technically, &lt;code&gt;define/with-syntax&lt;/code&gt; is not strictly necessary—we could just use &lt;code&gt;#`&lt;/code&gt; and &lt;code&gt;#,&lt;/code&gt;—but it&amp;rsquo;s cleaner to work with.&lt;/p&gt;
+
+&lt;p&gt;We&amp;rsquo;ll start by defining a set of instantiated data constructor types, one per &lt;code&gt;data-constructor&lt;/code&gt;:&lt;/p&gt;
+
+&lt;div class="brush: racket"&gt;
+ &lt;div class="source"&gt;
+  &lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;define/with-syntax&lt;/span&gt; &lt;span class="p"&gt;[&lt;/span&gt;&lt;span class="n"&gt;data-type&lt;/span&gt; &lt;span class="k"&gt;...&lt;/span&gt;&lt;span class="p"&gt;]&lt;/span&gt;
+  &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="k"&gt;for/list&lt;/span&gt; &lt;span class="p"&gt;([&lt;/span&gt;&lt;span class="n"&gt;name&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="nb"&gt;in-syntax&lt;/span&gt; &lt;span class="o"&gt;#&amp;#39;&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;data-constructor.name&lt;/span&gt; &lt;span class="k"&gt;...&lt;/span&gt;&lt;span class="p"&gt;))])&lt;/span&gt;
+    &lt;span class="p"&gt;))&lt;/span&gt;
+&lt;/pre&gt;&lt;/div&gt;
+
+&lt;/div&gt;
+
+&lt;p&gt;Now we can fill in the body with any code we&amp;rsquo;d like, so long as each body returns a syntax object. We can use some trivial branching logic to determine which form we need:&lt;/p&gt;
+
+&lt;div class="brush: racket"&gt;
+ &lt;div class="source"&gt;
+  &lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;define/with-syntax&lt;/span&gt; &lt;span class="p"&gt;[&lt;/span&gt;&lt;span class="n"&gt;data-type&lt;/span&gt; &lt;span class="k"&gt;...&lt;/span&gt;&lt;span class="p"&gt;]&lt;/span&gt;
+  &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="k"&gt;for/list&lt;/span&gt; &lt;span class="p"&gt;([&lt;/span&gt;&lt;span class="n"&gt;name&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="nb"&gt;in-syntax&lt;/span&gt; &lt;span class="o"&gt;#&amp;#39;&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;data-constructor.name&lt;/span&gt; &lt;span class="k"&gt;...&lt;/span&gt;&lt;span class="p"&gt;))])&lt;/span&gt;
+    &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="k"&gt;if&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;stx-null?&lt;/span&gt; &lt;span class="o"&gt;#&amp;#39;&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;type-name.param&lt;/span&gt; &lt;span class="k"&gt;...&lt;/span&gt;&lt;span class="p"&gt;))&lt;/span&gt;
+        &lt;span class="n"&gt;name&lt;/span&gt;
+        &lt;span class="o"&gt;#`&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="o"&gt;#,&lt;/span&gt;&lt;span class="n"&gt;name&lt;/span&gt; &lt;span class="n"&gt;type-name.param&lt;/span&gt; &lt;span class="k"&gt;...&lt;/span&gt;&lt;span class="p"&gt;))))&lt;/span&gt;
+&lt;/pre&gt;&lt;/div&gt;
+
+&lt;/div&gt;
+
+&lt;p&gt;Now with our definition for &lt;code&gt;data-type&lt;/code&gt;, we can implement our type alias for the supertype extremely easily:&lt;/p&gt;
+
+&lt;div class="brush: racket"&gt;
+ &lt;div class="source"&gt;
+  &lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;span class="o"&gt;#&amp;#39;&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;define-type&lt;/span&gt; &lt;span class="n"&gt;type-name&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;U&lt;/span&gt; &lt;span class="n"&gt;data-type&lt;/span&gt; &lt;span class="k"&gt;...&lt;/span&gt;&lt;span class="p"&gt;))&lt;/span&gt;
+&lt;/pre&gt;&lt;/div&gt;
+
+&lt;/div&gt;
+
+&lt;h2 id="putting-it-all-together"&gt;Putting it all together&lt;/h2&gt;
+
+&lt;p&gt;There&amp;rsquo;s just one more thing to do before we can call this macro finished: we need to ensure that all the type parameters defined by &lt;code&gt;type-name&lt;/code&gt; are in scope for each data constructor&amp;rsquo;s structure definition. We can do this by making use of &lt;code&gt;type-name.param&lt;/code&gt; within each produced struct definition, resulting in this:&lt;/p&gt;
+
+&lt;div class="brush: racket"&gt;
+ &lt;div class="source"&gt;
+  &lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;span class="o"&gt;#&amp;#39;&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="k"&gt;begin&lt;/span&gt;
+    &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="k"&gt;struct&lt;/span&gt; &lt;span class="n"&gt;data-constructor.name&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;type-name.param&lt;/span&gt; &lt;span class="k"&gt;...&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+      &lt;span class="p"&gt;([&lt;/span&gt;&lt;span class="n"&gt;data-constructor.field-id&lt;/span&gt; &lt;span class="n"&gt;:&lt;/span&gt; &lt;span class="n"&gt;data-constructor.param&lt;/span&gt;&lt;span class="p"&gt;]&lt;/span&gt; &lt;span class="k"&gt;...&lt;/span&gt;&lt;span class="p"&gt;))&lt;/span&gt;
+    &lt;span class="k"&gt;...&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+&lt;/pre&gt;&lt;/div&gt;
+
+&lt;/div&gt;
+
+&lt;p&gt;And we&amp;rsquo;re done! The final macro, now completed, looks like this:&lt;/p&gt;
+
+&lt;div class="brush: racket"&gt;
+ &lt;div class="source"&gt;
+  &lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="k"&gt;begin-for-syntax&lt;/span&gt;
+  &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;define-syntax-class&lt;/span&gt; &lt;span class="n"&gt;type&lt;/span&gt;
+    &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;pattern&lt;/span&gt; &lt;span class="n"&gt;name:id&lt;/span&gt;
+             &lt;span class="kd"&gt;#:attr&lt;/span&gt; &lt;span class="p"&gt;[&lt;/span&gt;&lt;span class="n"&gt;param&lt;/span&gt; &lt;span class="mi"&gt;1&lt;/span&gt;&lt;span class="p"&gt;]&lt;/span&gt; &lt;span class="o"&gt;&amp;#39;&lt;/span&gt;&lt;span class="p"&gt;()&lt;/span&gt;
+             &lt;span class="kd"&gt;#:attr&lt;/span&gt; &lt;span class="p"&gt;[&lt;/span&gt;&lt;span class="n"&gt;field-id&lt;/span&gt; &lt;span class="mi"&gt;1&lt;/span&gt;&lt;span class="p"&gt;]&lt;/span&gt; &lt;span class="o"&gt;&amp;#39;&lt;/span&gt;&lt;span class="p"&gt;())&lt;/span&gt;
+    &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;pattern&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;name:id&lt;/span&gt; &lt;span class="n"&gt;param&lt;/span&gt; &lt;span class="n"&gt;...+&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+             &lt;span class="kd"&gt;#:attr&lt;/span&gt; &lt;span class="p"&gt;[&lt;/span&gt;&lt;span class="n"&gt;field-id&lt;/span&gt; &lt;span class="mi"&gt;1&lt;/span&gt;&lt;span class="p"&gt;]&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="nb"&gt;generate-temporaries&lt;/span&gt; &lt;span class="o"&gt;#&amp;#39;&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;param&lt;/span&gt; &lt;span class="k"&gt;...&lt;/span&gt;&lt;span class="p"&gt;)))))&lt;/span&gt;
+
+&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="k"&gt;define-syntax&lt;/span&gt; &lt;span class="n"&gt;define-datatype&lt;/span&gt;
+  &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;syntax-parser&lt;/span&gt;
+    &lt;span class="p"&gt;[(&lt;/span&gt;&lt;span class="k"&gt;_&lt;/span&gt; &lt;span class="n"&gt;type-name:type&lt;/span&gt; &lt;span class="n"&gt;data-constructor:type&lt;/span&gt; &lt;span class="k"&gt;...&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+
+     &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;define/with-syntax&lt;/span&gt; &lt;span class="p"&gt;[&lt;/span&gt;&lt;span class="n"&gt;data-type&lt;/span&gt; &lt;span class="k"&gt;...&lt;/span&gt;&lt;span class="p"&gt;]&lt;/span&gt;
+       &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="k"&gt;for/list&lt;/span&gt; &lt;span class="p"&gt;([&lt;/span&gt;&lt;span class="n"&gt;name&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="nb"&gt;in-syntax&lt;/span&gt; &lt;span class="o"&gt;#&amp;#39;&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;data-constructor.name&lt;/span&gt; &lt;span class="k"&gt;...&lt;/span&gt;&lt;span class="p"&gt;))])&lt;/span&gt;
+         &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="k"&gt;if&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;stx-null?&lt;/span&gt; &lt;span class="o"&gt;#&amp;#39;&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;type-name.param&lt;/span&gt; &lt;span class="k"&gt;...&lt;/span&gt;&lt;span class="p"&gt;))&lt;/span&gt;
+             &lt;span class="n"&gt;name&lt;/span&gt;
+             &lt;span class="o"&gt;#`&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="o"&gt;#,&lt;/span&gt;&lt;span class="n"&gt;name&lt;/span&gt; &lt;span class="n"&gt;type-name.param&lt;/span&gt; &lt;span class="k"&gt;...&lt;/span&gt;&lt;span class="p"&gt;))))&lt;/span&gt;
+
+     &lt;span class="o"&gt;#&amp;#39;&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="k"&gt;begin&lt;/span&gt;
+         &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="k"&gt;struct&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;type-name.param&lt;/span&gt; &lt;span class="k"&gt;...&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="n"&gt;data-constructor.name&lt;/span&gt;
+           &lt;span class="p"&gt;([&lt;/span&gt;&lt;span class="n"&gt;data-constructor.field-id&lt;/span&gt; &lt;span class="n"&gt;:&lt;/span&gt; &lt;span class="n"&gt;data-constructor.param&lt;/span&gt;&lt;span class="p"&gt;]&lt;/span&gt; &lt;span class="k"&gt;...&lt;/span&gt;&lt;span class="p"&gt;))&lt;/span&gt; &lt;span class="k"&gt;...&lt;/span&gt;
+         &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;define-type&lt;/span&gt; &lt;span class="n"&gt;type-name&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;U&lt;/span&gt; &lt;span class="n"&gt;data-type&lt;/span&gt; &lt;span class="k"&gt;...&lt;/span&gt;&lt;span class="p"&gt;)))]))&lt;/span&gt;
+&lt;/pre&gt;&lt;/div&gt;
+
+&lt;/div&gt;
+
+&lt;p&gt;It&amp;rsquo;s a little bit dense, certainly, but it is not as complicated or scary as it might seem. It&amp;rsquo;s a simple, mostly declarative, powerful way to transform a DSL into ordinary Typed Racket syntax, and now all we have to do is put it to use.&lt;/p&gt;
+
+&lt;h1 id="using-our-adts"&gt;Using our ADTs&lt;/h1&gt;
+
+&lt;p&gt;With the macro built, we can now actually use our ADTs using the syntax we described! The following is now &lt;em&gt;valid code&lt;/em&gt;:&lt;/p&gt;
+
+&lt;div class="brush: racket"&gt;
+ &lt;div class="source"&gt;
+  &lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;define-datatype&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;Tree&lt;/span&gt; &lt;span class="n"&gt;a&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+  &lt;span class="n"&gt;Empty&lt;/span&gt;
+  &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;Leaf&lt;/span&gt; &lt;span class="n"&gt;a&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+  &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;Node&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;Tree&lt;/span&gt; &lt;span class="n"&gt;a&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;Tree&lt;/span&gt; &lt;span class="n"&gt;a&lt;/span&gt;&lt;span class="p"&gt;)))&lt;/span&gt;
+
+&lt;span class="nb"&gt;&amp;gt;&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;Node&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;Leaf&lt;/span&gt; &lt;span class="mi"&gt;3&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;Node&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;Empty&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;Leaf&lt;/span&gt; &lt;span class="mi"&gt;7&lt;/span&gt;&lt;span class="p"&gt;)))&lt;/span&gt;
+&lt;span class="nb"&gt;-&lt;/span&gt; &lt;span class="n"&gt;:&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;Node&lt;/span&gt; &lt;span class="n"&gt;Positive-Byte&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;Node&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;Leaf&lt;/span&gt; &lt;span class="mi"&gt;3&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;Node&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;Empty&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;Leaf&lt;/span&gt; &lt;span class="mi"&gt;7&lt;/span&gt;&lt;span class="p"&gt;)))&lt;/span&gt;
+&lt;/pre&gt;&lt;/div&gt;
+
+&lt;/div&gt;
+
+&lt;p&gt;We can use this to define common data types, such as Haskell&amp;rsquo;s &lt;code&gt;Maybe&lt;/code&gt;:&lt;/p&gt;
+
+&lt;div class="brush: racket"&gt;
+ &lt;div class="source"&gt;
+  &lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;define-datatype&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;Maybe&lt;/span&gt; &lt;span class="n"&gt;a&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+  &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;Just&lt;/span&gt; &lt;span class="n"&gt;a&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+  &lt;span class="n"&gt;Nothing&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+
+&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;:&lt;/span&gt; &lt;span class="n"&gt;maybe-default&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;All&lt;/span&gt; &lt;span class="p"&gt;[&lt;/span&gt;&lt;span class="n"&gt;a&lt;/span&gt;&lt;span class="p"&gt;]&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;Maybe&lt;/span&gt; &lt;span class="n"&gt;a&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="n"&gt;a&lt;/span&gt; &lt;span class="k"&gt;-&amp;gt;&lt;/span&gt; &lt;span class="n"&gt;a&lt;/span&gt;&lt;span class="p"&gt;))&lt;/span&gt;
+&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="k"&gt;define&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;maybe-default&lt;/span&gt; &lt;span class="n"&gt;m&lt;/span&gt; &lt;span class="n"&gt;v&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+  &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="k"&gt;match&lt;/span&gt; &lt;span class="n"&gt;m&lt;/span&gt;
+    &lt;span class="p"&gt;[(&lt;/span&gt;&lt;span class="n"&gt;Just&lt;/span&gt; &lt;span class="n"&gt;a&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;  &lt;span class="n"&gt;a&lt;/span&gt;&lt;span class="p"&gt;]&lt;/span&gt;
+    &lt;span class="p"&gt;[(&lt;/span&gt;&lt;span class="n"&gt;Nothing&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="n"&gt;v&lt;/span&gt;&lt;span class="p"&gt;]))&lt;/span&gt;
+
+&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;:&lt;/span&gt; &lt;span class="n"&gt;maybe-then&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;All&lt;/span&gt; &lt;span class="p"&gt;[&lt;/span&gt;&lt;span class="n"&gt;a&lt;/span&gt;&lt;span class="p"&gt;]&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;Maybe&lt;/span&gt; &lt;span class="n"&gt;a&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;a&lt;/span&gt; &lt;span class="k"&gt;-&amp;gt;&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;Maybe&lt;/span&gt; &lt;span class="n"&gt;a&lt;/span&gt;&lt;span class="p"&gt;))&lt;/span&gt; &lt;span class="k"&gt;-&amp;gt;&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;Maybe&lt;/span&gt; &lt;span class="n"&gt;a&lt;/span&gt;&lt;span class="p"&gt;)))&lt;/span&gt;
+&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="k"&gt;define&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;maybe-then&lt;/span&gt; &lt;span class="n"&gt;m&lt;/span&gt; &lt;span class="n"&gt;f&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+  &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="k"&gt;match&lt;/span&gt; &lt;span class="n"&gt;m&lt;/span&gt;
+    &lt;span class="p"&gt;[(&lt;/span&gt;&lt;span class="n"&gt;Just&lt;/span&gt; &lt;span class="n"&gt;a&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;  &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;f&lt;/span&gt; &lt;span class="n"&gt;a&lt;/span&gt;&lt;span class="p"&gt;)]&lt;/span&gt;
+    &lt;span class="p"&gt;[(&lt;/span&gt;&lt;span class="n"&gt;Nothing&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;Nothing&lt;/span&gt;&lt;span class="p"&gt;)]))&lt;/span&gt;
+&lt;/pre&gt;&lt;/div&gt;
+
+&lt;/div&gt;
+
+&lt;p&gt;And of course, we can also use it to define ADTs that use concrete types rather that type parameters, if we so desire. This implements a small mathematical language, along with a trivial interpreter:&lt;/p&gt;
+
+&lt;div class="brush: racket"&gt;
+ &lt;div class="source"&gt;
+  &lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;define-datatype&lt;/span&gt; &lt;span class="n"&gt;Expr&lt;/span&gt;
+  &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;Value&lt;/span&gt; &lt;span class="n"&gt;Number&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+  &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;Add&lt;/span&gt; &lt;span class="n"&gt;Expr&lt;/span&gt; &lt;span class="n"&gt;Expr&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+  &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;Subtract&lt;/span&gt; &lt;span class="n"&gt;Expr&lt;/span&gt; &lt;span class="n"&gt;Expr&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+  &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;Multiply&lt;/span&gt; &lt;span class="n"&gt;Expr&lt;/span&gt; &lt;span class="n"&gt;Expr&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+  &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;Divide&lt;/span&gt; &lt;span class="n"&gt;Expr&lt;/span&gt; &lt;span class="n"&gt;Expr&lt;/span&gt;&lt;span class="p"&gt;))&lt;/span&gt;
+
+&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;:&lt;/span&gt; &lt;span class="n"&gt;evaluate&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;Expr&lt;/span&gt; &lt;span class="k"&gt;-&amp;gt;&lt;/span&gt; &lt;span class="n"&gt;Number&lt;/span&gt;&lt;span class="p"&gt;))&lt;/span&gt;
+&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="k"&gt;define&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;evaluate&lt;/span&gt; &lt;span class="n"&gt;e&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+  &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="k"&gt;match&lt;/span&gt; &lt;span class="n"&gt;e&lt;/span&gt;
+    &lt;span class="p"&gt;[(&lt;/span&gt;&lt;span class="n"&gt;Value&lt;/span&gt; &lt;span class="n"&gt;x&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;      &lt;span class="n"&gt;x&lt;/span&gt;                            &lt;span class="p"&gt;]&lt;/span&gt;
+    &lt;span class="p"&gt;[(&lt;/span&gt;&lt;span class="n"&gt;Add&lt;/span&gt; &lt;span class="n"&gt;a&lt;/span&gt; &lt;span class="n"&gt;b&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;      &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="nb"&gt;+&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;evaluate&lt;/span&gt; &lt;span class="n"&gt;a&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;evaluate&lt;/span&gt; &lt;span class="n"&gt;b&lt;/span&gt;&lt;span class="p"&gt;))]&lt;/span&gt;
+    &lt;span class="p"&gt;[(&lt;/span&gt;&lt;span class="n"&gt;Subtract&lt;/span&gt; &lt;span class="n"&gt;a&lt;/span&gt; &lt;span class="n"&gt;b&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="nb"&gt;-&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;evaluate&lt;/span&gt; &lt;span class="n"&gt;a&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;evaluate&lt;/span&gt; &lt;span class="n"&gt;b&lt;/span&gt;&lt;span class="p"&gt;))]&lt;/span&gt;
+    &lt;span class="p"&gt;[(&lt;/span&gt;&lt;span class="n"&gt;Multiply&lt;/span&gt; &lt;span class="n"&gt;a&lt;/span&gt; &lt;span class="n"&gt;b&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="nb"&gt;*&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;evaluate&lt;/span&gt; &lt;span class="n"&gt;a&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;evaluate&lt;/span&gt; &lt;span class="n"&gt;b&lt;/span&gt;&lt;span class="p"&gt;))]&lt;/span&gt;
+    &lt;span class="p"&gt;[(&lt;/span&gt;&lt;span class="n"&gt;Divide&lt;/span&gt; &lt;span class="n"&gt;a&lt;/span&gt; &lt;span class="n"&gt;b&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;   &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="nb"&gt;/&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;evaluate&lt;/span&gt; &lt;span class="n"&gt;a&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;evaluate&lt;/span&gt; &lt;span class="n"&gt;b&lt;/span&gt;&lt;span class="p"&gt;))]))&lt;/span&gt;
+
+&lt;span class="nb"&gt;&amp;gt;&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;evaluate&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;Add&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;Value&lt;/span&gt; &lt;span class="mi"&gt;1&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+                 &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;Multiply&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;Divide&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;Value&lt;/span&gt; &lt;span class="mi"&gt;1&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;Value&lt;/span&gt; &lt;span class="mi"&gt;2&lt;/span&gt;&lt;span class="p"&gt;))&lt;/span&gt;
+                           &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;Value&lt;/span&gt; &lt;span class="mi"&gt;7&lt;/span&gt;&lt;span class="p"&gt;))))&lt;/span&gt;
+&lt;span class="mi"&gt;4&lt;/span&gt; &lt;span class="m"&gt;1/2&lt;/span&gt;
+&lt;/pre&gt;&lt;/div&gt;
+
+&lt;/div&gt;
+
+&lt;p&gt;There&amp;rsquo;s all the power of ADTs, right in Racket, all implemented in 22 lines of code. If you&amp;rsquo;d like to see all the code together in a runnable form, &lt;a href="https://gist.github.com/lexi-lambda/18cf7a9156f743a1317e"&gt;I&amp;rsquo;ve put together a gist here&lt;/a&gt;.&lt;/p&gt;
+
+&lt;h1 id="conclusions-and-credit"&gt;Conclusions and credit&lt;/h1&gt;
+
+&lt;p&gt;This isn&amp;rsquo;t the simplest macro to create, nor is it the most complex. The code examples might not even make much sense until you try it out yourself. Macros, like any difficult concept, are not always easy to pick up, but they certainly &lt;em&gt;are&lt;/em&gt; powerful. The ability to extend the language in such a way, in the matter of minutes, is unparalleled in languages other than Lisp.&lt;/p&gt;
+
+&lt;p&gt;This is, of course, a blessing and a curse. Lisps reject some of the syntactic landmarks that often aid in readability for the power to abstract programs into their bare components. In the end, is this uniform conciseness more or less readable? That&amp;rsquo;s an incredibly subjective question, one that has prompted powerfully impassioned discussions, and I will not attempt to argue one way or the other here.&lt;/p&gt;
+
+&lt;p&gt;That said, I think it&amp;rsquo;s pretty cool.&lt;/p&gt;
+
+&lt;p&gt;Finally, I must give credit where credit is due. Thanks to &lt;a href="http://andmkent.com"&gt;Andrew M. Kent&lt;/a&gt; for the creation of the &lt;a href="https://github.com/andmkent/datatype"&gt;datatype&lt;/a&gt; package, which served as the inspiration for this blog post. Many thanks to &lt;a href="http://www.ccs.neu.edu/home/samth/"&gt;Sam Tobin-Hochstadt&lt;/a&gt; for his work creating Typed Racket, as well as helping me dramatically simplify the implementation used in this blog post. Also thanks to &lt;a href="http://www.ccs.neu.edu/home/ryanc/"&gt;Ryan Culpepper&lt;/a&gt; and &lt;a href="http://www.ccs.neu.edu/home/matthias/"&gt;Matthias Felleisen&lt;/a&gt; for their work on creating &lt;code&gt;syntax/parse&lt;/code&gt;, which is truly a marvelous tool for exploring the world of macros, and, of course, a big thanks to &lt;a href="http://www.cs.utah.edu/~mflatt/"&gt;Matthew Flatt&lt;/a&gt; for his implementation of hygiene in Racket, as well as much of the rest of Racket itself. Not to mention the entire legacy of those who formulated the foundations of the Scheme macro system and created the framework for all of this to be possible so many decades later.&lt;/p&gt;
+
+&lt;p&gt;Truly, working in Racket feels like standing on the shoulders of giants. If you&amp;rsquo;re intrigued, give it a shot. It&amp;rsquo;s a fun feeling.&lt;/p&gt;</description></item></channel></rss>

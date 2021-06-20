@@ -1,0 +1,554 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <title>User-programmable infix operators in Racket</title>
+    <meta name="description" content="Lisps are not known for infix operators, quite the opposite; infix operators generally involve more syntax and parsing than Lispers are keen to support. However, in Hackett, all functions are curried, and variable-arity functions do not exist. Infix opera...">
+    <meta name="author"      content="Alexis King">
+    <meta name="keywords"    content="racket, hackett, macros">
+    <meta name="viewport"    content="width=device-width, initial-scale=1.0">
+    <link rel="icon"      href="/favicon.ico">
+    <link rel="canonical" href="http://lexi-lambda.github.io/blog/2017/08/12/user-programmable-infix-operators-in-racket/">
+    <link rel="next" href="/blog/2017/06/29/unit-testing-effectful-haskell-with-monad-mock/">
+    <link rel="prev" href="/blog/2017/08/28/hackett-progress-report-documentation-quality-of-life-and-snake/">
+    <!-- CSS -->
+    <link rel="stylesheet" type="text/css" href="https://fonts.googleapis.com/css?family=Merriweather+Sans:400,300,300italic,400italic,700,700italic,800,800italic|Merriweather:400,300,300italic,400italic,700,700italic,900,900italic|Fira+Code:300,400,500,600,700">
+    <link rel="stylesheet" type="text/css" href="/css/application.min.css">
+    <link rel="stylesheet" type="text/css" href="/css/pygments.min.css">
+    <!-- Feeds -->
+    <link rel="alternate" type="application/atom+xml"
+          href="/feeds/all.atom.xml" title="Atom Feed">
+    <link rel="alternate" type="application/rss+xml"
+          href="/feeds/all.rss.xml" title="RSS Feed">
+    <!-- JS -->
+    <!-- <script src="/js/application.min.js"></script> -->
+    <script type="text/javascript">
+      (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+      (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+      m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+      })(window,document,'script','//www.google-analytics.com/analytics.js','ga');
+
+      ga('create', 'UA-65250372-1', 'auto');
+      ga('send', 'pageview');
+    </script>
+  </head>
+  <body>
+    <div id="page-content">
+      <!-- Navigation Bar -->
+      <header>
+        <nav role="navigation" class="navigation-bar">
+          <ul class="navigation-items left">
+            <li id="blog-title-header"><a href="/"><h1>Alexis King</h1></a></li>
+          </ul>
+          <ul class="navigation-items center"></ul>
+          <ul class="navigation-items right">
+            <li><a href="/">Home</a></li>
+            <li><a href="/resume.html">About Me</a></li>
+          </ul>
+        </nav>
+      </header>
+      <section role="main">
+        <!-- Main column -->
+        <div class="content" class="col-md-12">
+
+
+
+          <article class="main">
+  <header>
+    <h1 class="title">User-programmable infix operators in Racket</h1>
+    <div class='date-and-tags'>
+      <time datetime="2017-08-12T16:26:05">
+        2017-08-12
+      </time>
+      <span style="margin: 0 3px">⦿</span>
+      <span class="tags"><a href="/tags/racket.html">racket</a>, <a href="/tags/hackett.html">hackett</a>, <a href="/tags/macros.html">macros</a></span>
+    </div>
+  </header>
+
+<p>Lisps are not known for infix operators, quite the opposite; infix operators generally involve more syntax and parsing than Lispers are keen to support. However, in <a href="https://github.com/lexi-lambda/hackett">Hackett</a>, all functions are curried, and variable-arity functions do not exist. Infix operators are almost necessary for that to be palatable, and though there are other reasons to want them, it may not be obvious how to support them without making the reader considerably more complex.</p>
+
+<p>Fortunately, if we require users to syntactically specify where they wish to use infix expressions, support for infix operators is not only possible, but can support be done <em>without</em> modifying the stock <code>#lang racket</code> reader. Futhermore, the resulting technique makes it possible for fixity information to be specified locally in a way that cooperates nicely with the Racket macro system, allowing the parsing of infix expressions to be manipulated at compile-time by users’ macros.</p>
+<!-- more-->
+
+<h1 id="our-mission">Our mission</h1>
+
+<p>Before we embark, let’s clarify our goal. We want to support infix operators in Racket, of course, but that could mean a lot of different things! Let’s start with what we <em>do</em> want:</p>
+
+<ul>
+ <li>
+  <p>Infix operators should be user-extensible, not limited to a special set of built-in operators.</p></li>
+ <li>
+  <p>Furthermore, operators’ names should not be restricted to a separate “operator” character set. Any valid Lisp identifier should be usable as an infix operator.</p></li>
+ <li>
+  <p>We want to be able to support fixity/associativity annotations. Some operators should associate to the left, like subtraction, but others should associate to the right, like <code>cons</code>. This allows <code>5 - 1 - 2</code> to be parsed as <code>(- (- 5 1) 2)</code>, but <code>5 :: 1 :: nil</code> to be parsed as <code>(:: 5 (:: 1 nil))</code>.</p></li></ul>
+
+<p>These are nice goals, but we also won’t be too ambitious. In order to keep things simple and achievable, we’ll keep the following restrictions:</p>
+
+<ul>
+ <li>
+  <p>We will <strong>not</strong> permit infix expressions in arbitrary locations, since that would be impossible to parse given how we want to allow users to pick any names for operators they wish. Instead, infix expressions must be wrapped in curly braces, e.g. replacing <code>(+ 1 2)</code> with <code>{1 + 2}</code>.</p></li>
+ <li>
+  <p>Our implementation will <strong>not</strong> support any notion of operator precedence; all operators will have equal precedence, and it will be illegal to mix operators of different associativity in the same expression. Precedence is entirely possible to implement in theory, but it would be considerably more work, so this blog post does not include it.</p></li>
+ <li>
+  <p>All operators will be binary, and we will <strong>not</strong> support unary or mixfix operators. My intuition is that this technique should be able to be generalized to both of those things, but it would be considerably more complicated.</p></li></ul>
+
+<p>With those points in mind, what would the interface for our infix operator library look like for our users? Ideally, something like this:</p>
+
+<div class="brush: racket">
+ <div class="source">
+  <pre><span></span><span class="kn">#lang </span><span class="nn">racket</span>
+
+<span class="p">(</span><span class="k">require</span> <span class="p">(</span><span class="k">prefix-in</span> <span class="n">racket/base/</span> <span class="n">racket/base</span><span class="p">)</span>
+         <span class="s2">"infix.rkt"</span><span class="p">)</span>
+
+<span class="p">(</span><span class="n">define-infix-operator</span> <span class="nb">-</span> <span class="n">racket/base/-</span> <span class="kd">#:fixity</span> <span class="n">left</span><span class="p">)</span>
+<span class="p">(</span><span class="n">define-infix-operator</span> <span class="n">::</span> <span class="nb">cons</span> <span class="kd">#:fixity</span> <span class="n">right</span><span class="p">)</span>
+
+<span class="p">{{</span><span class="mi">2</span> <span class="nb">-</span> <span class="mi">1</span><span class="p">}</span> <span class="n">::</span> <span class="p">{</span><span class="mi">10</span> <span class="nb">-</span> <span class="mi">3</span><span class="p">}</span> <span class="n">::</span> <span class="o">&#39;</span><span class="p">()}</span>
+<span class="c1">; =&gt; &#39;(1 7)</span>
+</pre></div>
+
+</div>
+
+<p>Let’s get started.</p>
+
+<h1 id="implementing-infix-operators">Implementing infix operators</h1>
+
+<p>Now that we know what we want, how do we get there? Well, there are a few pieces to this puzzle. We’ll need to solve a two main problems:</p>
+
+<ol>
+ <li>
+  <p>How do we “hook into” expressions wrapped with curly braces so that we can perform a desugaring pass?</p></li>
+ <li>
+  <p>How can we associate fixity information with certain operators?</p></li></ol>
+
+<p>We’ll start by tackling the first problem, since its solution will inform the answer to the second. Since we won’t have any fixity information to start with, we’ll just assume that all operators associate left by default.</p>
+
+<p>So, how <em>do</em> we detect if a Racket expression is surrounded by curly braces? Normally, in <code>#lang racket</code>, parentheses, square brackets, and curly braces are all interchangeable. Indeed, if you use curly braces in the REPL, you will find that they are treated <em>exactly</em> the same as parentheses:</p>
+
+<div class="brush: racket">
+ <div class="source">
+  <pre><span></span><span class="nb">&gt;</span> <span class="p">{</span><span class="nb">+</span> <span class="mi">1</span> <span class="mi">2</span><span class="p">}</span>
+<span class="mi">3</span>
+</pre></div>
+
+</div>
+
+<p>If they are treated identically, giving them special behavior might seem hopeless, but don’t despair! Racket is no ordinary programming language, and it provides some tools to help us out here.</p>
+
+<p>Someone who has worked with Lisps before is likely already aware that Lisp source code is a very direct representation of its AST, composed mostly of lists, pairs, symbols, numbers, and strings. In Racket, this is also true, but Racket also wraps these datums in boxes known as <a href="http://docs.racket-lang.org/reference/syntax-model.html#%28tech._syntax._object%29"><em>syntax objects</em></a>. Syntax objects contain extra metadata about the code, most notably its lexical context, necessary for Racket’s hygiene system. However, syntax objects can also contain arbitrary metadata, known as <a href="http://docs.racket-lang.org/reference/stxprops.html#%28tech._syntax._property%29"><em>syntax properties</em></a>. Macros can attach arbitrary values to the syntax objects they produce using syntax properties, and other macros can inspect them. Racket’s <a href="http://docs.racket-lang.org/guide/Pairs__Lists__and_Racket_Syntax.html#%28tech._reader%29"><em>reader</em></a> (the syntax parser that turns program text into Racket syntax objects) also attaches certain syntax properties as part of its parsing process. One of those is named <a href="http://docs.racket-lang.org/reference/reader.html#%28idx._%28gentag._30._%28lib._scribblings%2Freference%2Freference..scrbl%29%29%29"><code>'paren-shape</code></a>.</p>
+
+<p>This syntax property, as the name implies, keeps track of the shape of parentheses in syntax objects. You can see that for yourself by inspecting the property’s value for different syntax objects in the REPL:</p>
+
+<div class="brush: racket">
+ <div class="source">
+  <pre><span></span><span class="nb">&gt;</span> <span class="p">(</span><span class="nb">syntax-property</span> <span class="o">#&#39;</span><span class="p">(</span><span class="mi">1</span> <span class="mi">2</span> <span class="mi">3</span><span class="p">)</span> <span class="o">&#39;</span><span class="ss">paren-shape</span><span class="p">)</span>
+<span class="no">#f</span>
+<span class="nb">&gt;</span> <span class="p">(</span><span class="nb">syntax-property</span> <span class="o">#&#39;</span><span class="p">[</span><span class="mi">1</span> <span class="mi">2</span> <span class="mi">3</span><span class="p">]</span> <span class="o">&#39;</span><span class="ss">paren-shape</span><span class="p">)</span>
+<span class="sc">#\[</span>
+<span class="nb">&gt;</span> <span class="p">(</span><span class="nb">syntax-property</span> <span class="o">#&#39;</span><span class="p">{</span><span class="mi">1</span> <span class="mi">2</span> <span class="mi">3</span><span class="p">}</span> <span class="o">&#39;</span><span class="ss">paren-shape</span><span class="p">)</span>
+<span class="sc">#\{</span>
+</pre></div>
+
+</div>
+
+<p>This syntax property gives us the capability to distinguish between syntax objects that use curly braces and those that don’t, which is a step in the right direction, but it still doesn’t give us any hook with which we can change the behavior of certain expressions. Fortunately, there’s something else that can.</p>
+
+<h2 id="customizing-application">Customizing application</h2>
+
+<p>Racket is a language <em>designed</em> to be extended, and it provides a variety of hooks in the language for the purposes of tweaking pieces in minor ways. One such hook is named <a href="http://docs.racket-lang.org/reference/application.html#%28form._%28%28lib._racket%2Fprivate%2Fbase..rkt%29._~23~25app%29%29"><code>#%app</code></a>, which is automatically introduced by the macroexpander whenever it encounters a function application. That means it effectively turns this:</p>
+
+<div class="brush: racket">
+ <div class="source">
+  <pre><span></span><span class="p">(</span><span class="nb">+</span> <span class="mi">1</span> <span class="mi">2</span><span class="p">)</span>
+</pre></div>
+
+</div>
+
+<p>…into this:</p>
+
+<div class="brush: racket">
+ <div class="source">
+  <pre><span></span><span class="p">(</span><span class="k">#%app</span> <span class="nb">+</span> <span class="mi">1</span> <span class="mi">2</span><span class="p">)</span>
+</pre></div>
+
+</div>
+
+<p>What’s special about <code>#%app</code> is that the macroexpander will use whichever <code>#%app</code> is in scope in the expression’s lexical context, so if we write our own version of <code>#%app</code>, it will be used instead of the one from <code>#lang racket</code>. This is what we will use to hook into ordinary Racket expressions.</p>
+
+<p>To write our custom version of <code>#%app</code>, we will use the usual tool: Racket’s industrial-strength macro-authoring DSL, <a href="http://docs.racket-lang.org/syntax/stxparse.html"><code>syntax/parse</code></a>. We’ll also use a helper library that provides some tools for pattern-matching on syntax objects with the <code>'paren-shape</code> syntax property, <a href="http://docs.racket-lang.org/syntax-classes/index.html#%28mod-path._syntax%2Fparse%2Fclass%2Fparen-shape%29"><code>syntax/parse/class/paren-shape</code></a>. Using these, we can transform expressions that are surrounded in curly braces differently from how we would transform expressions surrounded by parentheses:</p>
+
+<div class="brush: racket">
+ <div class="source">
+  <pre><span></span><span class="kn">#lang </span><span class="nn">racket</span>
+
+<span class="p">(</span><span class="k">require</span> <span class="p">(</span><span class="k">for-syntax</span> <span class="n">syntax/parse/class/paren-shape</span><span class="p">)</span>
+         <span class="p">(</span><span class="k">prefix-in</span> <span class="n">racket/base/</span> <span class="n">racket/base</span><span class="p">)</span>
+         <span class="n">syntax/parse/define</span><span class="p">)</span>
+
+<span class="p">(</span><span class="n">define-syntax-parser</span> <span class="k">#%app</span>
+  <span class="p">[{</span><span class="n">~braces</span> <span class="k">_</span> <span class="n">arg</span> <span class="k">...</span><span class="p">}</span>
+   <span class="o">#&#39;</span><span class="p">(</span><span class="n">#%infix</span> <span class="n">arg</span> <span class="k">...</span><span class="p">)]</span>
+  <span class="p">[(</span><span class="k">_</span> <span class="n">arg</span> <span class="k">...</span><span class="p">)</span>
+   <span class="o">#&#39;</span><span class="p">(</span><span class="n">racket/base/#%app</span> <span class="n">arg</span> <span class="k">...</span><span class="p">)])</span>
+</pre></div>
+
+</div>
+
+<p>This code will transform any applications surrounded in curly braces into one that starts with <code>#%infix</code> instead of <code>#%app</code>, so <code>{1 + 2}</code> will become <code>(#%infix 1 + 2)</code>, for example. The identifier <code>#%infix</code> isn’t actually special in any way, it just has a funny name, but we haven’t actually defined <code>#%infix</code> yet, so we need to do that next!</p>
+
+<p>To start, we’ll just handle the simplest case: infix expressions with precisely three subexpressions, like <code>{1 + 2}</code>, should be converted into the equivalent prefix expressions, in this case <code>(+ 1 2)</code>. We can do this with a simple macro:</p>
+
+<div class="brush: racket">
+ <div class="source">
+  <pre><span></span><span class="p">(</span><span class="n">define-syntax-parser</span> <span class="n">#%infix</span>
+  <span class="p">[(</span><span class="k">_</span> <span class="n">a</span> <span class="n">op</span> <span class="n">b</span><span class="p">)</span>
+   <span class="o">#&#39;</span><span class="p">(</span><span class="n">racket/base/#%app</span> <span class="n">op</span> <span class="n">a</span> <span class="n">b</span><span class="p">)])</span>
+</pre></div>
+
+</div>
+
+<p>Due to the way Racket propagates syntax properties, we explicitly indicate that the resulting expansion should use the <code>#%app</code> from <code>racket/base</code>, which will avoid any accidental infinite recursion between our <code>#%app</code> and <code>#%infix</code>. With this in place, we can now try our code out in the REPL, and believe it or not, we now support infix expressions with just those few lines of code:</p>
+
+<div class="brush: racket">
+ <div class="source">
+  <pre><span></span><span class="nb">&gt;</span> <span class="p">(</span><span class="nb">+</span> <span class="mi">1</span> <span class="mi">2</span><span class="p">)</span>
+<span class="mi">3</span>
+<span class="nb">&gt;</span> <span class="p">{</span><span class="mi">1</span> <span class="nb">+</span> <span class="mi">2</span><span class="p">}</span>
+<span class="mi">3</span>
+</pre></div>
+
+</div>
+
+<p>That’s pretty cool!</p>
+
+<p>Of course, we probably want to support infix applications with more than just a single binary operator, such as <code>{1 + 2 + 3}</code>. We can implement that just by adding another case to <code>#%infix</code> that handles more subforms:</p>
+
+<div class="brush: racket">
+ <div class="source">
+  <pre><span></span><span class="p">(</span><span class="n">define-syntax-parser</span> <span class="n">#%infix</span>
+  <span class="p">[(</span><span class="k">_</span> <span class="n">a</span> <span class="n">op</span> <span class="n">b</span><span class="p">)</span>
+   <span class="o">#&#39;</span><span class="p">(</span><span class="n">racket/base/#%app</span> <span class="n">op</span> <span class="n">a</span> <span class="n">b</span><span class="p">)]</span>
+  <span class="p">[(</span><span class="k">_</span> <span class="n">a</span> <span class="n">op</span> <span class="n">b</span> <span class="n">more</span> <span class="k">...</span><span class="p">)</span>
+   <span class="o">#&#39;</span><span class="p">(</span><span class="n">#%infix</span> <span class="p">(</span><span class="n">#%infix</span> <span class="n">a</span> <span class="n">op</span> <span class="n">b</span><span class="p">)</span> <span class="n">more</span> <span class="k">...</span><span class="p">)])</span>
+</pre></div>
+
+</div>
+
+<p>…and now, just by adding those two lines, we support arbitrarily-large sequences of infix operators:</p>
+
+<div class="brush: racket">
+ <div class="source">
+  <pre><span></span><span class="nb">&gt;</span> <span class="p">{</span><span class="mi">1</span> <span class="nb">+</span> <span class="mi">2</span> <span class="nb">+</span> <span class="mi">3</span><span class="p">}</span>
+<span class="mi">6</span>
+<span class="nb">&gt;</span> <span class="p">{</span><span class="mi">1</span> <span class="nb">+</span> <span class="mi">2</span> <span class="nb">+</span> <span class="mi">3</span> <span class="nb">+</span> <span class="mi">4</span><span class="p">}</span>
+<span class="mi">10</span>
+</pre></div>
+
+</div>
+
+<p>I don’t know about you, but I think being able to do this in less than 20 lines of code is pretty awesome. We can even mix different operators in the same expression:</p>
+
+<div class="brush: racket">
+ <div class="source">
+  <pre><span></span><span class="nb">&gt;</span> <span class="p">{</span><span class="mi">1</span> <span class="nb">+</span> <span class="mi">2</span> <span class="nb">*</span> <span class="mi">3</span> <span class="nb">-</span> <span class="mi">4</span><span class="p">}</span>
+<span class="mi">5</span>
+</pre></div>
+
+</div>
+
+<p>Of course, all of our infix expressions currently assume that all operators associate left, as was our plan. In general, though, there are lots of useful operators that associate right, such as <code>cons</code>, nested <code>-&gt;</code> types or contracts for curried functions, and <code>expt</code>, the exponentiation operator.</p>
+
+<h2 id="tracking-operator-fixity">Tracking operator fixity</h2>
+
+<p>Clearly, we need some way to associate operator fixity with certain identifiers, and we need to be able to do it at compile-time. Fortunately, Racket has a very robust mechanism for creating compile-time values. Unfortunately, simply associating metadata with an identifier is a little less convenient than it could be, but there is a general technique that can be done with little boilerplate.</p>
+
+<p>Essentially, Racket (like Scheme) uses a <code>define-syntax</code> form to define macros, which is what <code>define-syntax-parser</code> eventually expands into. However, unlike Scheme, Racket’s <code>define-syntax</code> is not <em>just</em> for defining macros—it’s for defining arbitrary bindings with compile-time (aka “phase 1”) values. Using this, we can define bindings that have entirely arbitrary values at compile-time, including plain data like numbers or strings:</p>
+
+<div class="brush: racket">
+ <div class="source">
+  <pre><span></span><span class="p">(</span><span class="k">define-syntax</span> <span class="n">foo</span> <span class="mi">3</span><span class="p">)</span>
+</pre></div>
+
+</div>
+
+<p>Once a binding has been defined using <code>define-syntax</code>, a macro can look up the value associated with it by using the <a href="http://docs.racket-lang.org/reference/stxtrans.html#%28def._%28%28quote._~23~25kernel%29._syntax-local-value%29%29"><code>syntax-local-value</code></a> function, which returns the compile-time value associated with an identifier:</p>
+
+<div class="brush: racket">
+ <div class="source">
+  <pre><span></span><span class="p">(</span><span class="k">begin-for-syntax</span>
+  <span class="p">(</span><span class="nb">println</span> <span class="p">(</span><span class="nb">syntax-local-value</span> <span class="o">#&#39;</span><span class="n">foo</span><span class="p">)))</span>
+<span class="c1">; =&gt; 3</span>
+</pre></div>
+
+</div>
+
+<p>The cool thing is that <code>syntax-local-value</code> gets the value associated with a specific <em>binding</em>, not a specific name. This means a macro can look up the compile-time value associated with an identifier provided to it as a subform. This is close to what we want, since we could use <code>syntax-local-value</code> to look up something associated with our infix operator bindings, but the trouble is that they would then cease to be usable as ordinary functions. For example, if you try and use the <code>foo</code> binding from the above example as an expression, Racket will complain about an “illegal use of syntax”, which makes sense, because <code>foo</code> is not bound to anything at runtime.</p>
+
+<p>To solve this problem, we can use something of a trick: any compile-time binding that happens to have a procedure as its value will be treated like a macro—that is, using it as an expression will cause the macroexpander to invoke the procedure with a syntax object representing the macro invocation, and the procedure is expected to produce a new syntax object as output. Additionally, Racket programmers can make custom datatypes valid procedures by using the <a href="http://docs.racket-lang.org/reference/procedures.html#%28def._%28%28lib._racket%2Fprivate%2Fbase..rkt%29._prop~3aprocedure%29%29"><code>prop:procedure</code></a> structure type property.</p>
+
+<p>If you are not familiar with the Racket macro system, this probably sounds rather complicated, but in practice, it’s not as confusing as it might seem. The trick here is to create a custom structure type at compile-time that we can use to track operator fixity alongside its runtime binding:</p>
+
+<div class="brush: racket">
+ <div class="source">
+  <pre><span></span><span class="p">(</span><span class="k">require</span> <span class="p">(</span><span class="k">for-syntax</span> <span class="n">syntax/transformer</span><span class="p">))</span>
+
+<span class="p">(</span><span class="k">begin-for-syntax</span>
+  <span class="p">(</span><span class="k">struct</span> <span class="n">infix-operator</span> <span class="p">(</span><span class="n">runtime-binding</span> <span class="n">fixity</span><span class="p">)</span>
+    <span class="kd">#:property</span> <span class="nb">prop:procedure</span>
+    <span class="p">(</span><span class="k">λ</span> <span class="p">(</span><span class="n">operator</span> <span class="n">stx</span><span class="p">)</span>
+      <span class="p">((</span><span class="nb">set!-transformer-procedure</span>
+        <span class="p">(</span><span class="n">make-variable-like-transformer</span>
+         <span class="p">(</span><span class="n">infix-operator-runtime-binding</span> <span class="n">operator</span><span class="p">)))</span>
+       <span class="n">stx</span><span class="p">))))</span>
+</pre></div>
+
+</div>
+
+<p>This is quite the magical incantation, and all the details of what is going on here are outside the scope of this blog post. Essentially, though, we can use values of this structure as a compile-time binding that will act just like the identifier provided for <code>runtime-binding</code>, but we can also include a value of our choosing for <code>fixity</code>. Here’s an example:</p>
+
+<div class="brush: racket">
+ <div class="source">
+  <pre><span></span><span class="p">(</span><span class="k">define-syntax</span> <span class="n">::</span> <span class="p">(</span><span class="n">infix-operator</span> <span class="o">#&#39;</span><span class="nb">cons</span> <span class="o">&#39;</span><span class="ss">right</span><span class="p">))</span>
+</pre></div>
+
+</div>
+
+<p>This new <code>::</code> binding will act, in every way, just like <code>cons</code>. If we use it in the REPL, you can see that it acts exactly the same:</p>
+
+<div class="brush: racket">
+ <div class="source">
+  <pre><span></span><span class="nb">&gt;</span> <span class="p">(</span><span class="n">::</span> <span class="mi">1</span> <span class="o">&#39;</span><span class="p">())</span>
+<span class="o">&#39;</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+</pre></div>
+
+</div>
+
+<p>However, we can also use <code>syntax-local-value</code> to extract this binding’s fixity at compile-time, and that’s what makes it interesting:</p>
+
+<div class="brush: racket">
+ <div class="source">
+  <pre><span></span><span class="p">(</span><span class="k">begin-for-syntax</span>
+  <span class="p">(</span><span class="nb">println</span> <span class="p">(</span><span class="n">infix-operator-fixity</span> <span class="p">(</span><span class="nb">syntax-local-value</span> <span class="o">#&#39;</span><span class="n">::</span><span class="p">))))</span>
+<span class="c1">; =&gt; &#39;right</span>
+</pre></div>
+
+</div>
+
+<p>Using this extra compile-time information, we can adjust our <code>#%infix</code> macro to inspect bindings and determine their fixity, then use that to make decisions about parsing. Just like we used <code>syntax/parse/class/paren-shape</code> to make decisions based on the <code>'paren-shape</code> syntax property, we can use <a href="http://docs.racket-lang.org/syntax-classes/index.html#%28mod-path._syntax%2Fparse%2Fclass%2Flocal-value%29"><code>syntax/parse/class/local-value</code></a> to pattern-match on bindings with a particular compile-time value. We’ll wrap this in a syntax class of our own to make the code easier to read:</p>
+
+<div class="brush: racket">
+ <div class="source">
+  <pre><span></span><span class="p">(</span><span class="k">begin-for-syntax</span>
+  <span class="p">(</span><span class="n">define-syntax-class</span> <span class="n">infix-op</span>
+    <span class="kd">#:description</span> <span class="s2">"infix operator"</span>
+    <span class="kd">#:attributes</span> <span class="p">[</span><span class="n">fixity</span><span class="p">]</span>
+    <span class="p">[</span><span class="n">pattern</span> <span class="p">{</span><span class="n">~var</span> <span class="n">op</span> <span class="p">(</span><span class="n">local-value</span> <span class="n">infix-operator?</span><span class="p">)}</span>
+             <span class="kd">#:attr</span> <span class="n">fixity</span> <span class="p">(</span><span class="n">infix-operator-fixity</span> <span class="p">(</span><span class="n">attribute</span> <span class="n">op.local-value</span><span class="p">))]))</span>
+</pre></div>
+
+</div>
+
+<p>Now, we can update <code>#%infix</code> to use our new <code>infix-op</code> syntax class:</p>
+
+<div class="brush: racket">
+ <div class="source">
+  <pre><span></span><span class="p">(</span><span class="n">define-syntax-parser</span> <span class="n">#%infix</span>
+  <span class="p">[(</span><span class="k">_</span> <span class="n">a</span> <span class="n">op:infix-op</span> <span class="n">b</span><span class="p">)</span>
+   <span class="o">#&#39;</span><span class="p">(</span><span class="n">racket/base/#%app</span> <span class="n">op</span> <span class="n">a</span> <span class="n">b</span><span class="p">)]</span>
+  <span class="p">[(</span><span class="k">_</span> <span class="n">a</span> <span class="n">op:infix-op</span> <span class="n">b</span> <span class="n">more</span> <span class="k">...</span><span class="p">)</span>
+   <span class="kd">#:when</span> <span class="p">(</span><span class="nb">eq?</span> <span class="o">&#39;</span><span class="ss">left</span> <span class="p">(</span><span class="n">attribute</span> <span class="n">op.fixity</span><span class="p">))</span>
+   <span class="o">#&#39;</span><span class="p">(</span><span class="n">#%infix</span> <span class="p">(</span><span class="n">#%infix</span> <span class="n">a</span> <span class="n">op</span> <span class="n">b</span><span class="p">)</span> <span class="n">more</span> <span class="k">...</span><span class="p">)]</span>
+  <span class="p">[(</span><span class="k">_</span> <span class="n">more</span> <span class="k">...</span> <span class="n">a</span> <span class="n">op:infix-op</span> <span class="n">b</span><span class="p">)</span>
+   <span class="kd">#:when</span> <span class="p">(</span><span class="nb">eq?</span> <span class="o">&#39;</span><span class="ss">right</span> <span class="p">(</span><span class="n">attribute</span> <span class="n">op.fixity</span><span class="p">))</span>
+   <span class="o">#&#39;</span><span class="p">(</span><span class="n">#%infix</span> <span class="n">more</span> <span class="k">...</span> <span class="p">(</span><span class="n">#%infix</span> <span class="n">a</span> <span class="n">op</span> <span class="n">b</span><span class="p">))])</span>
+</pre></div>
+
+</div>
+
+<p>Notably, we now require all operators to be bound to compile-time infix operator values, and we include two conditions via <code>#:when</code> clauses. These clauses check to ensure that the operator in question has the expected fixity before committing to that clause; if the condition fails, then parsing backtracks. Using this new definition of <code>#%infix</code>, we can successfully use <code>::</code> in an infix expression, and it will be parsed with the associativity that we expect:</p>
+
+<div class="brush: racket">
+ <div class="source">
+  <pre><span></span><span class="nb">&gt;</span> <span class="p">{</span><span class="mi">1</span> <span class="n">::</span> <span class="mi">2</span> <span class="n">::</span> <span class="mi">3</span> <span class="n">::</span> <span class="o">&#39;</span><span class="p">()}</span>
+<span class="o">&#39;</span><span class="p">(</span><span class="mi">1</span> <span class="mi">2</span> <span class="mi">3</span><span class="p">)</span>
+</pre></div>
+
+</div>
+
+<p>Exciting!</p>
+
+<h2 id="a-nicer-interface-for-defining-infix-operators">A nicer interface for defining infix operators</h2>
+
+<p>We currently have to define infix operators by explicitly using <code>define-syntax</code>, but this is not a very good interface. Users of infix syntax probably don’t want to have to understand the internal workings of the infix operator implementation, so we just need to define one final macro to consider this done: the <code>define-infix-operator</code> form from the example at the very beginning of this blog post.</p>
+
+<p>Fortunately, this macro is absolutely trivial to write. In fact, we can do it in a mere three lines of code, since it’s very minor sugar over the <code>define-syntax</code> definitions we were already writing:</p>
+
+<div class="brush: racket">
+ <div class="source">
+  <pre><span></span><span class="p">(</span><span class="n">define-simple-macro</span> <span class="p">(</span><span class="n">define-infix-operator</span> <span class="n">op:id</span> <span class="n">value:id</span>
+                       <span class="kd">#:fixity</span> <span class="p">{</span><span class="n">~and</span> <span class="n">fixity</span> <span class="p">{</span><span class="n">~or</span> <span class="p">{</span><span class="n">~datum</span> <span class="n">left</span><span class="p">}</span> <span class="p">{</span><span class="n">~datum</span> <span class="n">right</span><span class="p">}}})</span>
+  <span class="p">(</span><span class="k">define-syntax</span> <span class="n">op</span> <span class="p">(</span><span class="n">infix-operator</span> <span class="o">#&#39;</span><span class="n">value</span> <span class="o">&#39;</span><span class="ss">fixity</span><span class="p">)))</span>
+</pre></div>
+
+</div>
+
+<p>With this in hand, we can define some infix operators with a much nicer syntax:</p>
+
+<div class="brush: racket">
+ <div class="source">
+  <pre><span></span><span class="p">(</span><span class="n">define-infix-operator</span> <span class="nb">+</span> <span class="n">racket/base/+</span> <span class="kd">#:fixity</span> <span class="n">left</span><span class="p">)</span>
+<span class="p">(</span><span class="n">define-infix-operator</span> <span class="nb">-</span> <span class="n">racket/base/-</span> <span class="kd">#:fixity</span> <span class="n">left</span><span class="p">)</span>
+<span class="p">(</span><span class="n">define-infix-operator</span> <span class="nb">*</span> <span class="n">racket/base/*</span> <span class="kd">#:fixity</span> <span class="n">left</span><span class="p">)</span>
+<span class="p">(</span><span class="n">define-infix-operator</span> <span class="nb">/</span> <span class="n">racket/base//</span> <span class="kd">#:fixity</span> <span class="n">left</span><span class="p">)</span>
+
+<span class="p">(</span><span class="n">define-infix-operator</span> <span class="n">^</span> <span class="nb">expt</span> <span class="kd">#:fixity</span> <span class="n">right</span><span class="p">)</span>
+<span class="p">(</span><span class="n">define-infix-operator</span> <span class="n">::</span> <span class="nb">cons</span> <span class="kd">#:fixity</span> <span class="n">right</span><span class="p">)</span>
+</pre></div>
+
+</div>
+
+<p>With these simple definitions, we can write some very nice mathematical expressions that use infix syntax, in ordinary <code>#lang racket</code>:</p>
+
+<div class="brush: racket">
+ <div class="source">
+  <pre><span></span><span class="nb">&gt;</span> <span class="p">{</span><span class="mi">1</span> <span class="nb">+</span> <span class="mi">2</span> <span class="nb">-</span> <span class="mi">4</span><span class="p">}</span>
+<span class="mi">-1</span>
+<span class="nb">&gt;</span> <span class="p">{</span><span class="mi">2</span> <span class="n">^</span> <span class="mi">2</span> <span class="n">^</span> <span class="mi">3</span><span class="p">}</span>
+<span class="mi">256</span>
+<span class="nb">&gt;</span> <span class="p">{{</span><span class="mi">2</span> <span class="n">^</span> <span class="mi">2</span><span class="p">}</span> <span class="n">^</span> <span class="mi">3</span><span class="p">}</span>
+<span class="mi">64</span>
+</pre></div>
+
+</div>
+
+<p>And you know what’s most amazing about this? The entire thing is <strong>only 50 lines of code</strong>. Here is the entire implementation of infix operators from this blog post in a single code block, with absolutely nothing hidden or omitted:</p>
+
+<div class="brush: racket">
+ <div class="source">
+  <pre><span></span><span class="kn">#lang </span><span class="nn">racket</span>
+
+<span class="p">(</span><span class="k">require</span> <span class="p">(</span><span class="k">for-syntax</span> <span class="n">syntax/parse/class/local-value</span>
+                     <span class="n">syntax/parse/class/paren-shape</span>
+                     <span class="n">syntax/transformer</span><span class="p">)</span>
+         <span class="p">(</span><span class="k">prefix-in</span> <span class="n">racket/base/</span> <span class="n">racket/base</span><span class="p">)</span>
+         <span class="n">syntax/parse/define</span><span class="p">)</span>
+
+<span class="p">(</span><span class="k">begin-for-syntax</span>
+  <span class="p">(</span><span class="k">struct</span> <span class="n">infix-operator</span> <span class="p">(</span><span class="n">runtime-binding</span> <span class="n">fixity</span><span class="p">)</span>
+    <span class="kd">#:property</span> <span class="nb">prop:procedure</span>
+    <span class="p">(</span><span class="k">λ</span> <span class="p">(</span><span class="n">operator</span> <span class="n">stx</span><span class="p">)</span>
+      <span class="p">((</span><span class="nb">set!-transformer-procedure</span>
+        <span class="p">(</span><span class="n">make-variable-like-transformer</span>
+         <span class="p">(</span><span class="n">infix-operator-runtime-binding</span> <span class="n">operator</span><span class="p">)))</span>
+       <span class="n">stx</span><span class="p">)))</span>
+
+  <span class="p">(</span><span class="n">define-syntax-class</span> <span class="n">infix-op</span>
+    <span class="kd">#:description</span> <span class="s2">"infix operator"</span>
+    <span class="kd">#:attributes</span> <span class="p">[</span><span class="n">fixity</span><span class="p">]</span>
+    <span class="p">[</span><span class="n">pattern</span> <span class="p">{</span><span class="n">~var</span> <span class="n">op</span> <span class="p">(</span><span class="n">local-value</span> <span class="n">infix-operator?</span><span class="p">)}</span>
+             <span class="kd">#:attr</span> <span class="n">fixity</span> <span class="p">(</span><span class="n">infix-operator-fixity</span> <span class="p">(</span><span class="n">attribute</span> <span class="n">op.local-value</span><span class="p">))]))</span>
+
+<span class="p">(</span><span class="n">define-syntax-parser</span> <span class="k">#%app</span>
+  <span class="p">[{</span><span class="n">~braces</span> <span class="k">_</span> <span class="n">arg</span> <span class="k">...</span><span class="p">}</span>
+   <span class="o">#&#39;</span><span class="p">(</span><span class="n">#%infix</span> <span class="n">arg</span> <span class="k">...</span><span class="p">)]</span>
+  <span class="p">[(</span><span class="k">_</span> <span class="n">arg</span> <span class="k">...</span><span class="p">)</span>
+   <span class="o">#&#39;</span><span class="p">(</span><span class="n">racket/base/#%app</span> <span class="n">arg</span> <span class="k">...</span><span class="p">)])</span>
+
+<span class="p">(</span><span class="n">define-syntax-parser</span> <span class="n">#%infix</span>
+  <span class="p">[(</span><span class="k">_</span> <span class="n">a</span> <span class="n">op:infix-op</span> <span class="n">b</span><span class="p">)</span>
+   <span class="o">#&#39;</span><span class="p">(</span><span class="n">racket/base/#%app</span> <span class="n">op</span> <span class="n">a</span> <span class="n">b</span><span class="p">)]</span>
+  <span class="p">[(</span><span class="k">_</span> <span class="n">a</span> <span class="n">op:infix-op</span> <span class="n">b</span> <span class="n">more</span> <span class="k">...</span><span class="p">)</span>
+   <span class="kd">#:when</span> <span class="p">(</span><span class="nb">eq?</span> <span class="o">&#39;</span><span class="ss">left</span> <span class="p">(</span><span class="n">attribute</span> <span class="n">op.fixity</span><span class="p">))</span>
+   <span class="o">#&#39;</span><span class="p">(</span><span class="n">#%infix</span> <span class="p">(</span><span class="n">#%infix</span> <span class="n">a</span> <span class="n">op</span> <span class="n">b</span><span class="p">)</span> <span class="n">more</span> <span class="k">...</span><span class="p">)]</span>
+  <span class="p">[(</span><span class="k">_</span> <span class="n">more</span> <span class="k">...</span> <span class="n">a</span> <span class="n">op:infix-op</span> <span class="n">b</span><span class="p">)</span>
+   <span class="kd">#:when</span> <span class="p">(</span><span class="nb">eq?</span> <span class="o">&#39;</span><span class="ss">right</span> <span class="p">(</span><span class="n">attribute</span> <span class="n">op.fixity</span><span class="p">))</span>
+   <span class="o">#&#39;</span><span class="p">(</span><span class="n">#%infix</span> <span class="n">more</span> <span class="k">...</span> <span class="p">(</span><span class="n">#%infix</span> <span class="n">a</span> <span class="n">op</span> <span class="n">b</span><span class="p">))])</span>
+
+<span class="p">(</span><span class="n">define-simple-macro</span> <span class="p">(</span><span class="n">define-infix-operator</span> <span class="n">op:id</span> <span class="n">value:id</span>
+                       <span class="kd">#:fixity</span> <span class="p">{</span><span class="n">~and</span> <span class="n">fixity</span> <span class="p">{</span><span class="n">~or</span> <span class="p">{</span><span class="n">~datum</span> <span class="n">left</span><span class="p">}</span> <span class="p">{</span><span class="n">~datum</span> <span class="n">right</span><span class="p">}}})</span>
+  <span class="p">(</span><span class="k">define-syntax</span> <span class="n">op</span> <span class="p">(</span><span class="n">infix-operator</span> <span class="o">#&#39;</span><span class="n">value</span> <span class="o">&#39;</span><span class="ss">fixity</span><span class="p">)))</span>
+
+<span class="p">(</span><span class="n">define-infix-operator</span> <span class="nb">+</span> <span class="n">racket/base/+</span> <span class="kd">#:fixity</span> <span class="n">left</span><span class="p">)</span>
+<span class="p">(</span><span class="n">define-infix-operator</span> <span class="nb">-</span> <span class="n">racket/base/-</span> <span class="kd">#:fixity</span> <span class="n">left</span><span class="p">)</span>
+<span class="p">(</span><span class="n">define-infix-operator</span> <span class="nb">*</span> <span class="n">racket/base/*</span> <span class="kd">#:fixity</span> <span class="n">left</span><span class="p">)</span>
+<span class="p">(</span><span class="n">define-infix-operator</span> <span class="nb">/</span> <span class="n">racket/base//</span> <span class="kd">#:fixity</span> <span class="n">left</span><span class="p">)</span>
+
+<span class="p">(</span><span class="n">define-infix-operator</span> <span class="n">^</span> <span class="nb">expt</span> <span class="kd">#:fixity</span> <span class="n">right</span><span class="p">)</span>
+<span class="p">(</span><span class="n">define-infix-operator</span> <span class="n">::</span> <span class="nb">cons</span> <span class="kd">#:fixity</span> <span class="n">right</span><span class="p">)</span>
+</pre></div>
+
+</div>
+
+<p>Racket is a hell of a programming language.</p>
+
+<h1 id="applications-limitations-and-implications">Applications, limitations, and implications</h1>
+
+<p>This blog post has outlined a complete, useful model for infix operators, and it is now hopefully clear how they work, but many of the most interesting properties of this implementation are probably not obvious. As far as I can make out, this embedding of infix operators into a macro system is novel, and I am <em>almost certain</em> that the way this implementation tracks fixity information is unique. One of the most interesting capabilities gained from this choice of implementation is the ability for macros to define infix operators and control their fixity, even <em>locally</em>.</p>
+
+<p>What does this mean? Well, remember that infix operators are just special syntax bindings. Racket includes a variety of forms for binding or adjusting macros locally, such as <code>let-syntax</code> and <code>syntax-parameterize</code>. Using these tools, it would be entirely possible to implement a <code>with-fixity</code> macro, that could adjust the fixity of an operator within a syntactic block. This could be used, for example, to make <code>/</code> right associative within a block of code:</p>
+
+<div class="brush: racket">
+ <div class="source">
+  <pre><span></span><span class="nb">&gt;</span> <span class="p">{</span><span class="mi">1</span> <span class="nb">/</span> <span class="mi">2</span> <span class="nb">/</span> <span class="mi">3</span><span class="p">}</span>
+<span class="m">1/6</span>
+<span class="nb">&gt;</span> <span class="p">(</span><span class="n">with-fixity</span> <span class="p">([</span><span class="nb">/</span> <span class="n">right</span><span class="p">])</span>
+    <span class="p">{</span><span class="mi">1</span> <span class="nb">/</span> <span class="mi">2</span> <span class="nb">/</span> <span class="mi">3</span><span class="p">})</span>
+<span class="mi">1</span> <span class="m">1/2</span>
+</pre></div>
+
+</div>
+
+<p>In fact, this macro is hardly theoretical, since it could be implemented in a trivial 7 lines, simply expanding to uses of <code>splicing-let</code> and <code>splicing-let-syntax</code>:</p>
+
+<div class="brush: racket">
+ <div class="source">
+  <pre><span></span><span class="p">(</span><span class="n">define-simple-macro</span>
+  <span class="p">(</span><span class="n">with-fixity</span> <span class="p">([</span><span class="n">op:id</span> <span class="p">{</span><span class="n">~and</span> <span class="n">fixity</span> <span class="p">{</span><span class="n">~or</span> <span class="p">{</span><span class="n">~datum</span> <span class="n">left</span><span class="p">}</span> <span class="p">{</span><span class="n">~datum</span> <span class="n">right</span><span class="p">}}}]</span> <span class="k">...</span><span class="p">)</span>
+    <span class="n">body</span> <span class="k">...</span><span class="p">)</span>
+  <span class="kd">#:with</span> <span class="p">[</span><span class="n">op-tmp</span> <span class="k">...</span><span class="p">]</span> <span class="p">(</span><span class="nb">generate-temporaries</span> <span class="o">#&#39;</span><span class="p">[</span><span class="n">op</span> <span class="k">...</span><span class="p">])</span>
+  <span class="p">(</span><span class="n">splicing-let</span> <span class="p">([</span><span class="n">op-tmp</span> <span class="n">op</span><span class="p">]</span> <span class="k">...</span><span class="p">)</span>
+    <span class="p">(</span><span class="n">splicing-let-syntax</span> <span class="p">([</span><span class="n">op</span> <span class="p">(</span><span class="n">infix-operator</span> <span class="o">#&#39;</span><span class="n">op-tmp</span> <span class="o">&#39;</span><span class="ss">fixity</span><span class="p">)]</span> <span class="k">...</span><span class="p">)</span>
+      <span class="n">body</span> <span class="k">...</span><span class="p">)))</span>
+</pre></div>
+
+</div>
+
+<p>This is not especially useful given the current set of infix operator features, but it’s easy to imagine how useful it could be in a system that also supported a notion of precedence. It is not entirely uncommon to encounter certain expressions that could be more cleanly expressed with a local set of operator precedence rules, perhaps described as a set of relations <em>between</em> operators rather than a global table of magic precedence numbers. With traditional approaches to infix operators, parsing such code would be difficult without a very rigid syntactic structure, but this technique makes it easy.</p>
+
+<p>As mentioned at the beginning of this blog post, this technique is also not merely a novelty—as of now, I am actively using this in <a href="https://github.com/lexi-lambda/hackett">Hackett</a> to support infix operators with all of the features outlined here. The Hackett implementation is a little bit fancier than the one in this blog post, since it works harder to produce better error messages. It explicitly disallows mixing left associative and right associative operators in the same expression, so it does some additional validation as part of expansion, and it arranges for source location information to be copied onto the result. It also make a different design decision to allow <em>any</em> expression to serve as an infix operator, assuming left associativity if no fixity annotation is available.</p>
+
+<p>If you’re interested in the code behind the additional steps Hackett takes to make infix operators more usable and complete, take a look at <a href="https://github.com/lexi-lambda/hackett/blob/0d177d00a9ee96f30dd76761f1cb86f15830779f/hackett-lib/hackett/private/infix.rkt">this file for the definition of infix bindings</a>, as well as <a href="https://github.com/lexi-lambda/hackett/blob/0d177d00a9ee96f30dd76761f1cb86f15830779f/hackett-lib/hackett/private/kernel.rkt#L80-L101">this file for the defintion of infix application</a>. My hope is to eventually add support for some sort of precedence information, though who knows—maybe infix operators will be easier to reason about if the rules are kept extremely simple. I am also considering adding support for so-called “operator sections” at some point, which would allow things like <code>{_ - 1}</code> to serve as a shorthand for <code>(lambda [x] {x - 1})</code>, but I haven’t yet decided if I like the tradeoffs involved.</p>
+
+<p>It’s possible that this implementation of infix operators might also be useful in languages in the Racket ecosystem besides Hackett. However, I’m not sure it makes a ton of sense in <code>#lang racket</code> without modifications, as variadic functions subsume many of the cases where infix operators are needed in Haskell. If there is a clamoring for this capability, I would be happy to consider extracting the functionality into a library, but as of right now, I don’t have any plans to do so.</p>
+
+<p>Finally, the main point of this blog post is to showcase how easy it is to do things in Racket that would be impossible in most languages and difficult even in most Lisps. It also helps to show off how Hackett is already benefitting from those capabilities: while this particular feature is built-in to <code>#lang hackett</code>, there’s no reason something similar but more powerful couldn’t be built as a separate library by a <em>user</em> of Hackett. Even as Hackett’s author, I think that’s exciting, since makes it possible for users to experiment with improvements to the language on their own. Some of those improvements may eventually be rolled into the core language or standard library, but many of them can likely live effectively in separate libraries, accessible on-demand to those who need them. After all, that’s one of Racket’s most important promises—languages as libraries—and it’s why Hackett is a part of the Racket ecosystem.</p>
+  <footer>
+    <ul class="pager">
+      <li class="previous">
+        <a href="/blog/2017/08/28/hackett-progress-report-documentation-quality-of-life-and-snake/">&larr; <em>Hackett progress report: documentation, quality of life, and snake</em></a>
+      </li>
+      <li class="next">
+        <a href="/blog/2017/06/29/unit-testing-effectful-haskell-with-monad-mock/"><em>Unit testing effectful Haskell with monad-mock</em> &rarr;</a>
+      </li>
+    </ul>
+  </footer>
+</article>
+        </div>
+      </section>
+      <footer>
+        <div class="content">
+          <h2 id="copyright-notice">© 2021, Alexis King</h2>
+          <h3>
+            Built with <a href="https://github.com/greghendershott/frog">Frog</a>, the
+            <strong>fr</strong>ozen bl<strong>og</strong> tool.
+          </h3>
+          <h3>
+            Feeds are available via <a href="/feeds/all.atom.xml">Atom</a>
+            or <a href="/feeds/all.rss.xml">RSS</a>.
+          </h3>
+        </div>
+      </footer>
+    </div>
+  </body>
+</html>

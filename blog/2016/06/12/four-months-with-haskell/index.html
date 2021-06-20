@@ -1,0 +1,592 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <title>Four months with Haskell</title>
+    <meta name="description" content="At the end of January of this year, I switched to a new job, almost exclusively because I was enticed by the idea of being able to write Haskell. The concept of using such an interesting programming language every day instead of what I’d been doing before...">
+    <meta name="author"      content="Alexis King">
+    <meta name="keywords"    content="haskell, functional programming">
+    <meta name="viewport"    content="width=device-width, initial-scale=1.0">
+    <link rel="icon"      href="/favicon.ico">
+    <link rel="canonical" href="http://lexi-lambda.github.io/blog/2016/06/12/four-months-with-haskell/">
+    <link rel="next" href="/blog/2016/02/18/simple-safe-multimethods-in-racket/">
+    <link rel="prev" href="/blog/2016/08/11/climbing-the-infinite-ladder-of-abstraction/">
+    <!-- CSS -->
+    <link rel="stylesheet" type="text/css" href="https://fonts.googleapis.com/css?family=Merriweather+Sans:400,300,300italic,400italic,700,700italic,800,800italic|Merriweather:400,300,300italic,400italic,700,700italic,900,900italic|Fira+Code:300,400,500,600,700">
+    <link rel="stylesheet" type="text/css" href="/css/application.min.css">
+    <link rel="stylesheet" type="text/css" href="/css/pygments.min.css">
+    <!-- Feeds -->
+    <link rel="alternate" type="application/atom+xml"
+          href="/feeds/all.atom.xml" title="Atom Feed">
+    <link rel="alternate" type="application/rss+xml"
+          href="/feeds/all.rss.xml" title="RSS Feed">
+    <!-- JS -->
+    <!-- <script src="/js/application.min.js"></script> -->
+    <script type="text/javascript">
+      (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+      (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+      m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+      })(window,document,'script','//www.google-analytics.com/analytics.js','ga');
+
+      ga('create', 'UA-65250372-1', 'auto');
+      ga('send', 'pageview');
+    </script>
+  </head>
+  <body>
+    <div id="page-content">
+      <!-- Navigation Bar -->
+      <header>
+        <nav role="navigation" class="navigation-bar">
+          <ul class="navigation-items left">
+            <li id="blog-title-header"><a href="/"><h1>Alexis King</h1></a></li>
+          </ul>
+          <ul class="navigation-items center"></ul>
+          <ul class="navigation-items right">
+            <li><a href="/">Home</a></li>
+            <li><a href="/resume.html">About Me</a></li>
+          </ul>
+        </nav>
+      </header>
+      <section role="main">
+        <!-- Main column -->
+        <div class="content" class="col-md-12">
+
+
+
+          <article class="main">
+  <header>
+    <h1 class="title">Four months with Haskell</h1>
+    <div class='date-and-tags'>
+      <time datetime="2016-06-12T16:02:27">
+        2016-06-12
+      </time>
+      <span style="margin: 0 3px">⦿</span>
+      <span class="tags"><a href="/tags/haskell.html">haskell</a>, <a href="/tags/functional-programming.html">functional programming</a></span>
+    </div>
+  </header>
+
+<p>At the end of January of this year, I switched to a new job, almost exclusively because I was enticed by the idea of being able to write Haskell. The concept of using such an interesting programming language every day instead of what I’d been doing before (mostly Rails and JavaScript) was very exciting, and I’m pleased to say that the switch seems to have been well worth it.</p>
+
+<p>Haskell was a language I had played with in the past but never really used for anything terribly practical, but lately I think I can confidently say that it really is an <em>incredible</em> programming language. At the same time, it has some significant drawbacks, too, though probably not the ones people expect. I certainly wasn’t prepared for some of the areas where Haskell would blow me away, nor was I capable of realizing which parts would leave me hopelessly frustrated until I actually sat down and started writing lots and lots of code.</p>
+<!-- more-->
+
+<h1 id="dispelling-some-myths">Dispelling some myths</h1>
+
+<p>Before moving on and discussing my experiences in depth, I want to take a quick detour to dispel some frequent rumors I hear about why Haskell is at least potentially problematic. These are things I hear a <em>lot</em>, and nothing in my experience so far would lead me to believe these are actually true. Ultimately, I don’t want to spend too much time on these—I think that, for the most part, they are nitpicks that people complain about to avoid understanding the deeper and more insidious problems with the language—but I think it’s important to at least mention them.</p>
+
+<h2 id="hiring-haskell-developers-is-not-hard">Hiring Haskell developers is not hard</h2>
+
+<p>I am on the first Haskell team in my company, and I am among the first Haskell developers we ever hired. Not only were we hiring without much experience with Haskell at all, we explicitly <em>did not</em> want to hire remote. Debate all you like about whether or not permitting remote work is a good idea, but I don’t think anyone would dispute that this constraint makes hiring much harder. We didn’t have any trouble finding a very large stream of qualified applicants, and it definitely seems to have dispelled any fears that we would have trouble finding new candidates in the future.</p>
+
+<h2 id="performing-io-in-haskell-is-easy">Performing I/O in Haskell is easy</h2>
+
+<p>Haskell’s purity is a point of real contention, and it’s one of the most frustrating complaints I often hear about Haskell. It is surprisingly common to hear concerns along the lines of “I don’t want to use Haskell because its academic devotion to purity sounds like it would make it very hard to get anything done”. There are very valid reasons to avoid Haskell, but in practice, I/O is not one of them. In fact, I found that isolating I/O in Haskell was much the same as isolating I/O in every other language, which I need to do anyway to permit unit testing.</p>
+
+<p>&hellip;you <em>do</em> write deterministic unit tests for your impure logic, right?</p>
+
+<h2 id="working-with-lots-of-monads-is-not-very-difficult">Working with lots of monads is not very difficult</h2>
+
+<p>The “M word” has ended up being a running joke <em>about</em> Haskell that actually ends up coming up fairly rarely <em>within</em> the Haskell community. To be clear, there is <em>no doubt</em> in my mind that monads make Haskell intimidating and provide a steep learning curve for new users. The proliferation of the joke that monads are impossible to explain, to the point of becoming mythologized, is absolutely indicative of a deeper problem about Haskell’s accessibility. However, once people learn the basics about monads, I’ve found that applying them is just as natural as applying any other programming pattern.</p>
+
+<p>Monads are used to assist the programmer, not impede them, and they really do pay off in practice. When something has a monadic interface, there’s a decent chance I already know what that interface is going to do, and that makes working with lots of different monads surprisingly easy. Admittedly, I do rely very, very heavily on tooling to help me out here, but with things like mouseover type tooltips, I’ve actually found that working with a variety of different monads and monad transformers is actually quite pleasant, and it makes things very readable!</p>
+
+<h1 id="haskell-the-good-parts">Haskell: the good parts</h1>
+
+<p>With the disclaimers out of the way, I really just want to gush for a little bit. This is not going to be an objective, reasoned survey of why Haskell is good. I am not even really going to touch upon why types are so great and why purity is so wonderful—I’d love to discuss those in depth, but that’s for a different blog post. For now, I just want to touch upon the real surprises, the real things that made me <em>excited</em> about Haskell in ways I didn’t expect. These are the things that my subjective little experience has found fun.</p>
+
+<h2 id="language-extensions-are-haskell">Language extensions <em>are</em> Haskell</h2>
+
+<p>There was a time in my life when I spent a lot of time writing C. There are a lot of compilers for C, and they all implement the language in subtly different but often incompatible ways, especially on different platforms. The only way to maintain a modicum of predictability was to adhere to the standards <em>religiously</em>, even when certain GCC or MSVC extensions seem tantalizingly useful. I was actually bitten a few times by real instances where I figured I’d just use a harmless extension that was implemented everywhere, then found out it worked slightly differently across different compilers in a particular edge case. It was a learning experience.</p>
+
+<p>It seems that this fear provides a very real distrust for using GHC’s numerous <em>language extensions</em>, and indeed, for a long time, I felt that it was probably an admirable goal to stick to Haskell 98 or Haskell 2010 as closely as possible. Sometimes I chose a slightly more verbose solution that was standard Haskell to avoid turning on a trivial extension that would make the code look a little bit cleaner.</p>
+
+<p>About a year later, I’m finding that attitude was not only a mistake, but it forced me to often completely miss out on a lot of Haskell’s core value. GHC <em>won</em>, and now GHC and Haskell are basically synonymous. With that in mind, the portability concerns of language extensions are a bit of a non-issue, and turning them on is a very good idea! Some extensions are more than a little dangerous, so they cannot all be turned on without thinking, but the question is absolutely not “Is using language extensions a good idea?” and more “Is using <em>this</em> language extension a good idea?”</p>
+
+<p>This is important, and I bring it up for a reason: so much of the awesomeness of Haskell is locked behind language extensions. Turning a lot of these on is one of the main things that made me really start to see how incredibly powerful Haskell actually is.</p>
+
+<h2 id="phantom-types">Phantom types</h2>
+
+<p>I’m going to start out by talking about <em>phantom types</em>, which are a pretty simple concept but a powerful one, and they serve as the foundation for a lot of other cool type-level tricks that can make Haskell extremely interesting. The basic idea of a phantom type is simple; it’s a type parameter that isn’t actually used to represent any particular runtime value:</p>
+
+<div class="brush: haskell">
+ <div class="source">
+  <pre><span></span><span class="kr">newtype</span> <span class="kt">Id</span> <span class="n">a</span> <span class="ow">=</span> <span class="kt">Id</span> <span class="kt">Text</span>
+</pre></div>
+
+</div>
+
+<p>This type represents an id for some kind of value, but although the kind of value is specified in the type as the <code>a</code> type parameter, it isn’t actually used anywhere on the data definition—no matter what <code>a</code> is, an <code>Id</code> is just a piece of text. This makes it possible to write functions that operate on specific kinds of ids, and those invariants will be statically checked by the compiler, even though the runtime representation is entirely identical:</p>
+
+<div class="brush: haskell">
+ <div class="source">
+  <pre><span></span><span class="nf">fetchUser</span> <span class="ow">::</span> <span class="kt">MonadDB</span> <span class="n">m</span> <span class="ow">=&gt;</span> <span class="kt">Id</span> <span class="kt">User</span> <span class="ow">-&gt;</span> <span class="n">m</span> <span class="kt">User</span>
+</pre></div>
+
+</div>
+
+<p>Using <code>FlexibleInstances</code>, it’s also possible to create different instances for different kinds of ids. For example, it would be possible to have different <code>Show</code> instances depending on the type of id in question.</p>
+
+<div class="brush: haskell">
+ <div class="source">
+  <pre><span></span><span class="kr">instance</span> <span class="kt">Show</span> <span class="p">(</span><span class="kt">Id</span> <span class="kt">User</span><span class="p">)</span> <span class="kr">where</span>
+  <span class="n">show</span> <span class="p">(</span><span class="kt">Id</span> <span class="n">txt</span><span class="p">)</span> <span class="ow">=</span> <span class="s">"user #"</span> <span class="o">&lt;&gt;</span> <span class="n">unpack</span> <span class="n">txt</span>
+
+<span class="kr">instance</span> <span class="kt">Show</span> <span class="p">(</span><span class="kt">Id</span> <span class="kt">Post</span><span class="p">)</span> <span class="kr">where</span>
+  <span class="n">show</span> <span class="p">(</span><span class="kt">Id</span> <span class="n">txt</span><span class="p">)</span> <span class="ow">=</span> <span class="s">"post #"</span> <span class="o">&lt;&gt;</span> <span class="n">unpack</span> <span class="n">txt</span>
+</pre></div>
+
+</div>
+
+<p>This provides a simple framework for encoding entirely arbitrary information into the type system, then asking the compiler to actually check assertions about that information. This is made even more powerful with some other extensions, which I’ll talk about shortly.</p>
+
+<h2 id="letting-the-compiler-write-code">Letting the compiler write code</h2>
+
+<p>One of the things I really dislike, more than most things, is boilerplate. A little bit of boilerplate is fine—even necessary at times—but as soon as I start wondering if a code generator would improve things, I think the programming language has pretty much failed me.</p>
+
+<p>I write a lot of Racket because, in a sense, Racket is the ultimate boilerplate killer: the macro system is a first-class code generator integrated with the rest of the language, and it means that boilerplate is almost never an issue. Of course, that’s not always true: sometimes a bit of boilerplate <em>is</em> still necessary because macros cannot deduce enough information about the program to generate the code entirely on their own, and in Haskell, some of that information is actually present in the type system.</p>
+
+<p>This leads to two absolutely incredible extensions, both of which are simple and related, but which actually <em>completely change</em> how I approach problems when programming. These two extensions are <code>GeneralizedNewtypeDeriving</code> and <code>StandaloneDeriving</code>.</p>
+
+<h3 id="newtypes-and-type-safety">Newtypes and type safety</h3>
+
+<p>The basic idea is that “newtypes” are just simple wrapper types in Haskell. This turns out to be extremely important when trying to find the value of Haskell because they allow you to harden type safety by specializing types to <em>your</em> domain. For example, consider a type representing a user’s name:</p>
+
+<div class="brush: haskell">
+ <div class="source">
+  <pre><span></span><span class="kr">newtype</span> <span class="kt">Name</span> <span class="ow">=</span> <span class="kt">Name</span> <span class="kt">Text</span>
+</pre></div>
+
+</div>
+
+<p>This type is extremely simple, and in fact isn’t even at all different from a simple <code>Text</code> value with respect to its representation, since all combinations of unicode characters are allowed in a name. Therefore, what’s the point of a separate type? Well, this allows Haskell to introduce actual compilation failures when two different kinds of textual data are mixed. This is not a new idea, and even in languages that don’t support this sort of thing, Joel Spolsky’s old blog post <a href="http://www.joelonsoftware.com/articles/Wrong.html">Making Wrong Code Look Wrong</a> describes how it can be done by convention. Still, almost every modern language makes this possible: in C, it would be a single-member <code>struct</code>, in class-based OO languages, it would be a single-member class&hellip; this is not a complicated idea.</p>
+
+<p>The difference lies in its usage. In other languages, this strategy is actually not very frequently employed for the simple reason that it is almost always extremely annoying. You are forced to do tons of wrapping/unwrapping, and at that point it isn’t really clear if you’re even getting all that much value out of the distinction when your first solution to a type mismatch is wrapping or unwrapping the value without a second thought. In Haskell, however, this can be heavily mitigated by asking the compiler to <em>automatically derive typeclass implementations</em>, which allow the unwrapping/wrapping to effectively happen implicitly for a constrained set of operations.</p>
+
+<h3 id="using-generalizednewtypederiving">Using <code>GeneralizedNewtypeDeriving</code></h3>
+
+<p>Consider the <code>Name</code> type once again, but this time, let’s derive a class:</p>
+
+<div class="brush: haskell">
+ <div class="source">
+  <pre><span></span><span class="kr">newtype</span> <span class="kt">Name</span> <span class="ow">=</span> <span class="kt">Name</span> <span class="kt">Text</span>
+  <span class="kr">deriving</span> <span class="p">(</span><span class="kt">IsString</span><span class="p">)</span>
+</pre></div>
+
+</div>
+
+<p>The <code>IsString</code> typeclass in Haskell allows custom types to automatically be created from string literals. It is <em>not</em> handled specially by Haskell’s <code>deriving</code> mechanism. Since <code>Text</code> implements <code>IsString</code>, an instance will be generated that simply defers to the underlying type, automatically generating the code to wrap the result up in a <code>Name</code> box at the end. This means that code like this will now just magically work:</p>
+
+<div class="brush: haskell">
+ <div class="source">
+  <pre><span></span><span class="nf">name</span> <span class="ow">::</span> <span class="kt">Name</span>
+<span class="nf">name</span> <span class="ow">=</span> <span class="s">"Alyssa P. Hacker"</span>
+</pre></div>
+
+</div>
+
+<p>No boilerplate needs to be written! This is a neat trick, but it actually turns out to be far more useful than that simple example in practice. What really makes this functionality shine is when you want to derive <em>some</em> kinds of functionality but disallow some others. For example, using the <a href="https://hackage.haskell.org/package/text-conversions"><code>text-conversions</code></a> package, it’s possible to do something like this:</p>
+
+<div class="brush: haskell">
+ <div class="source">
+  <pre><span></span><span class="kr">newtype</span> <span class="kt">Id</span> <span class="n">a</span> <span class="ow">=</span> <span class="kt">Id</span> <span class="kt">Text</span>
+  <span class="kr">deriving</span> <span class="p">(</span><span class="kt">Eq</span><span class="p">,</span> <span class="kt">Show</span><span class="p">,</span> <span class="kt">ToText</span><span class="p">,</span> <span class="kt">ToJSON</span><span class="p">)</span>
+</pre></div>
+
+</div>
+
+<p>This creates an opaque <code>Id</code> type, but it automatically generates conversions <em>to</em> textual formats. However, it does <em>not</em> automatically create <code>FromText</code> or <code>FromJSON</code> instances, which would be dangerous because decoding <code>Id</code>s can potentially fail. It’s then possible to write out those instances manually to preserve a type safety:</p>
+
+<div class="brush: haskell">
+ <div class="source">
+  <pre><span></span><span class="kr">instance</span> <span class="kt">FromText</span> <span class="p">(</span><span class="kt">Maybe</span> <span class="p">(</span><span class="kt">Id</span> <span class="n">a</span><span class="p">))</span> <span class="kr">where</span>
+  <span class="n">fromText</span> <span class="n">str</span> <span class="ow">=</span> <span class="kr">if</span> <span class="n">isValidId</span> <span class="n">str</span> <span class="kr">then</span> <span class="kt">Just</span> <span class="p">(</span><span class="kt">Id</span> <span class="n">str</span><span class="p">)</span> <span class="kr">else</span> <span class="kt">Nothing</span>
+
+<span class="kr">instance</span> <span class="kt">FromJSON</span> <span class="p">(</span><span class="kt">Id</span> <span class="n">a</span><span class="p">)</span> <span class="kr">where</span>
+  <span class="n">parseJSON</span> <span class="p">(</span><span class="kt">String</span> <span class="n">val</span><span class="p">)</span> <span class="ow">=</span> <span class="n">maybe</span> <span class="p">(</span><span class="n">fail</span> <span class="s">"invalid id"</span><span class="p">)</span> <span class="n">return</span> <span class="p">(</span><span class="n">fromText</span> <span class="n">val</span><span class="p">)</span>
+  <span class="n">parseJSON</span> <span class="kr">_</span>            <span class="ow">=</span> <span class="n">fail</span> <span class="s">"invalid id"</span>
+</pre></div>
+
+</div>
+
+<h3 id="using-standalonederiving">Using <code>StandaloneDeriving</code></h3>
+
+<p>The ordinary <code>deriving</code> mechanism is extremely useful, especially when paired with the above, but sometimes it is desirable to have a little bit more flexibility. In these cases, <code>StandaloneDeriving</code> can help.</p>
+
+<p>Take the <code>Id</code> example again: it has a phantom type, and simply adding something like <code>deriving (ToText)</code> with derive <code>ToText</code> instances for <em>all</em> kinds of ids. It is potentially useful, however, to derive instances for more specific id types. Using standalone <code>deriving</code> constructs permits this sort of flexibility.</p>
+
+<div class="brush: haskell">
+ <div class="source">
+  <pre><span></span><span class="kr">deriving</span> <span class="kr">instance</span> <span class="kt">ToText</span> <span class="p">(</span><span class="kt">Id</span> <span class="kt">User</span><span class="p">)</span>
+
+<span class="kr">instance</span> <span class="kt">ToText</span> <span class="p">(</span><span class="kt">Id</span> <span class="kt">Post</span><span class="p">)</span> <span class="kr">where</span>
+  <span class="n">toText</span> <span class="ow">=</span> <span class="n">postIdToText</span>
+</pre></div>
+
+</div>
+
+<p>This is an example where GHC language extensions end up becoming significantly more than the sum of their parts, which seems to be a fairly frequent realization. The <code>StandaloneDeriving</code> mechanism is a little bit useful without <code>GeneralizedNewtypeDeriving</code>, but when combined, they are incredibly powerful tools for getting a very fine-grained kind of type safety <em>without</em> writing any boilerplate.</p>
+
+<h2 id="datakinds-are-super-cool-with-caveats">DataKinds are super cool, with caveats</h2>
+
+<p>Phantom types are quite wonderful, but they can only encode <em>types</em>, not arbitrary data. That’s where <code>DataKinds</code> and <code>KindSignatures</code> come in: they allow lifting arbitrary datatypes to the type level so that things that would normally be purely runtime values can be used at compile-time as well.</p>
+
+<p>The way this works is pretty simple—when you define a datatype, you also define a “datakind”:</p>
+
+<div class="brush: haskell">
+ <div class="source">
+  <pre><span></span><span class="kr">data</span> <span class="kt">RegistrationStatus</span> <span class="ow">=</span> <span class="kt">Registered</span> <span class="o">|</span> <span class="kt">Anonymous</span>
+</pre></div>
+
+</div>
+
+<p>Normally, the above declaration declares a <em>type</em>, <code>RegistrationStatus</code>, and two <em>data constructors</em>, <code>Registered</code> and <code>Anonymous</code>. With <code>DataKinds</code>, it also defines a <em>kind</em>, <code>RegistrationStatus</code>, and two <em>type constructors</em>, <code>Registered</code> and <code>Anonymous.</code></p>
+
+<p>If that’s confusing, the way to understand that is to realize there is a sort of natural ordering here: types describe values, and kinds describe types. Therefore, turning on <code>DataKinds</code> “lifts” each definition by a single level, so types become kinds and values become types. This permits using these things at the type level:</p>
+
+<div class="brush: haskell">
+ <div class="source">
+  <pre><span></span><span class="kr">newtype</span> <span class="kt">UserId</span> <span class="p">(</span><span class="n">s</span> <span class="ow">::</span> <span class="kt">RegistrationStatus</span><span class="p">)</span> <span class="ow">=</span> <span class="kt">UserId</span> <span class="kt">Text</span>
+</pre></div>
+
+</div>
+
+<p>In this example, <code>UserId</code> still has a single phantom type variable, <code>s</code>, but this time it is constrained to the <code>RegistrationStatus</code> kind. Therefore, it can <em>only</em> be <code>Registered</code> or <code>Anonymous</code>. This cooperates well with the aforementioned <code>StandaloneDeriving</code> mechanism, and it mostly provides a convenient way to constrain type variables to custom kinds.</p>
+
+<p>In general, <code>DataKinds</code> is a much more powerful extension, allowing things like type-level natural numbers or strings, which can be used to perform actual type-level computation (especially in combination with <code>TypeFamilies</code>) or a sort of metaprogramming. In some cases, they can even be used to implement things emulating things you can do with dependent types.</p>
+
+<p>I think <code>DataKinds</code> are a very cool Haskell extension, but there are a couple caveats. One of the main ones is how new kinds are defined: <code>DataKinds</code> “hijacks” the existing datatype declaration syntax by making every single datatype declaration define a type <em>and</em> a kind. This is a little confusing, and it would be nice if a different syntax was used so that each could be defined independently.</p>
+
+<p>Similarly, it seems that a lot of work is being done to allow using runtime values at the type level, but I wonder if people will ever need to use, say, runtime values at the <em>kind</em> level. This immediately evokes thoughts of Racket’s phase-based macro system, and I wonder if some of this duplication would be unnecessary with something similar.</p>
+
+<p>Food for thought, but overall, <code>DataKinds</code> are a very nice addition to help with precisely and specifically typing particular problems.</p>
+
+<h2 id="typeclasses-can-emulate-effects">Typeclasses can emulate effects</h2>
+
+<p>This is something that I’ve found interesting in my time writing Haskell because I have <em>no idea</em> if it’s idiomatic or not, but it seems pretty powerful. The initial motivator for this idea was figuring out how to test our code without constantly dropping into <code>IO</code>.</p>
+
+<p>More generally, we wanted to be able to unit test by “mocking” out collaborators, as it would be described in object oriented programming. I was always semi-distrustful of mocking, and indeed, it seems likely that it is heavily abused in certain circles, but I’ve come to appreciate the need that sometimes it is important to stub things out, <em>even in pure code</em>.</p>
+
+<p>As an example, consider some code that needs access to the current time. This is something that would normally require <code>IO</code>, but we likely want to be able to use the value in a pure context without “infecting” the entire program with <code>IO</code> types. In Haskell, I have generally seen three ways of handling this sort of thing:</p>
+
+<ol>
+ <li>
+  <p>Just inject the required values into the function and produce them “higher up” where I/O is okay. If threading the value around becomes too burdensome, use a Reader monad.</p></li>
+ <li>
+  <p>Use a free monad or similar to create a pure DSL of sorts, then write interpreters for various implementations, one of which uses <code>IO</code>.</p></li>
+ <li>
+  <p>Create custom monadic typeclasses that provide interfaces to the functionality you want to perform, then create instances, one of which is an instance over <code>IO</code>.</p></li></ol>
+
+<p>This last approach seems to be less common in Haskell, but it’s the approach we took, and it seems to work out remarkably well. Returning to the need to get the current time, we could pretty easily write such a typeclass to encode that need:</p>
+
+<div class="brush: haskell">
+ <div class="source">
+  <pre><span></span><span class="kr">class</span> <span class="kt">Monad</span> <span class="n">m</span> <span class="ow">=&gt;</span> <span class="kt">CurrentTime</span> <span class="n">m</span> <span class="kr">where</span>
+  <span class="n">getCurrentTime</span> <span class="ow">::</span> <span class="n">m</span> <span class="kt">UTCTime</span>
+</pre></div>
+
+</div>
+
+<p>Now we can write functions that use the current time:</p>
+
+<div class="brush: haskell">
+ <div class="source">
+  <pre><span></span><span class="nf">validateToken</span> <span class="ow">::</span> <span class="kt">CurrentTime</span> <span class="n">m</span> <span class="ow">=&gt;</span> <span class="kt">Token</span> <span class="ow">-&gt;</span> <span class="n">m</span> <span class="kt">Bool</span>
+<span class="nf">validateToken</span> <span class="n">tok</span> <span class="ow">=</span> <span class="kr">do</span>
+  <span class="n">currentTime</span> <span class="ow">&lt;-</span> <span class="n">getCurrentTime</span>
+  <span class="n">return</span> <span class="p">(</span><span class="n">tokenExpirationDate</span> <span class="n">tok</span> <span class="o">&gt;</span> <span class="n">currentTime</span><span class="p">)</span>
+</pre></div>
+
+</div>
+
+<p>Now, we can write instances for <code>CurrentTime</code> that will allow us to run the same code in different contexts:</p>
+
+<div class="brush: haskell">
+ <div class="source">
+  <pre><span></span><span class="kr">newtype</span> <span class="kt">AppM</span> <span class="n">a</span> <span class="ow">=</span> <span class="kt">AppM</span> <span class="p">{</span> <span class="n">runAppM</span> <span class="ow">::</span> <span class="kt">IO</span> <span class="n">a</span> <span class="p">}</span>
+  <span class="kr">deriving</span> <span class="p">(</span><span class="kt">Functor</span><span class="p">,</span> <span class="kt">Applicative</span><span class="p">,</span> <span class="kt">Monad</span><span class="p">,</span> <span class="kt">MonadIO</span><span class="p">)</span>
+
+<span class="kr">newtype</span> <span class="kt">TestM</span> <span class="n">a</span> <span class="ow">=</span> <span class="kt">TestM</span> <span class="p">(</span><span class="kt">Identity</span> <span class="n">a</span><span class="p">)</span>
+  <span class="kr">deriving</span> <span class="p">(</span><span class="kt">Functor</span><span class="p">,</span> <span class="kt">Applicative</span><span class="p">,</span> <span class="kt">Monad</span><span class="p">)</span>
+
+<span class="nf">runTestM</span> <span class="ow">::</span> <span class="kt">TestM</span> <span class="n">a</span> <span class="ow">-&gt;</span> <span class="n">a</span>
+<span class="nf">runTestM</span> <span class="p">(</span><span class="kt">TestM</span> <span class="n">x</span><span class="p">)</span> <span class="ow">=</span> <span class="n">runIdentity</span> <span class="n">x</span>
+
+<span class="kr">instance</span> <span class="kt">CurrentTime</span> <span class="kt">AppM</span> <span class="kr">where</span>
+  <span class="n">getCurrentTime</span> <span class="ow">=</span> <span class="n">liftIO</span> <span class="kt">Data</span><span class="o">.</span><span class="kt">Time</span><span class="o">.</span><span class="kt">Clock</span><span class="o">.</span><span class="n">getCurrentTime</span>
+
+<span class="kr">instance</span> <span class="kt">CurrentTime</span> <span class="kt">TestM</span> <span class="kr">where</span>
+  <span class="n">getCurrentTime</span> <span class="ow">=</span> <span class="n">return</span> <span class="o">$</span> <span class="n">posixSecondsToUTCTime</span> <span class="mi">0</span>
+</pre></div>
+
+</div>
+
+<p>Where this really starts to shine is when adding additional effects. For example, the above token validation function might also need information about some kind of secret used for signing. Under this model, it’s just another typeclass:</p>
+
+<div class="brush: haskell">
+ <div class="source">
+  <pre><span></span><span class="kr">class</span> <span class="kt">Monad</span> <span class="n">m</span> <span class="ow">=&gt;</span> <span class="kt">TokenSecret</span> <span class="n">m</span> <span class="kr">where</span>
+  <span class="n">getTokenSecret</span> <span class="ow">::</span> <span class="n">m</span> <span class="kt">Secret</span>
+
+<span class="nf">validateToken</span> <span class="ow">::</span> <span class="p">(</span><span class="kt">CurrentTime</span> <span class="n">m</span><span class="p">,</span> <span class="kt">TokenSecret</span> <span class="n">m</span><span class="p">)</span> <span class="ow">=&gt;</span> <span class="kt">Token</span> <span class="ow">-&gt;</span> <span class="n">m</span> <span class="kt">Bool</span>
+<span class="nf">validateToken</span> <span class="n">tok</span> <span class="ow">=</span> <span class="kr">do</span>
+  <span class="n">currentTime</span> <span class="ow">&lt;-</span> <span class="n">getCurrentTime</span>
+  <span class="n">secret</span> <span class="ow">&lt;-</span> <span class="n">getTokenSecret</span>
+  <span class="n">return</span> <span class="p">(</span><span class="n">tokenExpirationDate</span> <span class="n">tok</span> <span class="o">&gt;</span> <span class="n">currentTime</span>
+       <span class="o">&amp;&amp;</span> <span class="n">verifySignature</span> <span class="n">tok</span> <span class="n">secret</span><span class="p">)</span>
+</pre></div>
+
+</div>
+
+<p>Of course, so far all of these functions have been extremely simple, and we’ve basically been using them as a glorified reader monad. In practice, though, we use this pattern for lots more than just retrieving values. For example, we might have a typeclass for database interactions:</p>
+
+<div class="brush: haskell">
+ <div class="source">
+  <pre><span></span><span class="kr">class</span> <span class="kt">Monad</span> <span class="n">m</span> <span class="ow">=&gt;</span> <span class="kt">Persistence</span> <span class="n">m</span> <span class="kr">where</span>
+  <span class="n">fetchUser</span> <span class="ow">::</span> <span class="kt">Id</span> <span class="kt">User</span> <span class="ow">-&gt;</span> <span class="n">m</span> <span class="p">(</span><span class="kt">Maybe</span> <span class="kt">User</span><span class="p">)</span>
+  <span class="n">insertUser</span> <span class="ow">::</span> <span class="kt">User</span> <span class="ow">-&gt;</span> <span class="n">m</span> <span class="p">(</span><span class="kt">Either</span> <span class="kt">PersistenceError</span> <span class="p">(</span><span class="kt">Id</span> <span class="kt">User</span><span class="p">))</span>
+</pre></div>
+
+</div>
+
+<p>With all of this done, it becomes incredibly easy to see which functions are using which effects:</p>
+
+<div class="brush: haskell">
+ <div class="source">
+  <pre><span></span><span class="nf">postUsers</span>
+  <span class="ow">::</span> <span class="p">(</span><span class="kt">CurrentTime</span> <span class="n">m</span><span class="p">,</span> <span class="kt">Persistence</span> <span class="n">m</span><span class="p">,</span> <span class="kt">TokenSecret</span> <span class="n">m</span><span class="p">)</span>
+  <span class="ow">=&gt;</span> <span class="kt">User</span> <span class="ow">-&gt;</span> <span class="n">m</span> <span class="kt">Response</span>
+<span class="nf">postUsers</span> <span class="ow">=</span> <span class="o">...</span>
+
+<span class="nf">getHealthcheck</span>
+  <span class="ow">::</span> <span class="kt">CurrentTime</span> <span class="n">m</span>
+  <span class="ow">=&gt;</span> <span class="n">m</span> <span class="kt">Response</span>
+<span class="nf">getHealthcheck</span> <span class="ow">=</span> <span class="o">...</span>
+</pre></div>
+
+</div>
+
+<p>There’s no need to perform any lifting, and this all seems to scale quite nicely. We’ve written some additional utilities to help write tests against functions using these kinds of monadic interfaces, and even though there’s a little bit of annoying boilerplate in a few spots, overall it seems to work quite elegantly.</p>
+
+<p>I’m not entirely sure how common this is in the Haskell community, but it’s certainly pretty neat how easy it is to get nearly all of the benefits of effect types in other languages simply by composing some of Haskell’s simplest features.</p>
+
+<h2 id="atoms-ide-haskell-tooling-is-invaluable">Atom’s ide-haskell tooling is invaluable</h2>
+
+<p>Alright, so, confession time: I don’t use Emacs.</p>
+
+<p>I know, I know, how is that possible? I write Lisp, after all. Well, honestly, I tried picking it up a number of times, but none of those times did I get far enough to ditch my other tools. For Racket work, I use DrRacket, but for almost everything else, I use Atom.</p>
+
+<p>Atom has a lot of flaws, but it’s also pretty amazing in places, and I absolutely <em>love</em> the Haskell tooling written by the wonderful <a href="https://github.com/atom-haskell">atom-haskell</a> folks. I use it constantly, and even though it doesn’t always work perfectly, it works pretty well. When it has problems, I’ve at least figured out how to get it working correctly.</p>
+
+<p>This is probably hard to really explain without seeing it for yourself, but I’ve found that I basically <em>depend</em> on this sort of tooling to be fully productive in Haskell, and I have no problem admitting that. The ability to get instant feedback about type errors tied to visual source locations, to be able to directly manipulate the source by selecting expressions and getting type information, and even the option to get inline linter suggestions means I spend a lot less time glancing at the terminal, and even less time in the REPL.</p>
+
+<p>The tooling is far from perfect, and it leaves a lot to be desired in places (the idea of using that static information for automated, project-wide refactoring <em>a la</em> Java is tantalizing), but most of those things are ideas of what amazing things could be, not broken or missing essentials. I am pretty satisfied with ide-haskell right now, and I can only hope it continues to get better and better.</p>
+
+<h1 id="frustrations-drawbacks-and-pain-points">Frustrations, drawbacks, and pain points</h1>
+
+<p>Haskell is not perfect. In fact, far from it. There is a vast array of little annoyances that I have with the language, as is the case with any language. Still, there are a few overarching problems that I would really like to at least mention. These are the biggest sources of frustration for me so far.</p>
+
+<h2 id="purity-failure-and-exception-handling">Purity, failure, and exception-handling</h2>
+
+<p>One of Haskell’s defining features is its purity—I don’t think many would disagree with that. Some people consider it a drawback, others consider it one of its greatest boons. Personally, I like it a lot, and I think one of the best parts about it is how it requires the programmer to be incredibly deliberate about failure.</p>
+
+<p>In many languages, when looking up a value from a container where the key doesn’t exist, there are really two ways to go about expressing this failure:</p>
+
+<ol>
+ <li>Throw an exception.</li>
+ <li>Return <code>null</code>.</li></ol>
+
+<p>The former is scary because it means <em>any</em> call to any function can make the entire program blow up, and it’s often impossible to know which functions even have the potential to throw. This creates a certain kind of non-local control flow that can sometimes cause a lot of unpredictability. The second option is much the same, especially when any value in a program might be <code>null</code>; it just defers the failure.</p>
+
+<p>In languages with option types, this is somewhat mitigated. Java now has option types, too, but they are still frequently cumbersome to use because there is nothing like monads to use to simply chain operations together. Haskell, in comparison, has an incredible complement of tools to simply handle errors without a whole lot of burden on the programmer, and I have found that, in practice, this is <em>actually helpful</em> and I really do write better error-handling code.</p>
+
+<h3 id="first-the-good-parts">First, the good parts</h3>
+
+<p>I have seen a comparison drawn between throwing checked exceptions and returning <code>Maybe</code> or <code>Either</code> types, but in practice the difference is massive. Handling checked exceptions is a monotonous chore because they are not first-class values, they are actually entirely separate linguistic constructs. Consider a library that throws a <code>LibraryException</code>, and you want to wrap that library and convert those exceptions to <code>ApplicationException</code>s. Well, have fun writing this code dozens of times:</p>
+
+<div class="brush: java">
+ <div class="source">
+  <pre><span></span><span class="k">try</span> <span class="o">{</span>
+  <span class="n">x</span> <span class="o">=</span> <span class="n">doSomething</span><span class="o">();</span>
+<span class="o">}</span> <span class="k">catch</span> <span class="o">(</span><span class="n">LibraryException</span> <span class="n">ex</span><span class="o">)</span> <span class="o">{</span>
+  <span class="k">throw</span> <span class="n">ApplicationException</span><span class="o">.</span><span class="na">fromLibraryException</span><span class="o">(</span><span class="n">ex</span><span class="o">);</span>
+<span class="o">}</span>
+
+<span class="c1">// ...</span>
+
+<span class="k">try</span> <span class="o">{</span>
+  <span class="n">y</span> <span class="o">=</span> <span class="n">doSomethingElse</span><span class="o">();</span>
+<span class="o">}</span> <span class="k">catch</span> <span class="o">(</span><span class="n">LibraryException</span> <span class="n">ex</span><span class="o">)</span> <span class="o">{</span>
+  <span class="k">throw</span> <span class="n">ApplicationException</span><span class="o">.</span><span class="na">fromLibraryException</span><span class="o">(</span><span class="n">ex</span><span class="o">);</span>
+<span class="o">}</span>
+</pre></div>
+
+</div>
+
+<p>In Haskell, failure is just represented by first-class values, and it’s totally possible to write helper functions to abstract over that kind of boilerplate:</p>
+
+<div class="brush: haskell">
+ <div class="source">
+  <pre><span></span><span class="nf">libraryToApplication</span> <span class="ow">::</span> <span class="kt">LibraryError</span> <span class="ow">-&gt;</span> <span class="kt">ApplicationError</span>
+<span class="nf">libraryToApplication</span> <span class="ow">=</span> <span class="o">...</span>
+
+<span class="nf">liftLibrary</span> <span class="ow">::</span> <span class="kt">Either</span> <span class="kt">LibraryError</span> <span class="n">a</span> <span class="ow">-&gt;</span> <span class="kt">Either</span> <span class="kt">ApplicationError</span> <span class="n">a</span>
+<span class="nf">liftLibrary</span> <span class="ow">=</span> <span class="n">mapLeft</span> <span class="n">libraryToApplication</span>
+</pre></div>
+
+</div>
+
+<p>Now, that same boilerplate-y code becomes nearly invisible:</p>
+
+<div class="brush: haskell">
+ <div class="source">
+  <pre><span></span><span class="nf">x</span> <span class="ow">&lt;-</span> <span class="n">liftLibrary</span> <span class="n">doSomething</span>
+
+<span class="c1">-- ...</span>
+
+<span class="nf">y</span> <span class="ow">&lt;-</span> <span class="n">liftLibrary</span> <span class="n">doSomethingElse</span>
+</pre></div>
+
+</div>
+
+<p>This might not <em>seem</em> like much, but it really cuts down on the amount of visual noise, which ends up making all the difference. Boilerplate incurs a cost much bigger than simply taking the time to type it all out (though that’s important, too): the cognitive overhead of parsing which parts of a program are boilerplate has a significant impact on readability.</p>
+
+<h3 id="so-whats-the-problem">So what’s the problem?</h3>
+
+<p>If error handling is so great in Haskell, then why am I putting it under the complaints section? Well, it turns out that not everyone seems to think it’s as great as I make it out to be because people seem to keep writing Haskell APIs that throw exceptions!</p>
+
+<p>Despite what some purists would have you believe, Haskell has exceptions, and they are not uncommon. Lots of things can throw exceptions, some of which are probably reasonable. Failing to connect to a database is a pretty catastrophic error, so it seems fair that it would throw. On the other hand, inserting a duplicate record is pretty normal operation, so it seems like that should <em>not</em> throw.</p>
+
+<p>I mostly treat exceptions in Haskell as unrecoverable catastrophes. If I throw an error in <em>my</em> code, I do not intend to catch it. That means something horrible happened, and I just want that horribleness to show up in a log somewhere so I can fix the problem. If I care about failure, there are better ways to handle that failure gracefully.</p>
+
+<p>It’s also probably worth noting that exceptions in Haskell can be thrown from anywhere, even pure code, but can only be <em>caught</em> within the <code>IO</code> monad. This is especially scary, but I’ve seen it happen in actual libraries out in the wild, even ones that the entire Haskell ecosystem is built on. One of the crowning examples of this is the <code>text</code> package, which provides a function called <code>decodeUtf8</code> to convert bytestrings into text. Its type is very simple:</p>
+
+<div class="brush: haskell">
+ <div class="source">
+  <pre><span></span><span class="nf">decodeUtf8</span> <span class="ow">::</span> <span class="kt">ByteString</span> <span class="ow">-&gt;</span> <span class="kt">Text</span>
+</pre></div>
+
+</div>
+
+<p>But wait, what if the bytestring is not actually a valid UTF&ndash;8 string?</p>
+
+<p>Boom. There goes the application.</p>
+
+<p>Okay, okay, well, at least the <code>text</code> package provides another function, this one called <code>decodeUtf8'</code>, which returns an <code>Either</code>. This is good, and I’ve trained myself to only ever use <code>decodeUtf8'</code>, but it still has some pretty significant problems:</p>
+
+<ul>
+ <li>
+  <p>The <em>safe</em> version of this function is the “prime” version, rather than the other way around, which encourages people to use the unsafe one. Ideally, the unsafe one should be explicitly labeled as such&hellip; maybe call it <code>unsafeDecodeUtf8</code>?</p></li>
+ <li>
+  <p>This is not a hypothetical problem. When using a Haskell JWT library, we found a function that converts a string into a JWT. Since not all strings are JWTs, the library intelligently returns a <code>Maybe</code>. Therefore, we figured we were safe.</p>
+  <p>A couple weeks later, we found that providing this function with invalid data was returning HTTP 500 errors. Why? Our error handling was meticulous! Well, the answer was a <code>decodeUtf8</code> call, hidden inside of the JWT library. This is especially egregious, given that the API it exposed returned a <code>Maybe</code> anyway! It would have been trivial to use the safe version there, instead, but the poor, misleading name led the library developer to overlook the bug lurking in the otherwise innocuous function.</p>
+  <p>Even worse, this function was totally pure, and we used it in pure code, so we could not simply wrap the function and catch the exception. We had two options: use <code>unsafePerformIO</code> (yuck!) or perform a check before handing the data to the buggy function. We chose the latter, but in some cases, I imagine that could be too difficult to do in order to make it feasible.</p></li></ul>
+
+<p>The point I’m trying to make is that this is a real problem, and it seems to me that throwing exceptions invalidates one of the primary advantages of Haskell. It disappointed me to realize that a significant amount of code written by FP Complete, one of the primary authors of some of the most important “modern Haskell” code in existence (including Stack), seem to very frequently expose APIs that will throw.</p>
+
+<p>I’m not sure how much of this stems from a fundamental divide in the Haskell ecosystem and how much it is simply due to Michael Snoyman’s coding style, given that he is the primary author of a number of these tools and libraries that seem very eager to throw exceptions. As just one example of a real situation in which we were surprised by this behavior, we used Snoyman’s http-client library and found that it mysteriously throws upon nearly <em>any</em> failure state:</p>
+
+<blockquote>
+ <p>A note on exceptions: for the most part, all actions that perform I/O should be assumed to throw an <code>HttpException</code> in the event of some problem, and all pure functions will be total. For example, <code>withResponse</code>, <code>httpLbs</code>, and <code>BodyReader</code> can all throw exceptions.</p></blockquote>
+
+<p>This doesn’t seem entirely unreasonable—after all, isn’t a failure to negotiate TLS fairly catastrophic?—until you consider our use case. We needed to make a subrequest during the extent of another HTTP request to our server, and if that subrequest fails, we absolutely need to handle that failure gracefully. Of course, this is not <em>terrible</em> given that we are in <code>IO</code> so we can actually catch these exceptions, but since this behavior was only noted in a single aside at the top of the documentation, we didn’t realize we were forgetting error handling until far too late and requests were silently failing.</p>
+
+<p>Exceptions seem to devalue one of the most powerful concepts in Haskell: if I don’t consider all the possibilities, my code <em>does not compile</em>. In practice, when working with APIs that properly encode these possibilities into the type system, this value proposition seems to be real. I really do find myself writing code that works correctly as soon as it compiles. It’s almost magical.</p>
+
+<p>Using exceptions throws that all out the window, and I wish the Haskell ecosystem was generally more cautious about when to use them.</p>
+
+<h2 id="the-string-problem">The String problem</h2>
+
+<p>I sort of alluded to this a tiny bit in the last section, and that is probably indicative of how bad this issue is. I’m just going to be blunt: <strong>In Haskell, strings suck.</strong></p>
+
+<p>This is always a bit of an amusing point whenever it is discussed because of how silly it seems. Haskell is a research language with a cutting-edge type system and some of the fanciest features of any language in existence. When everyday programming might use things like “profunctors”, “injective type families”, and “generalized algebraic datatypes”, you would think that dealing with <em>strings</em> would be a well-solved problem.</p>
+
+<p>But it isn’t. Haskell libraries frequently use not one, not two, but <strong><em>five</em></strong> kinds of strings. Let’s list them off, shall we?</p>
+
+<ul>
+ <li>
+  <p>First off, there’s the built-in <code>String</code> type, which is actually an alias for the <code>[Char]</code> type. For those not intimately familiar with Haskell, that’s a <em>linked list of characters</em>. As <a href="http://www.stephendiehl.com/">Stephen Diehl</a> recently put it in <a href="http://www.stephendiehl.com/posts/strings.html">a blog post describing the disaster that is Haskell string types</a>:</p>
+  <blockquote>
+   <p>This is not only a bad representation, it’s quite possibly the least efficient (non-contrived) representation of text data possible and has horrible performance in both time and space. <em>And it’s used everywhere in Haskell.</em></p></blockquote>
+  <p>The point is, it’s really bad. This type is not a useful representation for textual data in practical applications.</p></li>
+ <li>
+  <p>Moving on, we have a fairly decent type, <code>Text</code>, which comes from <code>Data.Text</code> in the <code>text</code> package. This is a decent representation of text, and it’s probably the one that everything should use. Well, maybe. Because <code>Text</code> comes in two varieties: lazy and strict. Nobody seems to agree on which of those two should be used, though, and they are totally incompatible types: functions that work with one kind of text won’t work with the other. You have to manually convert between them.</p></li>
+ <li>
+  <p>Finally, we have <code>ByteString</code>, which is horribly misnamed because it really isn’t a string at all, at least not in the textual sense. A better name for this type would have simply been <code>Bytes</code>, which sounds a lot scarier. And that would be good, because data typed as a <code>ByteString</code> is as close as you can get in Haskell to not assigning a type at all: a bytestring holds arbitrary bytes without assigning them any meaning whatsoever!</p>
+  <p>Or at least, that’s the intention. The trouble is that people <em>don’t</em> treat bytestrings like that—they just use them to toss pieces of text around, even when those pieces of text have a well-defined encoding and represent textual data. This leads to the <code>decodeUtf8</code> problem mentioned above, but it’s bigger than that because it often ends up with some poor APIs that assign some interpretation to <code>ByteString</code> data without assigning it a different type.</p>
+  <p>Again, this is throwing away so much of Haskell’s safety. It would be like using <code>Int</code> to keep track of boolean data (“just use 0 and 1!”) or using empty and singleton lists instead of using <code>Maybe</code>. When you use the precise type, you encode invariants and contracts into statically-checked assertions, but when you use general types like <code>ByteString</code>, you give that up.</p>
+  <p>Oh, and did I mention that <code>ByteString</code>s also come in incompatible lazy and strict versions, too?</p></li></ul>
+
+<p>So, obviously, the answer is to just stop using the bad types and to just use (one kind of) <code>Text</code> everywhere. Great! Except that the other types are totally inescapable. The entire standard library uses <code>String</code> exclusively—after all, <code>text</code> is a separate package—and small libraries often use <code>String</code> instead of <code>text</code> because they have no need to bring in the dependency. Of course, this just means every real application pays the performance hit of converting between all these different kinds of strings.</p>
+
+<p>Similarly, those that <em>do</em> use <code>Text</code> often use different kinds of text, so code ends up littered with <code>fromStrict</code> or <code>toStrict</code> coercions, which (again) have a cost. I’ve already ranted enough about <code>ByteString</code>, but basically, if you’re using <code>ByteString</code> in your API to pass around data that is semantically text, you are causing me pain. Please stop.</p>
+
+<p>It seems that the way <code>Data.Text</code> probably <em>should</em> have been designed was by making <code>Text</code> a typeclass, then making the lazy and strict implementations instances of that typeclass. Still, the fact that both of them exist would always cause problems. I’m actually unsure which one is the “correct” choice—I don’t know enough about how the two perform in practice—but it seems likely that picking <em>either</em> one would be a performance improvement over the current system, which is constantly spending time converting between the two.</p>
+
+<p>This issue has been ranted about plenty, so I won’t ramble on, but if you’re designing new libraries, please, <em>please</em> use <code>Text</code>. Your users will thank you.</p>
+
+<h2 id="documentation-is-nearly-worthless">Documentation is nearly worthless</h2>
+
+<p>Finally, let’s talk about documentation.</p>
+
+<p>One of my favorite programming languages is Racket. Racket has a documentation tool called Scribble. Scribble is special because it is a totally separate domain-specific language for writing documentation, and it makes it fun and easy to write good explanations. There are even forms for typesetting automatically-rendered examples that look like a REPL. If the examples ever break or become incorrect, the docs don’t even compile.</p>
+
+<p>All of the Racket core library documentation makes sure to set a good example about what good documentation should look like. The vast majority of the documentation is paragraphs of prose and simple but practical examples. There are also type signatures (in the form of contracts), and those are super important, but they are so effective because of how the prose explains what each function does, when to use it, <em>why</em> you’d use it, and <em>why you wouldn’t use it</em>.</p>
+
+<p>Everything is cross-referenced automatically. The documentation is completely searchable locally out of the box. As soon as you install a package, its docs are automatically indexed. User-written libraries tend to have pretty good docs, too, because the standard libraries set such a good example <em>and</em> because the tools are so fantastic. Racket docs are really nice, and they’re so good they actually make things like Stack Overflow or even Google mostly irrelevant. It’s all there in the manual.</p>
+
+<p>Haskell documentation is the opposite of everything I just said.</p>
+
+<ul>
+ <li>
+  <p>The core libraries are poorly documented. Most functions include a sentence of description, and almost none include examples. At their worst, the descriptions simply restate the type signature.</p></li>
+ <li>
+  <p>Third-party libraries’ documentation is even worse, going frequently completely undocumented and actually only including type signatures and nothing else.</p></li>
+ <li>
+  <p>Haddock is an incredibly user-hostile tool for writing anything other than tiny snippets of documentation and is not very good at supporting prose. Notably, Haddock’s documentation is not generated using Haddock (and it still manages to be almost unusable). Forcing all documentation into inline comments makes users unlikely to write much explanation, and there is no ability for abstraction.</p></li>
+ <li>
+  <p>Reading documentation locally is very difficult because there is no easy way to open documentation for a particular package in a web browser, and it’s <em>certainly</em> not searchable. This is especially ridiculous given that Hoogle exists, which is one of best ways to search API docs in existence. There should be a <code>stack hoogle</code> command that just opens a Hoogle page for all locally-installed packages and Just Works, but there isn’t.</p></li>
+ <li>
+  <p>Most valuable information exists outside of documentation, so Google becomes a go-to immediately after a quick glance at the docs, and information is spread across blog posts, mailing lists, and obscure reddit posts.</p></li></ul>
+
+<p>This is a problem that cannot be fixed by just making Haddock better, nor can it be fixed simply by improving the existing standard library documentation. There is a fundamental problem with Haskell documentation (which, to be completely fair, is not unique to Haskell), which is that its tools do not support anything more than API docs.</p>
+
+<p>Good documentation is so much more than “here’s what this function does”; it’s about guides and tutorials and case studies and common pitfalls. <a href="http://docs.racket-lang.org/lens/lens-guide.html">This is documentation for someone new to lenses.</a> <a href="https://hackage.haskell.org/package/lens#readme">This is not.</a> Take note of the difference.</p>
+
+<h1 id="conclusion-and-other-thoughts">Conclusion and other thoughts</h1>
+
+<p>Haskell is an incredible programming platform, and indeed, it is sometimes mind-boggling how complete it is. It also has a lot of rough edges, sometimes in places that feel like they need a lot more care, or perhaps they’re even simply unfinished.</p>
+
+<p>I could spend weeks writing about all the things I really like or dislike about the language, discussing in fine detail all the things that have made me excited or all the little bits that have made me want to tear my hair out. Heck, I could probably spend a month writing about strings alone. That’s not the point, though&hellip; I took a risk with Haskell, and it’s paid off. I’m not yet sure exactly how I feel about it, or when I would chose it relative to other tools, but it is currently very high on my list of favorite technologies.</p>
+
+<p>I did not come to Haskell with a distaste for static typing, despite the fact that I write so much Racket, a dynamically typed language (by default, at least). I don’t really use Typed Racket, and despite my love for Haskell and its type system, I am not sure I will use much more of it than I did before. Haskell and Racket are very different languages, which is justified in some places and probably sort of circumstantial in others.</p>
+
+<p>The future of Haskell seems bright, and a lot of the changes in the just-released GHC 8 are extremely exciting. I did not list records as a pain point because the changes in GHC 8 appear to make them a <em>lot</em> more palatable, although whether or not they solve that problem completely remains to be seen. I will absolutely continue to write Haskell and push it to its limits where I can, and hopefully try and take as much as I can from it along the way.</p>
+  <footer>
+    <ul class="pager">
+      <li class="previous">
+        <a href="/blog/2016/08/11/climbing-the-infinite-ladder-of-abstraction/">&larr; <em>Climbing the infinite ladder of abstraction</em></a>
+      </li>
+      <li class="next">
+        <a href="/blog/2016/02/18/simple-safe-multimethods-in-racket/"><em>Simple, safe multimethods in Racket</em> &rarr;</a>
+      </li>
+    </ul>
+  </footer>
+</article>
+        </div>
+      </section>
+      <footer>
+        <div class="content">
+          <h2 id="copyright-notice">© 2021, Alexis King</h2>
+          <h3>
+            Built with <a href="https://github.com/greghendershott/frog">Frog</a>, the
+            <strong>fr</strong>ozen bl<strong>og</strong> tool.
+          </h3>
+          <h3>
+            Feeds are available via <a href="/feeds/all.atom.xml">Atom</a>
+            or <a href="/feeds/all.rss.xml">RSS</a>.
+          </h3>
+        </div>
+      </footer>
+    </div>
+  </body>
+</html>

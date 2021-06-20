@@ -1,0 +1,436 @@
+<?xml version="1.0" encoding="utf-8"?> 
+<feed xmlns="http://www.w3.org/2005/Atom" xml:lang="en">
+ <title type="text">Alexis King's Blog: Posts tagged 'typescript'</title>
+ <link rel="self" href="http://lexi-lambda.github.io/feeds/typescript.atom.xml" />
+ <link href="http://lexi-lambda.github.io/tags/typescript.html" />
+ <id>urn:http-lexi-lambda-github-io:-tags-typescript-html</id>
+ <updated>2020-08-13T13:51:57Z</updated>
+ <entry>
+  <title type="text">Types as axioms, or: playing god with static types</title>
+  <link rel="alternate" href="http://lexi-lambda.github.io/blog/2020/08/13/types-as-axioms-or-playing-god-with-static-types/?utm_source=typescript&amp;utm_medium=Atom" />
+  <id>urn:http-lexi-lambda-github-io:-blog-2020-08-13-types-as-axioms-or-playing-god-with-static-types</id>
+  <published>2020-08-13T13:51:57Z</published>
+  <updated>2020-08-13T13:51:57Z</updated>
+  <author>
+   <name>Alexis King</name></author>
+  <content type="html">
+&lt;p&gt;Just what exactly &lt;em&gt;is&lt;/em&gt; a type?&lt;/p&gt;
+
+&lt;p&gt;A common perspective is that types are &lt;em&gt;restrictions&lt;/em&gt;. Static types restrict the set of values a variable may contain, capturing some subset of the space of “all possible values.” Under this worldview, a typechecker is sort of like an oracle, predicting which values will end up where when the program runs and making sure they satisfy the constraints the programmer wrote down in the type annotations. Of course, the typechecker can’t &lt;em&gt;really&lt;/em&gt; predict the future, so when the typechecker gets it wrong—it can’t “figure out” what a value will be—static types can feel like self-inflicted shackles.&lt;/p&gt;
+
+&lt;p&gt;But that is not the &lt;em&gt;only&lt;/em&gt; perspective. There is another way—a way that puts you, the programmer, back in the driver’s seat. You make the rules, you call the shots, you set the objectives. You need not be limited any longer by what the designers of your programming language decided the typechecker can and cannot prove. You do not serve the typechecker; the typechecker serves &lt;em&gt;you.&lt;/em&gt;&lt;/p&gt;
+
+&lt;p&gt;…no, I’m not trying to sell you a dubious self-help book for programmers who feel like they’ve lost control of their lives. If the above sounds too good to be true, well… I won’t pretend it’s all actually as easy as I make it sound. Nevertheless, it’s well within the reach of the working programmer, and most remarkably, all it takes is a change in perspective.&lt;/p&gt;
+&lt;!-- more--&gt;
+
+&lt;h1 id="seeing-the-types-half-empty"&gt;Seeing the types half-empty&lt;/h1&gt;
+
+&lt;p&gt;Let’s talk a little about TypeScript.&lt;/p&gt;
+
+&lt;p&gt;TypeScript is a &lt;em&gt;gradually-typed&lt;/em&gt; language, which means it’s possible to mix statically- and dynamically-typed code. The original intended use case of gradual typing was to &lt;em&gt;gradually&lt;/em&gt; add static types to an existing dynamically-typed codebase, which imposes some interesting design constraints. For one, a valid JavaScript program must also be a valid TypeScript program; for another, TypeScript must be accommodating of traditional JavaScript idioms.&lt;/p&gt;
+
+&lt;p&gt;Gradually typed languages like TypeScript are particularly good illustrations of the way type annotations can be viewed as constraints. A function with no explicit type declarations&lt;sup&gt;&lt;a href="#2020-08-13-types-as-axioms-or-playing-god-with-static-types-footnote-1-definition" name="2020-08-13-types-as-axioms-or-playing-god-with-static-types-footnote-1-return"&gt;1&lt;/a&gt;&lt;/sup&gt; can accept &lt;em&gt;any&lt;/em&gt; JavaScript value, so adding a type annotation fundamentally restricts the set of legal values.&lt;/p&gt;
+
+&lt;p&gt;Furthermore, languages like TypeScript tend to have subtyping. This makes it easy to classify certain types as “more restrictive” than others. For example, a type like &lt;code&gt;string | number&lt;/code&gt; clearly includes more values than just &lt;code&gt;number&lt;/code&gt;, so &lt;code&gt;number&lt;/code&gt; is a more restrictive type—a &lt;em&gt;subtype&lt;/em&gt;.&lt;/p&gt;
+
+&lt;p&gt;An exceptionally concrete way to illustrate this “types are restrictions” mentality is to write a function with an unnecessarily specific type. Here’s a TypeScript function that returns the first element in an array of numbers:&lt;/p&gt;
+
+&lt;div class="brush: typescript"&gt;
+ &lt;div class="source"&gt;
+  &lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;span class="kd"&gt;function&lt;/span&gt; &lt;span class="nx"&gt;getFirst&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="nx"&gt;arr&lt;/span&gt;: &lt;span class="kt"&gt;number&lt;/span&gt;&lt;span class="p"&gt;[])&lt;/span&gt;&lt;span class="o"&gt;:&lt;/span&gt; &lt;span class="kt"&gt;number&lt;/span&gt; &lt;span class="o"&gt;|&lt;/span&gt; &lt;span class="kc"&gt;undefined&lt;/span&gt; &lt;span class="p"&gt;{&lt;/span&gt;
+  &lt;span class="k"&gt;return&lt;/span&gt; &lt;span class="nx"&gt;arr&lt;/span&gt;&lt;span class="p"&gt;[&lt;/span&gt;&lt;span class="mi"&gt;0&lt;/span&gt;&lt;span class="p"&gt;];&lt;/span&gt;
+&lt;span class="p"&gt;}&lt;/span&gt;
+&lt;/pre&gt;&lt;/div&gt;
+
+&lt;/div&gt;
+
+&lt;p&gt;If we ignore the type annotations and consider only the dynamic semantics of JavaScript, this function would work perfectly well given a list of strings. However, if we write &lt;code&gt;getFirst(["hello", "world"])&lt;/code&gt;, the typechecker will complain. In this example, the restriction is thoroughly self-imposed—it would be easy to give this function a more generic type—but it’s not always that easy. For example, suppose we wrote a function where the return type depends upon the type of the argument:&lt;/p&gt;
+
+&lt;div class="brush: typescript"&gt;
+ &lt;div class="source"&gt;
+  &lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;span class="kd"&gt;function&lt;/span&gt; &lt;span class="nx"&gt;emptyLike&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="nx"&gt;val&lt;/span&gt;: &lt;span class="kt"&gt;number&lt;/span&gt; &lt;span class="o"&gt;|&lt;/span&gt; &lt;span class="kt"&gt;string&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;&lt;span class="o"&gt;:&lt;/span&gt; &lt;span class="kt"&gt;number&lt;/span&gt; &lt;span class="o"&gt;|&lt;/span&gt; &lt;span class="kt"&gt;string&lt;/span&gt; &lt;span class="p"&gt;{&lt;/span&gt;
+  &lt;span class="k"&gt;if&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="k"&gt;typeof&lt;/span&gt; &lt;span class="nx"&gt;val&lt;/span&gt; &lt;span class="o"&gt;===&lt;/span&gt; &lt;span class="s2"&gt;"number"&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="p"&gt;{&lt;/span&gt;
+    &lt;span class="k"&gt;return&lt;/span&gt; &lt;span class="mi"&gt;0&lt;/span&gt;&lt;span class="p"&gt;;&lt;/span&gt;
+  &lt;span class="p"&gt;}&lt;/span&gt; &lt;span class="k"&gt;else&lt;/span&gt; &lt;span class="p"&gt;{&lt;/span&gt;
+    &lt;span class="k"&gt;return&lt;/span&gt; &lt;span class="s2"&gt;""&lt;/span&gt;&lt;span class="p"&gt;;&lt;/span&gt;
+  &lt;span class="p"&gt;}&lt;/span&gt;
+&lt;span class="p"&gt;}&lt;/span&gt;
+&lt;/pre&gt;&lt;/div&gt;
+
+&lt;/div&gt;
+
+&lt;p&gt;Now if we write &lt;code&gt;emptyLike(42) * 10&lt;/code&gt;, the typechecker will once again complain, claiming the result might be a string—it can’t “figure out” that when we pass a number, we always get a number back.&lt;/p&gt;
+
+&lt;p&gt;When type systems are approached from this perspective, the result is often frustration. The programmer knows that the equivalent untyped JavaScript is perfectly well-behaved, so the typechecker comes off as being the highly unfortunate combination of stubborn yet dim-witted. What’s more, the programmer likely has little mental model of the typechecker’s internal operation, so when types like the above are inferred (not explicitly written), it can be unclear what solutions exist to make the error go away.&lt;/p&gt;
+
+&lt;p&gt;At this point, the programmer may give up. “Stupid typechecker,” they grumble, changing the return type of &lt;code&gt;emptyLike&lt;/code&gt; to &lt;code&gt;any&lt;/code&gt;. “If it can’t even figure this out, can it &lt;em&gt;really&lt;/em&gt; be all that useful?”&lt;/p&gt;
+
+&lt;p&gt;Sadly, this relationship with the typechecker is all too common, and gradually-typed languages in particular tend to create a vicious cycle of frustration:&lt;/p&gt;
+
+&lt;ul&gt;
+ &lt;li&gt;
+  &lt;p&gt;Gradual type systems are intentionally designed to “just work” on idiomatic code as much as possible, so programmers may not think much about the types except when they get type errors.&lt;/p&gt;&lt;/li&gt;
+ &lt;li&gt;
+  &lt;p&gt;Furthermore, many programmers using gradually-typed languages are already adept at programming in the underlying dynamically-typed language, so they have working mental models of program operation in terms of the dynamic semantics alone. They are much less likely to develop a rich mental model of the static semantics of the type system because they are used to reasoning without one.&lt;/p&gt;&lt;/li&gt;
+ &lt;li&gt;
+  &lt;p&gt;Gradually typed languages must support idioms from their dynamically-typed heritage, so they often include ad-hoc special cases (such as, for example, special treatment of &lt;code&gt;typeof&lt;/code&gt; checks) that obscure the rules the typechecker follows and make them seem semi-magical.&lt;/p&gt;&lt;/li&gt;
+ &lt;li&gt;
+  &lt;p&gt;Builtin types are deeply blessed in the type system, strongly encouraging programmers to embrace their full flexibility, but leaving little recourse when they run up against their limits.&lt;/p&gt;&lt;/li&gt;
+ &lt;li&gt;
+  &lt;p&gt;All this frustration breeds a readiness to override the typechecker using casts or &lt;code&gt;any&lt;/code&gt;, which ultimately creates a self-fulfilling prophecy in which the typechecker rarely catches any interesting mistakes because it has been so routinely disabled.&lt;/p&gt;&lt;/li&gt;&lt;/ul&gt;
+
+&lt;p&gt;The end result of all of this is a defeatist attitude that views the typechecker as a minor tooling convenience at best (i.e. a fancy autocomplete provider) or an active impediment at worst. Who can really blame them? The type system has (unintentionally of course) been designed in such a way so as to lead them into this dead end. The public perception of type systems settles into that of a strikingly literal nitpicker we endure rather than as a tool we actively leverage.&lt;/p&gt;
+
+&lt;h1 id="taking-back-types"&gt;Taking back types&lt;/h1&gt;
+
+&lt;p&gt;After everything I said above, it may be hard to imagine seeing types any other way. Indeed, through the lens of TypeScript, the “types are restrictions” mentality is incredibly natural, so much so that it seems self-evident. But let’s move away from TypeScript for a moment and focus on a different language, Haskell, which encourages a somewhat different perspective. If you aren’t familiar with Haskell, that’s alright—I’m going to try to keep the examples in this blog post as accessible as possible whether you’ve written any Haskell or not.&lt;/p&gt;
+
+&lt;p&gt;Though Haskell and TypeScript are both statically-typed—and both of their type systems are fairly sophisticated—Haskell’s type system is almost completely different philosophically:&lt;/p&gt;
+
+&lt;ul&gt;
+ &lt;li&gt;
+  &lt;p&gt;Haskell does not have subtyping,&lt;sup&gt;&lt;a href="#2020-08-13-types-as-axioms-or-playing-god-with-static-types-footnote-2-definition" name="2020-08-13-types-as-axioms-or-playing-god-with-static-types-footnote-2-return"&gt;2&lt;/a&gt;&lt;/sup&gt; which means that every value belongs to exactly one type.&lt;/p&gt;&lt;/li&gt;
+ &lt;li&gt;
+  &lt;p&gt;While JavaScript is built around a small handful of flexible builtin datatypes (booleans, numbers, strings, arrays, and objects), Haskell has essentially no blessed, built-in datatypes other than numbers. Key types such as booleans, lists, and tuples are ordinary datatypes defined in the standard library, no different from types users could define.&lt;sup&gt;&lt;a href="#2020-08-13-types-as-axioms-or-playing-god-with-static-types-footnote-3-definition" name="2020-08-13-types-as-axioms-or-playing-god-with-static-types-footnote-3-return"&gt;3&lt;/a&gt;&lt;/sup&gt;&lt;/p&gt;&lt;/li&gt;
+ &lt;li&gt;
+  &lt;p&gt;In particular, Haskell is built around the idea that datatypes can be defined with multiple &lt;em&gt;cases&lt;/em&gt;, and branching is done via pattern-matching (more on this shortly).&lt;/p&gt;&lt;/li&gt;&lt;/ul&gt;
+
+&lt;p&gt;Let’s look at a basic Haskell datatype declaration. Suppose we want to define a type that represents a season:&lt;/p&gt;
+
+&lt;div class="brush: haskell"&gt;
+ &lt;div class="source"&gt;
+  &lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;span class="kr"&gt;data&lt;/span&gt; &lt;span class="kt"&gt;Season&lt;/span&gt; &lt;span class="ow"&gt;=&lt;/span&gt; &lt;span class="kt"&gt;Spring&lt;/span&gt; &lt;span class="o"&gt;|&lt;/span&gt; &lt;span class="kt"&gt;Summer&lt;/span&gt; &lt;span class="o"&gt;|&lt;/span&gt; &lt;span class="kt"&gt;Fall&lt;/span&gt; &lt;span class="o"&gt;|&lt;/span&gt; &lt;span class="kt"&gt;Winter&lt;/span&gt;
+&lt;/pre&gt;&lt;/div&gt;
+
+&lt;/div&gt;
+
+&lt;p&gt;If you are familiar with TypeScript, this may look rather similar to a union type; if you’re familiar with a C-family language, this may remind you more of an enum. Both are on the right track: this defines a new type named &lt;code&gt;Season&lt;/code&gt; with four possible values, &lt;code&gt;Spring&lt;/code&gt;, &lt;code&gt;Summer&lt;/code&gt;, &lt;code&gt;Fall&lt;/code&gt;, and &lt;code&gt;Winter&lt;/code&gt;.&lt;/p&gt;
+
+&lt;p&gt;But what exactly &lt;em&gt;are&lt;/em&gt; those values?&lt;/p&gt;
+
+&lt;ul&gt;
+ &lt;li&gt;
+  &lt;p&gt;In TypeScript, we’d represent this type with a union of strings, like this:&lt;/p&gt;
+  &lt;div class="brush: ts"&gt;
+   &lt;div class="source"&gt;
+    &lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;span class="nx"&gt;type&lt;/span&gt; &lt;span class="nx"&gt;Season&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="s2"&gt;"spring"&lt;/span&gt; &lt;span class="o"&gt;|&lt;/span&gt; &lt;span class="s2"&gt;"summer"&lt;/span&gt; &lt;span class="o"&gt;|&lt;/span&gt; &lt;span class="s2"&gt;"fall"&lt;/span&gt; &lt;span class="o"&gt;|&lt;/span&gt; &lt;span class="s2"&gt;"winter"&lt;/span&gt;&lt;span class="p"&gt;;&lt;/span&gt;
+&lt;/pre&gt;&lt;/div&gt;
+
+&lt;/div&gt;
+  &lt;p&gt;Here, &lt;code&gt;Season&lt;/code&gt; is a type that can be one of those four strings, but nothing else.&lt;/p&gt;&lt;/li&gt;
+ &lt;li&gt;
+  &lt;p&gt;In C, we’d represent this type with an enum, like this:&lt;/p&gt;
+  &lt;div class="brush: c"&gt;
+   &lt;div class="source"&gt;
+    &lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;span class="k"&gt;enum&lt;/span&gt; &lt;span class="n"&gt;season&lt;/span&gt; &lt;span class="p"&gt;{&lt;/span&gt; &lt;span class="n"&gt;SPRING&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;SUMMER&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;FALL&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;WINTER&lt;/span&gt; &lt;span class="p"&gt;};&lt;/span&gt;
+&lt;/pre&gt;&lt;/div&gt;
+
+&lt;/div&gt;
+  &lt;p&gt;Here, &lt;code&gt;SPRING&lt;/code&gt;, &lt;code&gt;SUMMER&lt;/code&gt;, &lt;code&gt;FALL&lt;/code&gt;, and &lt;code&gt;WINTER&lt;/code&gt; are essentially defined to be global aliases for the integers &lt;code&gt;0&lt;/code&gt;, &lt;code&gt;1&lt;/code&gt;, &lt;code&gt;2&lt;/code&gt;, and &lt;code&gt;3&lt;/code&gt;, and the type &lt;code&gt;enum season&lt;/code&gt; is essentially an alias for &lt;code&gt;int&lt;/code&gt;.&lt;/p&gt;&lt;/li&gt;&lt;/ul&gt;
+
+&lt;p&gt;So in TypeScript, the values are strings, and in C, the values are numbers. What are they in Haskell? Well… they simply &lt;em&gt;are&lt;/em&gt;.&lt;/p&gt;
+
+&lt;p&gt;The Haskell declaration invents four completely new constants out of thin air, &lt;code&gt;Spring&lt;/code&gt;, &lt;code&gt;Summer&lt;/code&gt;, &lt;code&gt;Fall&lt;/code&gt;, and &lt;code&gt;Winter&lt;/code&gt;. They aren’t aliases for numbers, nor are they symbols or strings. The compiler doesn’t expose anything about how it chooses to represent these values at runtime; that’s an implementation detail. In Haskell, &lt;code&gt;Spring&lt;/code&gt; is now a value &lt;em&gt;distinct from all other values&lt;/em&gt;, even if someone in a different module were to also use the name &lt;code&gt;Spring&lt;/code&gt;. Haskell type declarations let us play god, creating something from nothing.&lt;/p&gt;
+
+&lt;p&gt;Since these values are totally unique, abstract constants, what can we actually do with them? The answer is one thing and &lt;em&gt;exactly&lt;/em&gt; one thing: we can branch on them. For example, we can write a function that takes a &lt;code&gt;Season&lt;/code&gt; as an argument and returns whether or not Christmas occurs during it:&lt;/p&gt;
+
+&lt;div class="brush: haskell"&gt;
+ &lt;div class="source"&gt;
+  &lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;span class="nf"&gt;containsChristmas&lt;/span&gt; &lt;span class="ow"&gt;::&lt;/span&gt; &lt;span class="kt"&gt;Season&lt;/span&gt; &lt;span class="ow"&gt;-&amp;gt;&lt;/span&gt; &lt;span class="kt"&gt;Bool&lt;/span&gt;
+&lt;span class="nf"&gt;containsChristmas&lt;/span&gt; &lt;span class="n"&gt;season&lt;/span&gt; &lt;span class="ow"&gt;=&lt;/span&gt; &lt;span class="kr"&gt;case&lt;/span&gt; &lt;span class="n"&gt;season&lt;/span&gt; &lt;span class="kr"&gt;of&lt;/span&gt;
+  &lt;span class="kt"&gt;Spring&lt;/span&gt; &lt;span class="ow"&gt;-&amp;gt;&lt;/span&gt; &lt;span class="kt"&gt;False&lt;/span&gt;
+  &lt;span class="kt"&gt;Summer&lt;/span&gt; &lt;span class="ow"&gt;-&amp;gt;&lt;/span&gt; &lt;span class="kt"&gt;True&lt;/span&gt;  &lt;span class="c1"&gt;-- southern hemisphere&lt;/span&gt;
+  &lt;span class="kt"&gt;Fall&lt;/span&gt;   &lt;span class="ow"&gt;-&amp;gt;&lt;/span&gt; &lt;span class="kt"&gt;False&lt;/span&gt;
+  &lt;span class="kt"&gt;Winter&lt;/span&gt; &lt;span class="ow"&gt;-&amp;gt;&lt;/span&gt; &lt;span class="kt"&gt;True&lt;/span&gt;  &lt;span class="c1"&gt;-- northern hemisphere&lt;/span&gt;
+&lt;/pre&gt;&lt;/div&gt;
+
+&lt;/div&gt;
+
+&lt;p&gt;&lt;code&gt;case&lt;/code&gt; expressions are, to a first approximation, a lot like C-style &lt;code&gt;switch&lt;/code&gt; statements (though they can do a lot more than this simple example suggests). Using &lt;code&gt;case&lt;/code&gt;, we can also define conversions from our totally unique &lt;code&gt;Season&lt;/code&gt; constants to other types, if we want:&lt;/p&gt;
+
+&lt;div class="brush: haskell"&gt;
+ &lt;div class="source"&gt;
+  &lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;span class="nf"&gt;seasonToString&lt;/span&gt; &lt;span class="ow"&gt;::&lt;/span&gt; &lt;span class="kt"&gt;Season&lt;/span&gt; &lt;span class="ow"&gt;-&amp;gt;&lt;/span&gt; &lt;span class="kt"&gt;String&lt;/span&gt;
+&lt;span class="nf"&gt;seasonToString&lt;/span&gt; &lt;span class="n"&gt;season&lt;/span&gt; &lt;span class="ow"&gt;=&lt;/span&gt; &lt;span class="kr"&gt;case&lt;/span&gt; &lt;span class="n"&gt;season&lt;/span&gt; &lt;span class="kr"&gt;of&lt;/span&gt;
+  &lt;span class="kt"&gt;Spring&lt;/span&gt; &lt;span class="ow"&gt;-&amp;gt;&lt;/span&gt; &lt;span class="s"&gt;"spring"&lt;/span&gt;
+  &lt;span class="kt"&gt;Summer&lt;/span&gt; &lt;span class="ow"&gt;-&amp;gt;&lt;/span&gt; &lt;span class="s"&gt;"summer"&lt;/span&gt;
+  &lt;span class="kt"&gt;Fall&lt;/span&gt;   &lt;span class="ow"&gt;-&amp;gt;&lt;/span&gt; &lt;span class="s"&gt;"fall"&lt;/span&gt;
+  &lt;span class="kt"&gt;Winter&lt;/span&gt; &lt;span class="ow"&gt;-&amp;gt;&lt;/span&gt; &lt;span class="s"&gt;"winter"&lt;/span&gt;
+&lt;/pre&gt;&lt;/div&gt;
+
+&lt;/div&gt;
+
+&lt;p&gt;We can also go the other way around, converting a &lt;code&gt;String&lt;/code&gt; to a &lt;code&gt;Season&lt;/code&gt;, but if we try, we run into a problem: what do we return for a string like, say, &lt;code&gt;"cheesecake"&lt;/code&gt;? In other languages, we might throw an error or return &lt;code&gt;null&lt;/code&gt;, but Haskell does not have &lt;code&gt;null&lt;/code&gt;, and errors are generally reserved for truly catastrophic failures. What can we do instead?&lt;/p&gt;
+
+&lt;p&gt;A particularly naïve solution would be to create a type called &lt;code&gt;MaybeASeason&lt;/code&gt; that has two cases—it can be a valid &lt;code&gt;Season&lt;/code&gt;, or it can be &lt;code&gt;NotASeason&lt;/code&gt;:&lt;/p&gt;
+
+&lt;div class="brush: haskell"&gt;
+ &lt;div class="source"&gt;
+  &lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;span class="kr"&gt;data&lt;/span&gt; &lt;span class="kt"&gt;MaybeASeason&lt;/span&gt; &lt;span class="ow"&gt;=&lt;/span&gt; &lt;span class="kt"&gt;IsASeason&lt;/span&gt; &lt;span class="kt"&gt;Season&lt;/span&gt; &lt;span class="o"&gt;|&lt;/span&gt; &lt;span class="kt"&gt;NotASeason&lt;/span&gt;
+
+&lt;span class="nf"&gt;stringToSeason&lt;/span&gt; &lt;span class="ow"&gt;::&lt;/span&gt; &lt;span class="kt"&gt;String&lt;/span&gt; &lt;span class="ow"&gt;-&amp;gt;&lt;/span&gt; &lt;span class="kt"&gt;MaybeASeason&lt;/span&gt;
+&lt;span class="nf"&gt;stringToSeason&lt;/span&gt; &lt;span class="n"&gt;seasonString&lt;/span&gt; &lt;span class="ow"&gt;=&lt;/span&gt; &lt;span class="kr"&gt;case&lt;/span&gt; &lt;span class="n"&gt;seasonString&lt;/span&gt; &lt;span class="kr"&gt;of&lt;/span&gt;
+  &lt;span class="s"&gt;"spring"&lt;/span&gt; &lt;span class="ow"&gt;-&amp;gt;&lt;/span&gt; &lt;span class="kt"&gt;IsASeason&lt;/span&gt; &lt;span class="kt"&gt;Spring&lt;/span&gt;
+  &lt;span class="s"&gt;"summer"&lt;/span&gt; &lt;span class="ow"&gt;-&amp;gt;&lt;/span&gt; &lt;span class="kt"&gt;IsASeason&lt;/span&gt; &lt;span class="kt"&gt;Summer&lt;/span&gt;
+  &lt;span class="s"&gt;"fall"&lt;/span&gt;   &lt;span class="ow"&gt;-&amp;gt;&lt;/span&gt; &lt;span class="kt"&gt;IsASeason&lt;/span&gt; &lt;span class="kt"&gt;Fall&lt;/span&gt;
+  &lt;span class="s"&gt;"winter"&lt;/span&gt; &lt;span class="ow"&gt;-&amp;gt;&lt;/span&gt; &lt;span class="kt"&gt;IsASeason&lt;/span&gt; &lt;span class="kt"&gt;Winter&lt;/span&gt;
+  &lt;span class="kr"&gt;_&lt;/span&gt;        &lt;span class="ow"&gt;-&amp;gt;&lt;/span&gt; &lt;span class="kt"&gt;NotASeason&lt;/span&gt;
+&lt;/pre&gt;&lt;/div&gt;
+
+&lt;/div&gt;
+
+&lt;p&gt;This shows a feature of Haskell datatypes that C-style enums do &lt;em&gt;not&lt;/em&gt; have: they aren’t just constants, they can contain other values. A &lt;code&gt;MaybeASeason&lt;/code&gt; can be one of five different values: &lt;code&gt;IsASeason Spring&lt;/code&gt;, &lt;code&gt;IsASeason Summer&lt;/code&gt;, &lt;code&gt;IsASeason Fall&lt;/code&gt;, &lt;code&gt;IsASeason Winter&lt;/code&gt;, or &lt;code&gt;NotASeason&lt;/code&gt;.&lt;/p&gt;
+
+&lt;p&gt;In TypeScript, we’d write &lt;code&gt;MaybeASeason&lt;/code&gt; more like this:&lt;/p&gt;
+
+&lt;div class="brush: ts"&gt;
+ &lt;div class="source"&gt;
+  &lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;span class="nx"&gt;type&lt;/span&gt; &lt;span class="nx"&gt;MaybeASeason&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="nx"&gt;Season&lt;/span&gt; &lt;span class="o"&gt;|&lt;/span&gt; &lt;span class="s2"&gt;"not-a-season"&lt;/span&gt;&lt;span class="p"&gt;;&lt;/span&gt;
+&lt;/pre&gt;&lt;/div&gt;
+
+&lt;/div&gt;
+
+&lt;p&gt;This is kind of nice, because we don’t have to wrap all our &lt;code&gt;Season&lt;/code&gt; values with &lt;code&gt;IsASeason&lt;/code&gt; like we have to do in Haskell. But remember that Haskell doesn’t have subtyping—every value must belong to exactly one type—so the Haskell code needs the &lt;code&gt;IsASeason&lt;/code&gt; wrapper to distinguish the value as a &lt;code&gt;MaybeASeason&lt;/code&gt; rather than a &lt;code&gt;Season&lt;/code&gt;.&lt;/p&gt;
+
+&lt;p&gt;Now, you may rightly point out that having to invent a type like &lt;code&gt;MaybeASeason&lt;/code&gt; every time we need to create a variant of a type with a failure case is absurd, so fortunately we can define a type like &lt;code&gt;MaybeASeason&lt;/code&gt; that works for &lt;em&gt;any&lt;/em&gt; underlying type. In Haskell, it looks like this:&lt;/p&gt;
+
+&lt;div class="brush: haskell"&gt;
+ &lt;div class="source"&gt;
+  &lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;span class="kr"&gt;data&lt;/span&gt; &lt;span class="kt"&gt;Maybe&lt;/span&gt; &lt;span class="n"&gt;a&lt;/span&gt; &lt;span class="ow"&gt;=&lt;/span&gt; &lt;span class="kt"&gt;Just&lt;/span&gt; &lt;span class="n"&gt;a&lt;/span&gt; &lt;span class="o"&gt;|&lt;/span&gt; &lt;span class="kt"&gt;Nothing&lt;/span&gt;
+&lt;/pre&gt;&lt;/div&gt;
+
+&lt;/div&gt;
+
+&lt;p&gt;This defines a generic type, where the &lt;code&gt;a&lt;/code&gt; in &lt;code&gt;Maybe a&lt;/code&gt; is a stand-in for some other type, much like the &lt;code&gt;T&lt;/code&gt; in &lt;code&gt;Array&amp;lt;T&amp;gt;&lt;/code&gt; in other languages. We can change our &lt;code&gt;stringToSeason&lt;/code&gt; function to use &lt;code&gt;Maybe&lt;/code&gt;:&lt;/p&gt;
+
+&lt;div class="brush: haskell"&gt;
+ &lt;div class="source"&gt;
+  &lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;span class="nf"&gt;stringToSeason&lt;/span&gt; &lt;span class="ow"&gt;::&lt;/span&gt; &lt;span class="kt"&gt;String&lt;/span&gt; &lt;span class="ow"&gt;-&amp;gt;&lt;/span&gt; &lt;span class="kt"&gt;Maybe&lt;/span&gt; &lt;span class="kt"&gt;Season&lt;/span&gt;
+&lt;span class="nf"&gt;stringToSeason&lt;/span&gt; &lt;span class="n"&gt;seasonString&lt;/span&gt; &lt;span class="ow"&gt;=&lt;/span&gt; &lt;span class="kr"&gt;case&lt;/span&gt; &lt;span class="n"&gt;seasonString&lt;/span&gt; &lt;span class="kr"&gt;of&lt;/span&gt;
+  &lt;span class="s"&gt;"spring"&lt;/span&gt; &lt;span class="ow"&gt;-&amp;gt;&lt;/span&gt; &lt;span class="kt"&gt;Just&lt;/span&gt; &lt;span class="kt"&gt;Spring&lt;/span&gt;
+  &lt;span class="s"&gt;"summer"&lt;/span&gt; &lt;span class="ow"&gt;-&amp;gt;&lt;/span&gt; &lt;span class="kt"&gt;Just&lt;/span&gt; &lt;span class="kt"&gt;Summer&lt;/span&gt;
+  &lt;span class="s"&gt;"fall"&lt;/span&gt;   &lt;span class="ow"&gt;-&amp;gt;&lt;/span&gt; &lt;span class="kt"&gt;Just&lt;/span&gt; &lt;span class="kt"&gt;Fall&lt;/span&gt;
+  &lt;span class="s"&gt;"winter"&lt;/span&gt; &lt;span class="ow"&gt;-&amp;gt;&lt;/span&gt; &lt;span class="kt"&gt;Just&lt;/span&gt; &lt;span class="kt"&gt;Winter&lt;/span&gt;
+  &lt;span class="kr"&gt;_&lt;/span&gt;        &lt;span class="ow"&gt;-&amp;gt;&lt;/span&gt; &lt;span class="kt"&gt;Nothing&lt;/span&gt;
+&lt;/pre&gt;&lt;/div&gt;
+
+&lt;/div&gt;
+
+&lt;p&gt;&lt;code&gt;Maybe&lt;/code&gt; gets us something a lot like nullable types, but it isn’t built into the type system, it’s just an ordinary type defined in the standard library.&lt;/p&gt;
+
+&lt;h2 id="positive-versus-negative-space"&gt;Positive versus negative space&lt;/h2&gt;
+
+&lt;p&gt;At this point, you may be wondering to yourself why I am talking about all of this, seeing as everything in the previous section is information you could find in a basic Haskell tutorial. But the point of this blog post is not to teach you Haskell, it’s to focus on a particular philosophical approach to modeling data.&lt;/p&gt;
+
+&lt;p&gt;In TypeScript, when we write a type declaration like&lt;/p&gt;
+
+&lt;div class="brush: ts"&gt;
+ &lt;div class="source"&gt;
+  &lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;span class="nx"&gt;type&lt;/span&gt; &lt;span class="nx"&gt;Season&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="s2"&gt;"summer"&lt;/span&gt; &lt;span class="o"&gt;|&lt;/span&gt; &lt;span class="s2"&gt;"spring"&lt;/span&gt; &lt;span class="o"&gt;|&lt;/span&gt; &lt;span class="s2"&gt;"fall"&lt;/span&gt; &lt;span class="o"&gt;|&lt;/span&gt; &lt;span class="s2"&gt;"winter"&lt;/span&gt;&lt;span class="p"&gt;;&lt;/span&gt;
+&lt;/pre&gt;&lt;/div&gt;
+
+&lt;/div&gt;
+
+&lt;p&gt;we are defining a type that can be one of those four strings &lt;em&gt;and nothing else&lt;/em&gt;. All the other strings that &lt;em&gt;aren’t&lt;/em&gt; one of those four make up &lt;code&gt;Season&lt;/code&gt;’s “negative space”—values that exist, but that we have intentionally excluded. In contrast, the Haskell type does not really have any “negative space” because we pulled four new values out of thin air.&lt;/p&gt;
+
+&lt;p&gt;Of course, I suspect you don’t really buy this argument. What makes a string like &lt;code&gt;"cheesecake"&lt;/code&gt; “negative space” in TypeScript but not in Haskell? Well… nothing, really. The distinction I’m drawing here doesn’t really exist, it’s just a different perspective, and arguably a totally contrived and arbitrary one. But now that I’ve explained the premise and set up some context, let me provide a more compelling example.&lt;/p&gt;
+
+&lt;p&gt;Suppose you are writing a TypeScript program, and you want a function that only accepts &lt;em&gt;non-empty&lt;/em&gt; arrays. What can you do? Your first instinct is that you need a way to somehow further restrict the function’s input type to exclude empty arrays. And indeed, there &lt;em&gt;is&lt;/em&gt; a trick for doing that:&lt;/p&gt;
+
+&lt;div class="brush: ts"&gt;
+ &lt;div class="source"&gt;
+  &lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;span class="nx"&gt;type&lt;/span&gt; &lt;span class="nx"&gt;NonEmptyArray&lt;/span&gt;&lt;span class="o"&gt;&amp;lt;&lt;/span&gt;&lt;span class="nx"&gt;T&lt;/span&gt;&lt;span class="o"&gt;&amp;gt;&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="p"&gt;[&lt;/span&gt;&lt;span class="nx"&gt;T&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="p"&gt;...&lt;/span&gt;&lt;span class="nx"&gt;T&lt;/span&gt;&lt;span class="p"&gt;[]];&lt;/span&gt;
+&lt;/pre&gt;&lt;/div&gt;
+
+&lt;/div&gt;
+
+&lt;p&gt;Great! But what if the constraint was more complicated: what if you needed an array containing an even number of elements? Unfortunately, there isn’t really a trick for that one. At this point, you might start wishing the type system had support for something really fancy, like refinement types, so you could write something like this:&lt;/p&gt;
+
+&lt;div class="brush: ts"&gt;
+ &lt;div class="source"&gt;
+  &lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;span class="nx"&gt;type&lt;/span&gt; &lt;span class="nx"&gt;EvenArray&lt;/span&gt;&lt;span class="o"&gt;&amp;lt;&lt;/span&gt;&lt;span class="nx"&gt;T&lt;/span&gt;&lt;span class="o"&gt;&amp;gt;&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="nx"&gt;T&lt;/span&gt;&lt;span class="p"&gt;[]&lt;/span&gt; &lt;span class="nx"&gt;satisfies&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="nx"&gt;arr&lt;/span&gt; &lt;span class="o"&gt;=&amp;gt;&lt;/span&gt; &lt;span class="nx"&gt;arr&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="nx"&gt;length&lt;/span&gt; &lt;span class="o"&gt;%&lt;/span&gt; &lt;span class="mi"&gt;2&lt;/span&gt; &lt;span class="o"&gt;===&lt;/span&gt; &lt;span class="mi"&gt;0&lt;/span&gt;&lt;span class="p"&gt;);&lt;/span&gt;
+&lt;/pre&gt;&lt;/div&gt;
+
+&lt;/div&gt;
+
+&lt;p&gt;But TypeScript doesn’t support anything like that, so for now you’re stuck. You need a way to restrict the function’s domain in a way the type system does not have any special support for, so your conclusion might be “I guess the type system just can’t do this.” People tend to call this “running up against the limits of the type system.”&lt;/p&gt;
+
+&lt;p&gt;But what if we took a different perspective? Recall that in Haskell, lists aren’t built-in datatypes, they’re just ordinary datatypes defined in the standard library:&lt;sup&gt;&lt;a href="#2020-08-13-types-as-axioms-or-playing-god-with-static-types-footnote-4-definition" name="2020-08-13-types-as-axioms-or-playing-god-with-static-types-footnote-4-return"&gt;4&lt;/a&gt;&lt;/sup&gt;&lt;/p&gt;
+
+&lt;div class="brush: haskell"&gt;
+ &lt;div class="source"&gt;
+  &lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;span class="kr"&gt;data&lt;/span&gt; &lt;span class="kt"&gt;List&lt;/span&gt; &lt;span class="n"&gt;a&lt;/span&gt; &lt;span class="ow"&gt;=&lt;/span&gt; &lt;span class="kt"&gt;Nil&lt;/span&gt; &lt;span class="o"&gt;|&lt;/span&gt; &lt;span class="kt"&gt;Cons&lt;/span&gt; &lt;span class="n"&gt;a&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="kt"&gt;List&lt;/span&gt; &lt;span class="n"&gt;a&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+&lt;/pre&gt;&lt;/div&gt;
+
+&lt;/div&gt;
+
+&lt;p&gt;This type might be a bit confusing at first if you have not written any Haskell, since it’s &lt;em&gt;recursive&lt;/em&gt;. All of these are valid values of type &lt;code&gt;List Int&lt;/code&gt;:&lt;/p&gt;
+
+&lt;ul&gt;
+ &lt;li&gt;&lt;code&gt;Nil&lt;/code&gt;&lt;/li&gt;
+ &lt;li&gt;&lt;code&gt;Cons 1 Nil&lt;/code&gt;&lt;/li&gt;
+ &lt;li&gt;&lt;code&gt;Cons 1 (Cons 2 Nil)&lt;/code&gt;&lt;/li&gt;
+ &lt;li&gt;&lt;code&gt;Cons 1 (Cons 2 (Cons 3 Nil))&lt;/code&gt;&lt;/li&gt;&lt;/ul&gt;
+
+&lt;p&gt;The recursive nature of &lt;code&gt;Cons&lt;/code&gt; is what gives our user-defined datatype the ability to hold any number of values: we can have any number of nested &lt;code&gt;Cons&lt;/code&gt;es we want before we terminate the list with a final &lt;code&gt;Nil&lt;/code&gt;.&lt;/p&gt;
+
+&lt;p&gt;If we wanted to define an &lt;code&gt;EvenList&lt;/code&gt; type in Haskell, we might end up thinking along the same lines we did before, that we need some fancy type system extension so we can restrict &lt;code&gt;List&lt;/code&gt; to exclude lists with odd numbers of elements. But that’s focusing on the negative space of things we want to exclude… what if instead, we focused on the &lt;em&gt;positive&lt;/em&gt; space of things we want to &lt;em&gt;include?&lt;/em&gt;&lt;/p&gt;
+
+&lt;p&gt;What do I mean by that? Well, we could define an entirely new type that’s just like &lt;code&gt;List&lt;/code&gt;, but we make it &lt;em&gt;impossible&lt;/em&gt; to ever include an odd number of elements:&lt;/p&gt;
+
+&lt;div class="brush: haskell"&gt;
+ &lt;div class="source"&gt;
+  &lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;span class="kr"&gt;data&lt;/span&gt; &lt;span class="kt"&gt;EvenList&lt;/span&gt; &lt;span class="n"&gt;a&lt;/span&gt; &lt;span class="ow"&gt;=&lt;/span&gt; &lt;span class="kt"&gt;EvenNil&lt;/span&gt; &lt;span class="o"&gt;|&lt;/span&gt; &lt;span class="kt"&gt;EvenCons&lt;/span&gt; &lt;span class="n"&gt;a&lt;/span&gt; &lt;span class="n"&gt;a&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="kt"&gt;EvenList&lt;/span&gt; &lt;span class="n"&gt;a&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+&lt;/pre&gt;&lt;/div&gt;
+
+&lt;/div&gt;
+
+&lt;p&gt;Here are some valid values of type &lt;code&gt;EvenList Int&lt;/code&gt;:&lt;/p&gt;
+
+&lt;ul&gt;
+ &lt;li&gt;&lt;code&gt;EvenNil&lt;/code&gt;&lt;/li&gt;
+ &lt;li&gt;&lt;code&gt;EvenCons 1 2 EvenNil&lt;/code&gt;&lt;/li&gt;
+ &lt;li&gt;&lt;code&gt;EvenCons 1 2 (EvenCons 3 4 EvenNil)&lt;/code&gt;&lt;/li&gt;&lt;/ul&gt;
+
+&lt;p&gt;Lo and behold, a datatype that can only ever include even numbers of elements!&lt;/p&gt;
+
+&lt;p&gt;Now, at this point you might realize that this is kind of silly. We don’t need to invent an entirely new datatype for this! We could just create a list of pairs:&lt;/p&gt;
+
+&lt;div class="brush: haskell"&gt;
+ &lt;div class="source"&gt;
+  &lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;span class="kr"&gt;type&lt;/span&gt; &lt;span class="kt"&gt;EvenList&lt;/span&gt; &lt;span class="n"&gt;a&lt;/span&gt; &lt;span class="ow"&gt;=&lt;/span&gt; &lt;span class="kt"&gt;List&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;a&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;a&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+&lt;/pre&gt;&lt;/div&gt;
+
+&lt;/div&gt;
+
+&lt;p&gt;Now values like &lt;code&gt;Cons (1, 2) (Cons (3, 4) Nil)&lt;/code&gt; would be valid values of type &lt;code&gt;EvenList Int&lt;/code&gt;, and we wouldn’t have to reinvent lists. But again, this is an approach based on thinking not on which values we want to exclude, but rather how to structure our data such that those illegal values aren’t even &lt;em&gt;constructible.&lt;/em&gt;&lt;/p&gt;
+
+&lt;p&gt;&lt;strong&gt;This is the essence of the Haskeller’s mantra, “Make illegal states unrepresentable,”&lt;/strong&gt; and sadly it is often misinterpreted. It’s much easier to think “hm, I want to make these states illegal, how can I add some post-hoc restrictions to rule them out?” And indeed, this is why refinement types really &lt;em&gt;are&lt;/em&gt; awesome, and when they’re available, by all means use them! But checking totally arbitrary properties at the type level is not tractable in general, and sometimes you need to think a little more outside the box.&lt;/p&gt;
+
+&lt;h2 id="types-as-axiom-schemas"&gt;Types as axiom schemas&lt;/h2&gt;
+
+&lt;p&gt;So far in this blog post, I’ve repeatedly touched upon a handful of different ideas in a few different ways:&lt;/p&gt;
+
+&lt;ul&gt;
+ &lt;li&gt;
+  &lt;p&gt;Instead of thinking about how to &lt;em&gt;restrict&lt;/em&gt;, it can be useful to think about how to &lt;em&gt;correctly construct&lt;/em&gt;.&lt;/p&gt;&lt;/li&gt;
+ &lt;li&gt;
+  &lt;p&gt;In Haskell, datatype declarations invent new values out of thin air.&lt;/p&gt;&lt;/li&gt;
+ &lt;li&gt;
+  &lt;p&gt;We can represent a &lt;em&gt;lot&lt;/em&gt; of different data structures using the incredibly simple framework of “datatypes with several possibilities.”&lt;/p&gt;&lt;/li&gt;&lt;/ul&gt;
+
+&lt;p&gt;Independently, those ideas might not seem deeply related, but in fact, they’re all essential to the Haskell school of data modeling. I want to now explore how we can unify them into a single framework that makes this seem less magical and more like an iterative design process.&lt;/p&gt;
+
+&lt;p&gt;In Haskell, when you define a datatype, you’re really defining a new, self-contained set of &lt;em&gt;axioms&lt;/em&gt; and &lt;em&gt;inference rules.&lt;/em&gt; That is rather abstract, so let’s make it more concrete. Consider the &lt;code&gt;List&lt;/code&gt; type again:&lt;/p&gt;
+
+&lt;div class="brush: haskell"&gt;
+ &lt;div class="source"&gt;
+  &lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;span class="kr"&gt;data&lt;/span&gt; &lt;span class="kt"&gt;List&lt;/span&gt; &lt;span class="n"&gt;a&lt;/span&gt; &lt;span class="ow"&gt;=&lt;/span&gt; &lt;span class="kt"&gt;Nil&lt;/span&gt; &lt;span class="o"&gt;|&lt;/span&gt; &lt;span class="kt"&gt;Cons&lt;/span&gt; &lt;span class="n"&gt;a&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="kt"&gt;List&lt;/span&gt; &lt;span class="n"&gt;a&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+&lt;/pre&gt;&lt;/div&gt;
+
+&lt;/div&gt;
+
+&lt;p&gt;Viewed as an axiom schema, this type has one axiom and one inference rule:&lt;/p&gt;
+
+&lt;ul&gt;
+ &lt;li&gt;
+  &lt;p&gt;The empty list is a list.&lt;/p&gt;&lt;/li&gt;
+ &lt;li&gt;
+  &lt;p&gt;If you have a list, and you add an element to the beginning, the result is also a list.&lt;/p&gt;&lt;/li&gt;&lt;/ul&gt;
+
+&lt;p&gt;The axiom is &lt;code&gt;Nil&lt;/code&gt;, and the inference rule is &lt;code&gt;Cons&lt;/code&gt;. Every list&lt;sup&gt;&lt;a href="#2020-08-13-types-as-axioms-or-playing-god-with-static-types-footnote-5-definition" name="2020-08-13-types-as-axioms-or-playing-god-with-static-types-footnote-5-return"&gt;5&lt;/a&gt;&lt;/sup&gt; is constructed by starting with the axiom, &lt;code&gt;Nil&lt;/code&gt;, followed by some number of applications of the inference rule, &lt;code&gt;Cons&lt;/code&gt;.&lt;/p&gt;
+
+&lt;p&gt;We can take a similar approach when designing the &lt;code&gt;EvenList&lt;/code&gt; type. The axiom is the same:&lt;/p&gt;
+
+&lt;ul&gt;
+ &lt;li&gt;The empty list is a list with an even number of elements.&lt;/li&gt;&lt;/ul&gt;
+
+&lt;p&gt;But our inference rule must preserve the invariant that the list always contains an even number of elements. We can do this by always adding two elements at a time:&lt;/p&gt;
+
+&lt;ul&gt;
+ &lt;li&gt;If you have a list with an even number of elements, and you add two elements to the beginning, the result is also a list with an even number of elements.&lt;/li&gt;&lt;/ul&gt;
+
+&lt;p&gt;This corresponds precisely to our &lt;code&gt;EvenList&lt;/code&gt; declaration:&lt;/p&gt;
+
+&lt;div class="brush: haskell"&gt;
+ &lt;div class="source"&gt;
+  &lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;span class="kr"&gt;data&lt;/span&gt; &lt;span class="kt"&gt;EvenList&lt;/span&gt; &lt;span class="n"&gt;a&lt;/span&gt; &lt;span class="ow"&gt;=&lt;/span&gt; &lt;span class="kt"&gt;EvenNil&lt;/span&gt; &lt;span class="o"&gt;|&lt;/span&gt; &lt;span class="kt"&gt;EvenCons&lt;/span&gt; &lt;span class="n"&gt;a&lt;/span&gt; &lt;span class="n"&gt;a&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="kt"&gt;EvenList&lt;/span&gt; &lt;span class="n"&gt;a&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+&lt;/pre&gt;&lt;/div&gt;
+
+&lt;/div&gt;
+
+&lt;p&gt;We can also go through this same reasoning process to come up with a type that represents non-empty lists. That type has just one inference rule:&lt;/p&gt;
+
+&lt;ul&gt;
+ &lt;li&gt;If you have a list, and you add an element to the beginning, the result is a non-empty list.&lt;/li&gt;&lt;/ul&gt;
+
+&lt;p&gt;That inference rule corresponds to the following datatype:&lt;/p&gt;
+
+&lt;div class="brush: haskell"&gt;
+ &lt;div class="source"&gt;
+  &lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;span class="kr"&gt;data&lt;/span&gt; &lt;span class="kt"&gt;NonEmptyList&lt;/span&gt; &lt;span class="n"&gt;a&lt;/span&gt; &lt;span class="ow"&gt;=&lt;/span&gt; &lt;span class="kt"&gt;NonEmptyCons&lt;/span&gt; &lt;span class="n"&gt;a&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="kt"&gt;List&lt;/span&gt; &lt;span class="n"&gt;a&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+&lt;/pre&gt;&lt;/div&gt;
+
+&lt;/div&gt;
+
+&lt;p&gt;Of course, it’s possible to do this with much more than just lists. A particularly classic example is the constructive definition of natural numbers:&lt;/p&gt;
+
+&lt;ul&gt;
+ &lt;li&gt;Zero is a natural number.&lt;/li&gt;
+ &lt;li&gt;If you have a natural number, its successor (i.e. that number plus one) is also a natural number.&lt;/li&gt;&lt;/ul&gt;
+
+&lt;p&gt;These are two of the &lt;a href="https://en.wikipedia.org/wiki/Peano_axioms"&gt;Peano axioms&lt;/a&gt;, which can be represented in Haskell as the following datatype:&lt;/p&gt;
+
+&lt;div class="brush: haskell"&gt;
+ &lt;div class="source"&gt;
+  &lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;span class="kr"&gt;data&lt;/span&gt; &lt;span class="kt"&gt;Natural&lt;/span&gt; &lt;span class="ow"&gt;=&lt;/span&gt; &lt;span class="kt"&gt;Zero&lt;/span&gt; &lt;span class="o"&gt;|&lt;/span&gt; &lt;span class="kt"&gt;Succ&lt;/span&gt; &lt;span class="kt"&gt;Natural&lt;/span&gt;
+&lt;/pre&gt;&lt;/div&gt;
+
+&lt;/div&gt;
+
+&lt;p&gt;Using this type, &lt;code&gt;Zero&lt;/code&gt; represents 0, &lt;code&gt;Succ Zero&lt;/code&gt; represents 1, &lt;code&gt;Succ (Succ Zero)&lt;/code&gt; represents 2, and so on. Just as &lt;code&gt;EvenList&lt;/code&gt; allowed us to represent any list with an even number of elements but made other values impossible to even express, this &lt;code&gt;Natural&lt;/code&gt; type allows us to represent all natural numbers, while other numbers (such as, for example, negative integers) are impossible to express.&lt;/p&gt;
+
+&lt;p&gt;Now, of course, all this hinges on our interpretation of the values we’ve invented! We have chosen to interpret &lt;code&gt;Zero&lt;/code&gt; as &lt;code&gt;0&lt;/code&gt; and &lt;code&gt;Succ n&lt;/code&gt; as &lt;code&gt;n + 1&lt;/code&gt;, but that interpretation is not inherent to &lt;code&gt;Natural&lt;/code&gt;’s definition—it’s all in our heads! We could choose to interpret &lt;code&gt;Succ n&lt;/code&gt; as &lt;code&gt;n - 1&lt;/code&gt; instead, in which case we would only be able to represent non-positive integers, or we could interpret &lt;code&gt;Zero&lt;/code&gt; as &lt;code&gt;1&lt;/code&gt; and &lt;code&gt;Succ n&lt;/code&gt; as &lt;code&gt;n * 2&lt;/code&gt;, in which case we could only represent powers of two.&lt;/p&gt;
+
+&lt;p&gt;I find that people sometimes find this approach troubling, or at least counterintuitive. Is &lt;code&gt;Succ (Succ Zero)&lt;/code&gt; &lt;em&gt;really&lt;/em&gt; 2? It certainly doesn’t look like a number we’re used to writing. When someone thinks “I need a datatype for a number greater than or equal to zero,” they’re going to reach for the type in their programming language called &lt;code&gt;number&lt;/code&gt; or &lt;code&gt;int&lt;/code&gt;, not think to invent a recursive datatype. And admittedly, the &lt;code&gt;Natural&lt;/code&gt; type defined here is not very practical: it’s an incredibly inefficient representation of natural numbers.&lt;/p&gt;
+
+&lt;p&gt;But in less contrived situations, this approach &lt;em&gt;is&lt;/em&gt; practical, and in fact it’s highly useful! The quibble that an &lt;code&gt;EvenList Int&lt;/code&gt; isn’t “really” a &lt;code&gt;List Int&lt;/code&gt; is rather meaningless, seeing as our definition of &lt;code&gt;List&lt;/code&gt; was just as arbitrary. A great deal of our jobs as programmers is imbuing arbitrary symbols with meaning; at some point someone decided that the number 65 would correspond to the capital letter A, and it was no less arbitrary then.&lt;/p&gt;
+
+&lt;p&gt;So when you have a property you want to capture in your types, take a step back and think about it for a little bit. Is there a way you can structure your data so that, no matter how you build it, the result is always a valid value? In other words, don’t try to add post-hoc restrictions to exclude bad values, &lt;strong&gt;make your datatypes correct by construction&lt;/strong&gt;.&lt;/p&gt;
+
+&lt;h1 id="but-what-if-i-dont-write-haskell-and-other-closing-thoughts"&gt;“But what if I don’t write Haskell?” And other closing thoughts&lt;/h1&gt;
+
+&lt;p&gt;I write Haskell for a living, and I wrote this blog post with both my coworkers and the broader Haskell community in mind, but if I had &lt;em&gt;only&lt;/em&gt; written it with those people in mind, it wouldn’t make sense to have spent so much time explaining basic Haskell. These techniques can be used in almost any statically typed programming language, though it’s certainly easier in some than others.&lt;/p&gt;
+
+&lt;p&gt;I don’t want people to come away from this blog post with an impression that I think TypeScript is a bad language, or that I’m claiming Haskell can do things TypeScript can’t. In fact, TypeScript &lt;em&gt;can&lt;/em&gt; do all the things I’ve talked about in this blog post! As proof, here are TypeScript definitions of both &lt;code&gt;EvenList&lt;/code&gt; and &lt;code&gt;Natural&lt;/code&gt;:&lt;/p&gt;
+
+&lt;div class="brush: typescript"&gt;
+ &lt;div class="source"&gt;
+  &lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;span class="nx"&gt;type&lt;/span&gt; &lt;span class="nx"&gt;EvenList&lt;/span&gt;&lt;span class="o"&gt;&amp;lt;&lt;/span&gt;&lt;span class="nx"&gt;T&lt;/span&gt;&lt;span class="o"&gt;&amp;gt;&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="p"&gt;[]&lt;/span&gt; &lt;span class="o"&gt;|&lt;/span&gt; &lt;span class="p"&gt;[&lt;/span&gt;&lt;span class="nx"&gt;T&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="nx"&gt;T&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="nx"&gt;EvenList&lt;/span&gt;&lt;span class="o"&gt;&amp;lt;&lt;/span&gt;&lt;span class="nx"&gt;T&lt;/span&gt;&lt;span class="o"&gt;&amp;gt;&lt;/span&gt;&lt;span class="p"&gt;];&lt;/span&gt;
+&lt;span class="nx"&gt;type&lt;/span&gt; &lt;span class="nx"&gt;Natural&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="s2"&gt;"zero"&lt;/span&gt; &lt;span class="o"&gt;|&lt;/span&gt; &lt;span class="p"&gt;{&lt;/span&gt; &lt;span class="nx"&gt;succ&lt;/span&gt;: &lt;span class="kt"&gt;Natural&lt;/span&gt; &lt;span class="p"&gt;};&lt;/span&gt;
+&lt;/pre&gt;&lt;/div&gt;
+
+&lt;/div&gt;
+
+&lt;p&gt;If anything, &lt;strong&gt;the real point of this blog post is that a type system does not have a well-defined list of things it “can prove” and “can’t prove.”&lt;/strong&gt; Languages like TypeScript don’t really encourage this approach to data modeling, where you restructure your values in a certain way so as to guarantee certain properties. Rather, they prefer to add increasingly sophisticated constraints and type system features that can capture the properties people want to capture without having to change their data representation.&lt;/p&gt;
+
+&lt;p&gt;And in general, &lt;em&gt;that’s great!&lt;/em&gt;&lt;/p&gt;
+
+&lt;p&gt;Being able to reuse the same data representation is &lt;em&gt;hugely&lt;/em&gt; beneficial. Functions like &lt;code&gt;map&lt;/code&gt; and &lt;code&gt;filter&lt;/code&gt; already exist for ordinary lists/arrays, but a home-grown &lt;code&gt;EvenList&lt;/code&gt; type needs its own versions. Passing an &lt;code&gt;EvenList&lt;/code&gt; to a function that expects a list requires explicitly converting between the two. All these things have both code complexity and performance costs, and type system features that make these issues just invisibly disappear are &lt;em&gt;obviously&lt;/em&gt; a good thing.&lt;/p&gt;
+
+&lt;p&gt;But the danger of treating the type system this way is that it means you may find yourself unsure what to do when suddenly you have a new requirement that the type system doesn’t provide built-in support for. What then? Do you start punching holes through your type system? The more you do that, the less useful the type system becomes: type systems are great at detecting how changes in one part of a codebase can impact seemingly-unrelated areas in surprising ways, but every unsafe cast or use of &lt;code&gt;any&lt;/code&gt; is a hard stop, a point past which the typechecker cannot propagate information. Do that once or twice in a leaf function, it’s okay, but do that even just a half dozen times in your application’s connective tissue, and your type system might not be able to catch those things anymore.&lt;/p&gt;
+
+&lt;p&gt;Even if it isn’t a technique you use every day, it’s worth getting comfortable tweaking your data representation to preserve those guarantees. It’s a magical experience having the typechecker teach you things about your domain you hadn’t even considered simply because you got a type error and started thinking through why. Yes, it’s extra work, but trust me: it’s a lot more pleasant to work for your typechecker when you know exactly how much your typechecker is working for you.&lt;/p&gt;
+
+&lt;div class="footnotes"&gt;
+ &lt;ol&gt;
+  &lt;li id="2020-08-13-types-as-axioms-or-playing-god-with-static-types-footnote-1-definition" class="footnote-definition"&gt;
+   &lt;p&gt;Sort of. TypeScript will try to infer type annotations based on how variables and functions are used, but by default, it falls back on the dynamic, unchecked &lt;code&gt;any&lt;/code&gt; type if it can’t find a solution that makes the program typecheck. That behavior can be changed via a configuration option, but that isn’t relevant here: I’m just trying to illustrate a perspective, not make any kind of value judgment about TypeScript specifically.&amp;nbsp;&lt;a href="#2020-08-13-types-as-axioms-or-playing-god-with-static-types-footnote-1-return"&gt;↩&lt;/a&gt;&lt;/p&gt;&lt;/li&gt;
+  &lt;li id="2020-08-13-types-as-axioms-or-playing-god-with-static-types-footnote-2-definition" class="footnote-definition"&gt;
+   &lt;p&gt;Sort of. Haskell does have a limited notion of subtyping when polymorphism is involved; for example, the type &lt;code&gt;forall a. a -&amp;gt; a&lt;/code&gt; is a subtype of the type &lt;code&gt;Int -&amp;gt; Int&lt;/code&gt;. But Haskell does not have anything resembling inheritance (e.g. there is no common &lt;code&gt;Number&lt;/code&gt; supertype that includes both &lt;code&gt;Int&lt;/code&gt; and &lt;code&gt;Double&lt;/code&gt;) nor does it have untagged unions (e.g. the argument to a function cannot be something like &lt;code&gt;Int | String&lt;/code&gt;, you must define a wrapper type like &lt;code&gt;data IntOrString = AnInt Int | AString String&lt;/code&gt;).&amp;nbsp;&lt;a href="#2020-08-13-types-as-axioms-or-playing-god-with-static-types-footnote-2-return"&gt;↩&lt;/a&gt;&lt;/p&gt;&lt;/li&gt;
+  &lt;li id="2020-08-13-types-as-axioms-or-playing-god-with-static-types-footnote-3-definition" class="footnote-definition"&gt;
+   &lt;p&gt;Lists, tuples, and strings do technically have special &lt;em&gt;syntax&lt;/em&gt;, which is built into the compiler, but there is truly nothing special about their semantics. They would work exactly the same way without the syntax, the code would just look less pretty.&amp;nbsp;&lt;a href="#2020-08-13-types-as-axioms-or-playing-god-with-static-types-footnote-3-return"&gt;↩&lt;/a&gt;&lt;/p&gt;&lt;/li&gt;
+  &lt;li id="2020-08-13-types-as-axioms-or-playing-god-with-static-types-footnote-4-definition" class="footnote-definition"&gt;
+   &lt;p&gt;Haskell programmers will notice that this is not actually the definition of the list type, since the real list type uses special syntax, but I wanted to keep things as simple as possible for this blog post.&amp;nbsp;&lt;a href="#2020-08-13-types-as-axioms-or-playing-god-with-static-types-footnote-4-return"&gt;↩&lt;/a&gt;&lt;/p&gt;&lt;/li&gt;
+  &lt;li id="2020-08-13-types-as-axioms-or-playing-god-with-static-types-footnote-5-definition" class="footnote-definition"&gt;
+   &lt;p&gt;Ignoring infinite lists, but the fact that infinite lists are representable in Haskell is outside the scope of this blog post.&amp;nbsp;&lt;a href="#2020-08-13-types-as-axioms-or-playing-god-with-static-types-footnote-5-return"&gt;↩&lt;/a&gt;&lt;/p&gt;&lt;/li&gt;&lt;/ol&gt;&lt;/div&gt;</content></entry></feed>

@@ -1,0 +1,1717 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <title>An introduction to typeclass metaprogramming</title>
+    <meta name="description" content="_Typeclass metaprogramming_ is a powerful technique available to Haskell programmers to automatically generate term-level code from static type information. It has been used to great effect in several popular Haskell libraries (such as the servant ecosyst...">
+    <meta name="author"      content="Alexis King">
+    <meta name="keywords"    content="haskell, types, functional programming">
+    <meta name="viewport"    content="width=device-width, initial-scale=1.0">
+    <link rel="icon"      href="/favicon.ico">
+    <link rel="canonical" href="http://lexi-lambda.github.io/blog/2021/03/25/an-introduction-to-typeclass-metaprogramming/">
+    <link rel="next" href="/blog/2020/11/01/names-are-not-type-safety/">
+
+    <!-- CSS -->
+    <link rel="stylesheet" type="text/css" href="https://fonts.googleapis.com/css?family=Merriweather+Sans:400,300,300italic,400italic,700,700italic,800,800italic|Merriweather:400,300,300italic,400italic,700,700italic,900,900italic|Fira+Code:300,400,500,600,700">
+    <link rel="stylesheet" type="text/css" href="/css/application.min.css">
+    <link rel="stylesheet" type="text/css" href="/css/pygments.min.css">
+    <!-- Feeds -->
+    <link rel="alternate" type="application/atom+xml"
+          href="/feeds/all.atom.xml" title="Atom Feed">
+    <link rel="alternate" type="application/rss+xml"
+          href="/feeds/all.rss.xml" title="RSS Feed">
+    <!-- JS -->
+    <!-- <script src="/js/application.min.js"></script> -->
+    <script type="text/javascript">
+      (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+      (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+      m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+      })(window,document,'script','//www.google-analytics.com/analytics.js','ga');
+
+      ga('create', 'UA-65250372-1', 'auto');
+      ga('send', 'pageview');
+    </script>
+  </head>
+  <body>
+    <div id="page-content">
+      <!-- Navigation Bar -->
+      <header>
+        <nav role="navigation" class="navigation-bar">
+          <ul class="navigation-items left">
+            <li id="blog-title-header"><a href="/"><h1>Alexis King</h1></a></li>
+          </ul>
+          <ul class="navigation-items center"></ul>
+          <ul class="navigation-items right">
+            <li><a href="/">Home</a></li>
+            <li><a href="/resume.html">About Me</a></li>
+          </ul>
+        </nav>
+      </header>
+      <section role="main">
+        <!-- Main column -->
+        <div class="content" class="col-md-12">
+
+
+
+          <article class="main">
+  <header>
+    <h1 class="title">An introduction to typeclass metaprogramming</h1>
+    <div class='date-and-tags'>
+      <time datetime="2021-03-25T00:00:00">
+        2021-03-25
+      </time>
+      <span style="margin: 0 3px">⦿</span>
+      <span class="tags"><a href="/tags/haskell.html">haskell</a>, <a href="/tags/types.html">types</a>, <a href="/tags/functional-programming.html">functional programming</a></span>
+    </div>
+  </header>
+
+<p><em>Typeclass metaprogramming</em> is a powerful technique available to Haskell programmers to automatically generate term-level code from static type information. It has been used to great effect in several popular Haskell libraries (such as the <a href="https://hackage.haskell.org/package/servant">servant</a> ecosystem), and it is the core mechanism used to implement generic programming via <a href="https://hackage.haskell.org/package/base-4.14.1.0/docs/GHC-Generics.html">GHC generics</a>. Despite this, remarkably little material exists that explains the technique, relegating it to folk knowledge known only to advanced Haskell programmers.</p>
+
+<p>This blog post attempts to remedy that by providing an overview of the foundational concepts behind typeclass metaprogramming. It does <em>not</em> attempt to be a complete guide to type-level programming in Haskell—such a task could easily fill a book—but it does provide explanations and illustrations of the most essential components. This is also <em>not</em> a blog post for Haskell beginners—familiarity with the essentials of the Haskell type system and several common GHC extensions is assumed—but it does not assume any prior knowledge of type-level programming.</p>
+<!-- more-->
+
+<h1 id="part-1-basic-building-blocks">Part 1: Basic building blocks</h1>
+
+<p>Typeclass metaprogramming is a big subject, which makes covering it in a blog post tricky. To break it into more manageable chunks, this post is divided into several parts, each of which introduces new type system features or type-level programming techniques, then presents an example of how they can be applied.</p>
+
+<p>To start, we’ll cover the absolute foundations of typeclass metaprogramming.</p>
+
+<h2 id="typeclasses-as-functions-from-types-to-terms">Typeclasses as functions from types to terms</h2>
+
+<p>As its name implies, typeclass metaprogramming (henceforth TMP<sup><a href="#2021-03-25-an-introduction-to-typeclass-metaprogramming-footnote-1-definition" name="2021-03-25-an-introduction-to-typeclass-metaprogramming-footnote-1-return">1</a></sup>) centers around Haskell’s typeclass construct. Traditionally, typeclasses are viewed as a mechanism for principled operator overloading; for example, they underpin Haskell’s polymorphic <code>==</code> operator via the <code>Eq</code> class. Though that is often the most useful way to think about typeclasses, TMP encourages a different perspective: <strong>typeclasses are functions from types to (runtime) terms</strong>.</p>
+
+<p>What does that mean? Let’s illustrate with an example. Suppose we define a typeclass called <code>TypeOf</code>:</p>
+
+<div class="brush: haskell">
+ <div class="source">
+  <pre><span></span><span class="kr">class</span> <span class="kt">TypeOf</span> <span class="n">a</span> <span class="kr">where</span>
+  <span class="n">typeOf</span> <span class="ow">::</span> <span class="n">a</span> <span class="ow">-&gt;</span> <span class="kt">String</span>
+</pre></div>
+
+</div>
+
+<p>The idea is that this typeclass will accept some value and return the name of its type as a string. To illustrate, here are a couple potential instances:</p>
+
+<div class="brush: haskell">
+ <div class="source">
+  <pre><span></span><span class="kr">instance</span> <span class="kt">TypeOf</span> <span class="kt">Bool</span> <span class="kr">where</span>
+  <span class="n">typeOf</span> <span class="kr">_</span> <span class="ow">=</span> <span class="s">"Bool"</span>
+
+<span class="kr">instance</span> <span class="kt">TypeOf</span> <span class="kt">Char</span> <span class="kr">where</span>
+  <span class="n">typeOf</span> <span class="kr">_</span> <span class="ow">=</span> <span class="s">"Char"</span>
+
+<span class="kr">instance</span> <span class="p">(</span><span class="kt">TypeOf</span> <span class="n">a</span><span class="p">,</span> <span class="kt">TypeOf</span> <span class="n">b</span><span class="p">)</span> <span class="ow">=&gt;</span> <span class="kt">TypeOf</span> <span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">)</span> <span class="kr">where</span>
+  <span class="n">typeOf</span> <span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">)</span> <span class="ow">=</span> <span class="s">"("</span> <span class="o">++</span> <span class="n">typeOf</span> <span class="n">a</span> <span class="o">++</span> <span class="s">", "</span> <span class="o">++</span> <span class="n">typeOf</span> <span class="n">b</span> <span class="o">++</span> <span class="s">")"</span>
+</pre></div>
+
+</div>
+
+<p>Given these instances, we can observe that they do what we expect in GHCi:</p>
+
+<div class="brush: haskell">
+ <div class="source">
+  <pre><span></span><span class="nf">ghci</span><span class="o">&gt;</span> <span class="n">typeOf</span> <span class="p">(</span><span class="kt">True</span><span class="p">,</span> <span class="sc">&#39;a&#39;</span><span class="p">)</span>
+<span class="s">"(Bool, Char)"</span>
+</pre></div>
+
+</div>
+
+<p>Note that both the <code>TypeOf Bool</code> and <code>TypeOf Char</code> instances ignore the argument to <code>typeOf</code> altogether. This makes sense, as the whole point of the <code>TypeOf</code> class is to get access to <em>type</em> information, which is the same regardless of which value is provided. To make this more explicit, we can take advantage of some GHC extensions to eliminate the value-level argument altogether:</p>
+
+<div class="brush: haskell">
+ <div class="source">
+  <pre><span></span><span class="cm">{-# LANGUAGE AllowAmbiguousTypes, ScopedTypeVariables, TypeApplications #-}</span>
+
+<span class="kr">class</span> <span class="kt">TypeOf</span> <span class="n">a</span> <span class="kr">where</span>
+  <span class="n">typeOf</span> <span class="ow">::</span> <span class="kt">String</span>
+</pre></div>
+
+</div>
+
+<p>This typeclass definition is a little unusual, as the type parameter <code>a</code> doesn’t appear anywhere in the body. To understand what it means, recall that the type of each method of a typeclass is implicitly extended with the typeclass’s constraint. For example, in the definition</p>
+
+<div class="brush: haskell">
+ <div class="source">
+  <pre><span></span><span class="kr">class</span> <span class="kt">Show</span> <span class="n">a</span> <span class="kr">where</span>
+  <span class="n">show</span> <span class="ow">::</span> <span class="n">a</span> <span class="ow">-&gt;</span> <span class="kt">String</span>
+</pre></div>
+
+</div>
+
+<p>the full type of the <code>show</code> method is implicitly extended with a <code>Show a</code> constraint to yield:</p>
+
+<div class="brush: haskell">
+ <div class="source">
+  <pre><span></span><span class="nf">show</span> <span class="ow">::</span> <span class="kt">Show</span> <span class="n">a</span> <span class="ow">=&gt;</span> <span class="n">a</span> <span class="ow">-&gt;</span> <span class="kt">String</span>
+</pre></div>
+
+</div>
+
+<p>Furthermore, if we write <code>forall</code>s explicitly, each typeclass method is also implicitly quantified over the class’s type parameters, which makes the following the <em>full</em> type of <code>show</code>:</p>
+
+<div class="brush: haskell">
+ <div class="source">
+  <pre><span></span><span class="nf">show</span> <span class="ow">::</span> <span class="n">forall</span> <span class="n">a</span><span class="o">.</span> <span class="kt">Show</span> <span class="n">a</span> <span class="ow">=&gt;</span> <span class="n">a</span> <span class="ow">-&gt;</span> <span class="kt">String</span>
+</pre></div>
+
+</div>
+
+<p>In the same vein, we can write out the full type of <code>typeOf</code>, as given by our new definition of <code>TypeOf</code>:</p>
+
+<div class="brush: haskell">
+ <div class="source">
+  <pre><span></span><span class="nf">typeOf</span> <span class="ow">::</span> <span class="n">forall</span> <span class="n">a</span><span class="o">.</span> <span class="kt">TypeOf</span> <span class="n">a</span> <span class="ow">=&gt;</span> <span class="kt">String</span>
+</pre></div>
+
+</div>
+
+<p>This type is still unusual, as the <code>a</code> type parameter doesn’t appear anywhere to the right of the <code>=&gt;</code> arrow. This makes the type parameter trivially <em>ambiguous</em>, which is to say it’s impossible for GHC to infer what <code>a</code> should be at any call site. Fortunately, <a href="https://downloads.haskell.org/ghc/9.0.1/docs/html/users_guide/exts/type_applications.html">we can use <code>TypeApplications</code></a> to pass a type for <code>a</code> directly, as we can see in the updated definition of <code>TypeOf (a, b)</code>:</p>
+
+<div class="brush: haskell">
+ <div class="source">
+  <pre><span></span><span class="kr">instance</span> <span class="kt">TypeOf</span> <span class="kt">Bool</span> <span class="kr">where</span>
+  <span class="n">typeOf</span> <span class="ow">=</span> <span class="s">"Bool"</span>
+
+<span class="kr">instance</span> <span class="kt">TypeOf</span> <span class="kt">Char</span> <span class="kr">where</span>
+  <span class="n">typeOf</span> <span class="ow">=</span> <span class="s">"Char"</span>
+
+<span class="kr">instance</span> <span class="p">(</span><span class="kt">TypeOf</span> <span class="n">a</span><span class="p">,</span> <span class="kt">TypeOf</span> <span class="n">b</span><span class="p">)</span> <span class="ow">=&gt;</span> <span class="kt">TypeOf</span> <span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">)</span> <span class="kr">where</span>
+  <span class="n">typeOf</span> <span class="ow">=</span> <span class="s">"("</span> <span class="o">++</span> <span class="n">typeOf</span> <span class="o">@</span><span class="n">a</span> <span class="o">++</span> <span class="s">", "</span> <span class="o">++</span> <span class="n">typeOf</span> <span class="o">@</span><span class="n">b</span> <span class="o">++</span> <span class="s">")"</span>
+</pre></div>
+
+</div>
+
+<p>Once again, we can test out our new definitions in GHCi:</p>
+
+<div class="brush: haskell">
+ <div class="source">
+  <pre><span></span><span class="nf">ghci</span><span class="o">&gt;</span> <span class="n">typeOf</span> <span class="o">@</span><span class="kt">Bool</span>
+<span class="s">"Bool"</span>
+<span class="nf">ghci</span><span class="o">&gt;</span> <span class="n">typeOf</span> <span class="o">@</span><span class="p">(</span><span class="kt">Bool</span><span class="p">,</span> <span class="kt">Char</span><span class="p">)</span>
+<span class="s">"(Bool, Char)"</span>
+</pre></div>
+
+</div>
+
+<p>This illustrates very succinctly how typeclasses can be seen as functions from types to terms. Our <code>typeOf</code> function is, quite literally, a function that accepts a single type as an argument and returns a term-level <code>String</code>. Of course, the <code>TypeOf</code> typeclass is not a particularly <em>useful</em> example of such a function, but it demonstrates how easy it is to construct.</p>
+
+<h2 id="type-level-interpreters">Type-level interpreters</h2>
+
+<p>One important consequence of eliminating the value-level argument of <code>typeOf</code> is that there is no need for its argument type to actually be <em>inhabited</em>. For example, consider the <code>TypeOf</code> instance on <code>Void</code> from <code>Data.Void</code>:</p>
+
+<div class="brush: haskell">
+ <div class="source">
+  <pre><span></span><span class="kr">instance</span> <span class="kt">TypeOf</span> <span class="kt">Void</span> <span class="kr">where</span>
+  <span class="n">typeOf</span> <span class="ow">=</span> <span class="s">"Void"</span>
+</pre></div>
+
+</div>
+
+<p>This above instance is no different from the ones on <code>Bool</code> and <code>Char</code> even though <code>Void</code> is a completely uninhabited type. This is an important point: as we delve into type-level programming, it’s important to keep in mind that the language of types is mostly blind to the term-level meaning of those types. Although we usually write typeclasses that operate on values, this is not at all essential. This turns out to be quite important in practice, even in something as simple as the definition of <code>TypeOf</code> on lists:</p>
+
+<div class="brush: haskell">
+ <div class="source">
+  <pre><span></span><span class="kr">instance</span> <span class="kt">TypeOf</span> <span class="n">a</span> <span class="ow">=&gt;</span> <span class="kt">TypeOf</span> <span class="p">[</span><span class="n">a</span><span class="p">]</span> <span class="kr">where</span>
+  <span class="n">typeOf</span> <span class="ow">=</span> <span class="s">"["</span> <span class="o">++</span> <span class="n">typeOf</span> <span class="o">@</span><span class="n">a</span> <span class="o">++</span> <span class="s">"]"</span>
+</pre></div>
+
+</div>
+
+<p>If <code>typeOf</code> required a value-level argument, not just a type, our instance above would be in a pickle when given the empty list, since it would have no value of type <code>a</code> to recursively apply <code>typeOf</code> to. But since <code>typeOf</code> only accepts a type-level argument, the term-level meaning of the list type poses no obstacle.</p>
+
+<p>A perhaps unintuitive consequence of this property is that we can use typeclasses to write interesting functions on types even if none of the types are inhabited at all. For example, consider the following pair of type definitions:</p>
+
+<div class="brush: haskell">
+ <div class="source">
+  <pre><span></span><span class="kr">data</span> <span class="kt">Z</span>
+<span class="kr">data</span> <span class="kt">S</span> <span class="n">a</span>
+</pre></div>
+
+</div>
+
+<p>It is impossible to construct any values of these types, but we can nevertheless use them to construct natural numbers at the type level:</p>
+
+<ul>
+ <li>
+  <p><code>Z</code> is a type that represents 0.</p></li>
+ <li>
+  <p><code>S Z</code> is a type that represents 1.</p></li>
+ <li>
+  <p><code>S (S Z)</code> is a type that represents 2.</p></li></ul>
+
+<p>And so on. These types might not seem very useful, since they aren’t inhabited by any values, but remarkably, we can still use a typeclass to distinguish them and convert them to term-level values:</p>
+
+<div class="brush: haskell">
+ <div class="source">
+  <pre><span></span><span class="kr">import</span> <span class="nn">Numeric.Natural</span>
+
+<span class="kr">class</span> <span class="kt">ReifyNat</span> <span class="n">a</span> <span class="kr">where</span>
+  <span class="n">reifyNat</span> <span class="ow">::</span> <span class="kt">Natural</span>
+
+<span class="kr">instance</span> <span class="kt">ReifyNat</span> <span class="kt">Z</span> <span class="kr">where</span>
+  <span class="n">reifyNat</span> <span class="ow">=</span> <span class="mi">0</span>
+
+<span class="kr">instance</span> <span class="kt">ReifyNat</span> <span class="n">a</span> <span class="ow">=&gt;</span> <span class="kt">ReifyNat</span> <span class="p">(</span><span class="kt">S</span> <span class="n">a</span><span class="p">)</span> <span class="kr">where</span>
+  <span class="n">reifyNat</span> <span class="ow">=</span> <span class="mi">1</span> <span class="o">+</span> <span class="n">reifyNat</span> <span class="o">@</span><span class="n">a</span>
+</pre></div>
+
+</div>
+
+<p>As its name implies, <code>reifyNat</code> reifies a type-level natural number encoded using our datatypes above into a term-level <code>Natural</code> value:</p>
+
+<div class="brush: haskell">
+ <div class="source">
+  <pre><span></span><span class="nf">ghci</span><span class="o">&gt;</span> <span class="n">reifyNat</span> <span class="o">@</span><span class="kt">Z</span>
+<span class="mi">0</span>
+<span class="nf">ghci</span><span class="o">&gt;</span> <span class="n">reifyNat</span> <span class="o">@</span><span class="p">(</span><span class="kt">S</span> <span class="kt">Z</span><span class="p">)</span>
+<span class="mi">1</span>
+<span class="nf">ghci</span><span class="o">&gt;</span> <span class="n">reifyNat</span> <span class="o">@</span><span class="p">(</span><span class="kt">S</span> <span class="p">(</span><span class="kt">S</span> <span class="kt">Z</span><span class="p">))</span>
+<span class="mi">2</span>
+</pre></div>
+
+</div>
+
+<p>One way to think about <code>reifyNat</code> is as an <em>interpreter</em> of a type-level language. In this case, the type-level language is very simple, only capturing natural numbers, but in general, it could be arbitrarily complex—and typeclasses can be used to give it a useful meaning, even if it has no term-level representation.</p>
+
+<h2 id="overlapping-instances">Overlapping instances</h2>
+
+<p>Generally, typeclass instances aren’t supposed to overlap. That is, if you write an instance for <code>Show (Maybe a)</code>, you aren’t supposed to <em>also</em> write an instance for <code>Show (Maybe Bool)</code>, since it isn’t clear whether <code>show (Just True)</code> should use the first instance or the second. For that reason, by default, GHC rejects any form of instance overlap as soon as it detects it.</p>
+
+<p>Usually, this is the right behavior. Due to the way Haskell’s typeclass system is designed to preserve coherency—that is, the same combination of type arguments always selects the same instance—overlapping instances can be unintuitive or even cause nonsensical behavior if orphan instances are defined. However, when doing TMP, it’s useful to make exceptions to that rule of thumb, so GHC provides the option to explicitly opt-in to overlapping instances.</p>
+
+<p>As a simple example, suppose we wanted to write a typeclass that checks whether a given type is <code>()</code> or not:</p>
+
+<div class="brush: haskell">
+ <div class="source">
+  <pre><span></span><span class="kr">class</span> <span class="kt">IsUnit</span> <span class="n">a</span> <span class="kr">where</span>
+  <span class="n">isUnit</span> <span class="ow">::</span> <span class="kt">Bool</span>
+</pre></div>
+
+</div>
+
+<p>If we were to write an ordinary, value-level function, we could write something like this pseudo-Haskell:</p>
+
+<div class="brush: haskell">
+ <div class="source">
+  <pre><span></span><span class="c1">-- not actually valid Haskell, just an example</span>
+<span class="nf">isUnit</span> <span class="ow">::</span> <span class="o">*</span> <span class="ow">-&gt;</span> <span class="kt">Bool</span>
+<span class="nf">isUnit</span> <span class="nb">()</span> <span class="ow">=</span> <span class="kt">True</span>
+<span class="nf">isUnit</span> <span class="kr">_</span>  <span class="ow">=</span> <span class="kt">False</span>
+</pre></div>
+
+</div>
+
+<p>But if we try to translate this to typeclass instances, we’ll get a problem:</p>
+
+<div class="brush: haskell">
+ <div class="source">
+  <pre><span></span><span class="kr">instance</span> <span class="kt">IsUnit</span> <span class="nb">()</span> <span class="kr">where</span>
+  <span class="n">isUnit</span> <span class="ow">=</span> <span class="kt">True</span>
+
+<span class="kr">instance</span> <span class="kt">IsUnit</span> <span class="n">a</span> <span class="kr">where</span>
+  <span class="n">isUnit</span> <span class="ow">=</span> <span class="kt">False</span>
+</pre></div>
+
+</div>
+
+<p>The problem is that a function definition has a closed set of clauses matched from top to bottom, but typeclass instances are open and unordered.<sup><a href="#2021-03-25-an-introduction-to-typeclass-metaprogramming-footnote-2-definition" name="2021-03-25-an-introduction-to-typeclass-metaprogramming-footnote-2-return">2</a></sup> This means GHC will complain about instance overlap if we try to evaluate <code>isUnit @()</code>:</p>
+
+<pre><code>ghci&gt; isUnit @()
+
+error:
+    • Overlapping instances for IsUnit ()
+        arising from a use of ‘isUnit’
+      Matching instances:
+        instance IsUnit a
+        instance IsUnit ()</code></pre>
+
+<p>To fix this, we have to explicitly mark <code>IsUnit ()</code> as overlapping:</p>
+
+<div class="brush: haskell">
+ <div class="source">
+  <pre><span></span><span class="kr">instance</span> <span class="cm">{-# OVERLAPPING #-}</span> <span class="kt">IsUnit</span> <span class="nb">()</span> <span class="kr">where</span>
+  <span class="n">isUnit</span> <span class="ow">=</span> <span class="kt">True</span>
+</pre></div>
+
+</div>
+
+<p>Now GHC accepts the expression without complaint:</p>
+
+<div class="brush: haskell">
+ <div class="source">
+  <pre><span></span><span class="nf">ghci</span><span class="o">&gt;</span> <span class="n">isUnit</span> <span class="o">@</span><span class="nb">()</span>
+<span class="kt">True</span>
+</pre></div>
+
+</div>
+
+<p>What does the <code>{-# OVERLAPPING #-}</code> pragma do, exactly? The gory details are <a href="https://downloads.haskell.org/ghc/9.0.1/docs/html/users_guide/exts/instances.html#overlapping-instances">spelled out in the GHC User’s Guide</a>, but the simple explanation is that <code>{-# OVERLAPPING #-}</code> relaxes the overlap checker as long as the instance is <em>strictly more specific</em> than the instance(s) it overlaps with. In this case, that is true: <code>IsUnit ()</code> is trivially more specific than <code>IsUnit a</code>, since the former only matches <code>()</code> while the latter matches anything at all. That means our overlap is well-formed, and instance resolution should behave the way we’d like.</p>
+
+<p>Overlapping instances are a useful tool when performing TMP, as they make it possible to write piecewise functions on types in the same way it’s possible to write piecewise functions on terms. However, they must still be used with care, as without understanding how they work, they can produce unintuitive results. For an example of how things can go wrong, consider the following definition:</p>
+
+<div class="brush: haskell">
+ <div class="source">
+  <pre><span></span><span class="nf">guardUnit</span> <span class="ow">::</span> <span class="n">forall</span> <span class="n">a</span><span class="o">.</span> <span class="n">a</span> <span class="ow">-&gt;</span> <span class="kt">Either</span> <span class="kt">String</span> <span class="n">a</span>
+<span class="nf">guardUnit</span> <span class="n">x</span> <span class="ow">=</span> <span class="kr">case</span> <span class="n">isUnit</span> <span class="o">@</span><span class="n">a</span> <span class="kr">of</span>
+  <span class="kt">True</span>  <span class="ow">-&gt;</span> <span class="kt">Left</span> <span class="s">"unit is not allowed"</span>
+  <span class="kt">False</span> <span class="ow">-&gt;</span> <span class="kt">Right</span> <span class="n">x</span>
+</pre></div>
+
+</div>
+
+<p>The intent of <code>guardUnit</code> is to use <code>isUnit</code> to detect if its argument is of type <code>()</code>, and if it is, to return an error. However, even though we marked <code>IsUnit ()</code> overlapping, we still get an overlapping instance error:</p>
+
+<pre><code>error:
+    • Overlapping instances for IsUnit a arising from a use of ‘isUnit’
+      Matching instances:
+        instance IsUnit a
+        instance [overlapping] IsUnit ()
+    • In the expression: isUnit @a</code></pre>
+
+<p>What gives? The problem is that GHC simply doesn’t know what type <code>a</code> is when compiling <code>guardUnit</code>. It <em>could</em> be instantiated to <code>()</code> where it’s called, but it might not be. Therefore, GHC doesn’t know which instance to pick, and an overlapping instance error is still reported.</p>
+
+<p>This behavior is actually a very, very good thing. If GHC were to blindly pick the <code>IsUnit a</code> instance in this case, then <code>guardUnit</code> would always take the <code>False</code> branch, even when passed a value of type <code>()</code>! That would certainly not be what was intended, so it’s better to reject this program than to silently do the wrong thing. However, in more complicated situations, it can be quite surprising that GHC is complaining about instance overlap even when <code>{-# OVERLAPPING #-}</code> annotations are used, so it’s important to keep their limitations in mind.</p>
+
+<p>As it happens, in this particular case, the error is easily remedied. We simply have to add an <code>IsUnit</code> constraint to the type signature of <code>guardUnit</code>:</p>
+
+<div class="brush: haskell">
+ <div class="source">
+  <pre><span></span><span class="nf">guardUnit</span> <span class="ow">::</span> <span class="n">forall</span> <span class="n">a</span><span class="o">.</span> <span class="kt">IsUnit</span> <span class="n">a</span> <span class="ow">=&gt;</span> <span class="n">a</span> <span class="ow">-&gt;</span> <span class="kt">Either</span> <span class="kt">String</span> <span class="n">a</span>
+<span class="nf">guardUnit</span> <span class="n">x</span> <span class="ow">=</span> <span class="kr">case</span> <span class="n">isUnit</span> <span class="o">@</span><span class="n">a</span> <span class="kr">of</span>
+  <span class="kt">True</span>  <span class="ow">-&gt;</span> <span class="kt">Left</span> <span class="s">"unit is not allowed"</span>
+  <span class="kt">False</span> <span class="ow">-&gt;</span> <span class="kt">Right</span> <span class="n">x</span>
+</pre></div>
+
+</div>
+
+<p>Now picking the right <code>IsUnit</code> instance is deferred to the place where <code>guardUnit</code> is used, and the definition is accepted.<sup><a href="#2021-03-25-an-introduction-to-typeclass-metaprogramming-footnote-3-definition" name="2021-03-25-an-introduction-to-typeclass-metaprogramming-footnote-3-return">3</a></sup></p>
+
+<h2 id="type-families-are-functions-from-types-to-types">Type families are functions from types to types</h2>
+
+<p>In the previous section, we discussed how typeclasses are functions from types to terms, but what about functions from types to types? For example, suppose we wanted to sum two type-level natural numbers and get a new type-level natural number as a result? For that, we can use a type family:</p>
+
+<div class="brush: haskell">
+ <div class="source">
+  <pre><span></span><span class="cm">{-# LANGUAGE TypeFamilies #-}</span>
+
+<span class="kr">type</span> <span class="kr">family</span> <span class="kt">Sum</span> <span class="n">a</span> <span class="n">b</span> <span class="kr">where</span>
+  <span class="kt">Sum</span> <span class="kt">Z</span>     <span class="n">b</span> <span class="ow">=</span> <span class="n">b</span>
+  <span class="kt">Sum</span> <span class="p">(</span><span class="kt">S</span> <span class="n">a</span><span class="p">)</span> <span class="n">b</span> <span class="ow">=</span> <span class="kt">S</span> <span class="p">(</span><span class="kt">Sum</span> <span class="n">a</span> <span class="n">b</span><span class="p">)</span>
+</pre></div>
+
+</div>
+
+<p>The above is a <a href="https://downloads.haskell.org/ghc/9.0.1/docs/html/users_guide/exts/type_families.html#closed-type-families">closed type family</a>, which works quite a lot like an ordinary Haskell function definition, just at the type level instead of at the value level. For comparison, the equivalent value-level definition of <code>Sum</code> would look like this:</p>
+
+<div class="brush: haskell">
+ <div class="source">
+  <pre><span></span><span class="kr">data</span> <span class="kt">Nat</span> <span class="ow">=</span> <span class="kt">Z</span> <span class="o">|</span> <span class="kt">S</span> <span class="kt">Nat</span>
+
+<span class="nf">sum</span> <span class="ow">::</span> <span class="kt">Nat</span> <span class="ow">-&gt;</span> <span class="kt">Nat</span> <span class="ow">-&gt;</span> <span class="kt">Nat</span>
+<span class="nf">sum</span> <span class="kt">Z</span>     <span class="n">b</span> <span class="ow">=</span> <span class="n">b</span>
+<span class="nf">sum</span> <span class="p">(</span><span class="kt">S</span> <span class="n">a</span><span class="p">)</span> <span class="n">b</span> <span class="ow">=</span> <span class="kt">S</span> <span class="p">(</span><span class="n">sum</span> <span class="n">a</span> <span class="n">b</span><span class="p">)</span>
+</pre></div>
+
+</div>
+
+<p>As you can see, the two are quite similar. Both are defined via a pair of pattern-matching clauses, and though it doesn’t matter here, both closed type families and ordinary functions evaluate their clauses top to bottom.</p>
+
+<p>To test our definition of <code>Sum</code> in GHCi, we can use <a href="https://downloads.haskell.org/ghc/9.0.1/docs/html/users_guide/ghci.html#ghci-cmd-:kind">the <code>:kind!</code> command</a>, which prints out a type and its kind after reducing it as much as possible:</p>
+
+<div class="brush: haskell">
+ <div class="source">
+  <pre><span></span><span class="nf">ghci</span><span class="o">&gt;</span> <span class="kt">:</span><span class="n">kind</span><span class="o">!</span> <span class="kt">Sum</span> <span class="p">(</span><span class="kt">S</span> <span class="kt">Z</span><span class="p">)</span> <span class="p">(</span><span class="kt">S</span> <span class="p">(</span><span class="kt">S</span> <span class="kt">Z</span><span class="p">))</span>
+<span class="kt">Sum</span> <span class="p">(</span><span class="kt">S</span> <span class="kt">Z</span><span class="p">)</span> <span class="p">(</span><span class="kt">S</span> <span class="p">(</span><span class="kt">S</span> <span class="kt">Z</span><span class="p">))</span> <span class="ow">::</span> <span class="o">*</span>
+<span class="ow">=</span> <span class="kt">S</span> <span class="p">(</span><span class="kt">S</span> <span class="p">(</span><span class="kt">S</span> <span class="kt">Z</span><span class="p">))</span>
+</pre></div>
+
+</div>
+
+<p>We can also combine <code>Sum</code> with our <code>ReifyNat</code> class from earlier:</p>
+
+<div class="brush: haskell">
+ <div class="source">
+  <pre><span></span><span class="nf">ghci</span><span class="o">&gt;</span> <span class="n">reifyNat</span> <span class="o">@</span><span class="p">(</span><span class="kt">Sum</span> <span class="p">(</span><span class="kt">S</span> <span class="kt">Z</span><span class="p">)</span> <span class="p">(</span><span class="kt">S</span> <span class="p">(</span><span class="kt">S</span> <span class="kt">Z</span><span class="p">)))</span>
+<span class="mi">3</span>
+</pre></div>
+
+</div>
+
+<p>Type families are a useful complement to typeclasses when performing type-level programming. They allow computation to occur entirely at the type-level, which is necessarily computation that occurs entirely at compile-time, and the result can then be passed to a typeclass method to produce a term-level value from the result.</p>
+
+<h2 id="example-1-generalized-concat">Example 1: Generalized <code>concat</code></h2>
+
+<p>Finally, using what we’ve discussed so far, we can do our first bit of practical TMP. Specifically, we’re going to define a <code>flatten</code> function similar to like-named functions provided by many dynamically-typed languages. In those languages, <code>flatten</code> is like <code>concat</code>, but it works on a list of arbitrary depth. For example, we might use it like this:</p>
+
+<div class="brush: haskell">
+ <div class="source">
+  <pre><span></span><span class="o">&gt;</span> <span class="n">flatten</span> <span class="p">[[[</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">],</span> <span class="p">[</span><span class="mi">3</span><span class="p">,</span> <span class="mi">4</span><span class="p">]],</span> <span class="p">[[</span><span class="mi">5</span><span class="p">,</span> <span class="mi">6</span><span class="p">],</span> <span class="p">[</span><span class="mi">7</span><span class="p">,</span> <span class="mi">8</span><span class="p">]]]</span>
+<span class="p">[</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">3</span><span class="p">,</span> <span class="mi">4</span><span class="p">,</span> <span class="mi">5</span><span class="p">,</span> <span class="mi">6</span><span class="p">,</span> <span class="mi">7</span><span class="p">,</span> <span class="mi">8</span><span class="p">]</span>
+</pre></div>
+
+</div>
+
+<p>In Haskell, lists of different depths have different types, so multiple levels of <code>concat</code> have to be applied explicitly. But using TMP, we can write a generic <code>flatten</code> function that operates on lists of any depth!</p>
+
+<p>Since this is <em>typeclass</em> metaprogramming, we’ll unsurprisingly begin with a typeclass:</p>
+
+<div class="brush: haskell">
+ <div class="source">
+  <pre><span></span><span class="kr">class</span> <span class="kt">Flatten</span> <span class="n">a</span> <span class="kr">where</span>
+  <span class="n">flatten</span> <span class="ow">::</span> <span class="n">a</span> <span class="ow">-&gt;</span> <span class="p">[</span><span class="o">???</span><span class="p">]</span>
+</pre></div>
+
+</div>
+
+<p>Our first challenge is writing the return type of <code>flatten</code>. Since the argument could be a list of any depth, there’s no direct way to obtain its element type. Fortunately, we can define a type family that does precisely that:</p>
+
+<div class="brush: haskell">
+ <div class="source">
+  <pre><span></span><span class="kr">type</span> <span class="kr">family</span> <span class="kt">ElementOf</span> <span class="n">a</span> <span class="kr">where</span>
+  <span class="kt">ElementOf</span> <span class="p">[[</span><span class="n">a</span><span class="p">]]</span> <span class="ow">=</span> <span class="kt">ElementOf</span> <span class="p">[</span><span class="n">a</span><span class="p">]</span>
+  <span class="kt">ElementOf</span> <span class="p">[</span><span class="n">a</span><span class="p">]</span>   <span class="ow">=</span> <span class="n">a</span>
+
+<span class="kr">class</span> <span class="kt">Flatten</span> <span class="n">a</span> <span class="kr">where</span>
+  <span class="n">flatten</span> <span class="ow">::</span> <span class="n">a</span> <span class="ow">-&gt;</span> <span class="p">[</span><span class="kt">ElementOf</span> <span class="n">a</span><span class="p">]</span>
+</pre></div>
+
+</div>
+
+<p>Now we can write our <code>Flatten</code> instances. The base case is when the type is a list of depth 1, in which case we don’t have any flattening to do:</p>
+
+<div class="brush: haskell">
+ <div class="source">
+  <pre><span></span><span class="kr">instance</span> <span class="kt">Flatten</span> <span class="p">[</span><span class="n">a</span><span class="p">]</span> <span class="kr">where</span>
+  <span class="n">flatten</span> <span class="n">x</span> <span class="ow">=</span> <span class="n">x</span>
+</pre></div>
+
+</div>
+
+<p>The inductive case is when the type is a nested list, in which case we want to apply <code>concat</code> and recur:</p>
+
+<div class="brush: haskell">
+ <div class="source">
+  <pre><span></span><span class="kr">instance</span> <span class="cm">{-# OVERLAPPING #-}</span> <span class="kt">Flatten</span> <span class="p">[</span><span class="n">a</span><span class="p">]</span> <span class="ow">=&gt;</span> <span class="kt">Flatten</span> <span class="p">[[</span><span class="n">a</span><span class="p">]]</span> <span class="kr">where</span>
+  <span class="n">flatten</span> <span class="n">x</span> <span class="ow">=</span> <span class="n">flatten</span> <span class="p">(</span><span class="n">concat</span> <span class="n">x</span><span class="p">)</span>
+</pre></div>
+
+</div>
+
+<p>Sadly, if we try to compile these definitions, GHC will reject our <code>Flatten [a]</code> instance:</p>
+
+<pre><code>error:
+    • Couldn't match type ‘a’ with ‘ElementOf [a]’
+      ‘a’ is a rigid type variable bound by
+        the instance declaration
+      Expected type: [ElementOf [a]]
+        Actual type: [a]
+    • In the expression: x
+      In an equation for ‘flatten’: flatten x = x
+      In the instance declaration for ‘Flatten [a]’
+   |
+   |   flatten x = x
+   |               ^</code></pre>
+
+<p>At first blush, this error looks very confusing. Why doesn’t GHC think <code>a</code> and <code>ElementOf [a]</code> are the same type? Well, consider what would happen if we picked a type like <code>[Int]</code> for <code>a</code>. Then <code>[a]</code> would be <code>[[Int]]</code>, a nested list, so the first case of <code>ElementOf</code> would apply. Therefore, GHC refuses to pick the second equation of <code>ElementOf</code> so hastily.</p>
+
+<p>In this particular case, we might think that’s rather silly. After all, if <code>a</code> were <code>[Int]</code>, then GHC wouldn’t have picked the <code>Flatten [a]</code> instance to begin with, it would pick the more specific <code>Flatten [[a]]</code> instance defined below. Therefore, the hypothetical situation above could never happen. Unfortunately, GHC does not realize this, so we find ourselves at an impasse.</p>
+
+<p>Fortunately, we can soothe GHC’s anxiety by adding an extra constraint to our <code>Flatten [a]</code> instance:</p>
+
+<div class="brush: haskell">
+ <div class="source">
+  <pre><span></span><span class="kr">instance</span> <span class="p">(</span><span class="kt">ElementOf</span> <span class="p">[</span><span class="n">a</span><span class="p">]</span> <span class="o">~</span> <span class="n">a</span><span class="p">)</span> <span class="ow">=&gt;</span> <span class="kt">Flatten</span> <span class="p">[</span><span class="n">a</span><span class="p">]</span> <span class="kr">where</span>
+  <span class="n">flatten</span> <span class="n">x</span> <span class="ow">=</span> <span class="n">x</span>
+</pre></div>
+
+</div>
+
+<p>This is a <em>type equality constraint</em>. Type equality constraints are written with the syntax <code>a ~ b</code>, and they state that <code>a</code> must be the same type as <code>b</code>. Type equality constraints are mostly useful when type families are involved, since they can be used (as in this case) to require a type family reduce to a certain type. In this case, we’re asserting that <code>ElementOf [a]</code> must always be <code>a</code>, which allows the instance to typecheck.</p>
+
+<p>Note that this doesn’t let us completely wriggle out of our obligation, as the type equality constraint must <em>eventually</em> be checked when the instance is actually used, so initially this might seem like we’ve only deferred the problem to later. But in this case, that’s exactly what we need: by the time the <code>Flatten [a]</code> instance is selected, GHC will know that <code>a</code> is <em>not</em> a list type, and it will be able to reduce <code>ElementOf [a]</code> to <code>a</code> without difficulty. Indeed, we can see this for ourselves by using <code>flatten</code> in GHCi:</p>
+
+<div class="brush: haskell">
+ <div class="source">
+  <pre><span></span><span class="nf">ghci</span><span class="o">&gt;</span> <span class="n">flatten</span> <span class="p">[[[</span><span class="mi">1</span> <span class="ow">::</span> <span class="kt">Integer</span><span class="p">,</span> <span class="mi">2</span><span class="p">],</span> <span class="p">[</span><span class="mi">3</span><span class="p">,</span> <span class="mi">4</span><span class="p">]],</span> <span class="p">[[</span><span class="mi">5</span><span class="p">,</span> <span class="mi">6</span><span class="p">],</span> <span class="p">[</span><span class="mi">7</span><span class="p">,</span> <span class="mi">8</span><span class="p">]]]</span>
+<span class="p">[</span><span class="mi">1</span><span class="p">,</span><span class="mi">2</span><span class="p">,</span><span class="mi">3</span><span class="p">,</span><span class="mi">4</span><span class="p">,</span><span class="mi">5</span><span class="p">,</span><span class="mi">6</span><span class="p">,</span><span class="mi">7</span><span class="p">,</span><span class="mi">8</span><span class="p">]</span>
+</pre></div>
+
+</div>
+
+<p>It works! But why do we need the type annotation on <code>1</code>? If we leave it out, we get a rather hairy type error:</p>
+
+<pre><code>error:
+    • Couldn't match type ‘ElementOf [a0]’ with ‘ElementOf [a]’
+      Expected type: [ElementOf [a]]
+        Actual type: [ElementOf [a0]]
+      NB: ‘ElementOf’ is a non-injective type family
+      The type variable ‘a0’ is ambiguous</code></pre>
+
+<p>The issue here stems from the polymorphic nature of Haskell number literals. Theoretically, someone could define a <code>Num [a]</code> instance, in which case <code>1</code> could actually have a list type, and either case of <code>ElementOf</code> could match depending on the choice of <code>Num</code> instance. Of course, no such <code>Num</code> instance exists, nor should it, but the possibility of it being defined means GHC can’t be certain of the depth of the argument list.</p>
+
+<p>This issue happens to come up a lot in simple examples of TMP, since polymorphic number literals introduce a level of ambiguity. In real programs, this is much less of an issue, since there’s no reason to call <code>flatten</code> on a completely hardcoded list! However, it’s still important to understand what these type errors mean and why they occur.</p>
+
+<p>That wrinkle aside, <code>flatten</code> is a functioning example of what useful TMP can look like. We’ve written a single, generic definition that flattens lists of any depth, taking advantage of static type information to choose what to do at runtime.</p>
+
+<h3 id="typeclasses-as-compile-time-code-generation">Typeclasses as compile-time code generation</h3>
+
+<p>Presented with the above definition of <code>Flatten</code>, it might not be immediately obvious how to think about <code>Flatten</code> as a function from types to terms. After all, it looks a lot more like an “ordinary” typeclass (like, say, <code>Eq</code> or <code>Show</code>) than the <code>TypeOf</code> and <code>ReifyNat</code> classes we defined above.</p>
+
+<p>One useful way to shift our perspective is to consider equivalent <code>Flatten</code> instances written using point-free style:</p>
+
+<div class="brush: haskell">
+ <div class="source">
+  <pre><span></span><span class="kr">instance</span> <span class="p">(</span><span class="kt">ElementOf</span> <span class="p">[</span><span class="n">a</span><span class="p">]</span> <span class="o">~</span> <span class="n">a</span><span class="p">)</span> <span class="ow">=&gt;</span> <span class="kt">Flatten</span> <span class="p">[</span><span class="n">a</span><span class="p">]</span> <span class="kr">where</span>
+  <span class="n">flatten</span> <span class="ow">=</span> <span class="n">id</span>
+
+<span class="kr">instance</span> <span class="cm">{-# OVERLAPPING #-}</span> <span class="kt">Flatten</span> <span class="p">[</span><span class="n">a</span><span class="p">]</span> <span class="ow">=&gt;</span> <span class="kt">Flatten</span> <span class="p">[[</span><span class="n">a</span><span class="p">]]</span> <span class="kr">where</span>
+  <span class="n">flatten</span> <span class="ow">=</span> <span class="n">flatten</span> <span class="o">.</span> <span class="n">concat</span>
+</pre></div>
+
+</div>
+
+<p>These definitions of <code>flatten</code> no longer (syntactically) depend on term-level arguments, just like our definitions of <code>typeOf</code> and <code>reifyNat</code> didn’t accept any term-level arguments above. This allows us to consider what <code>flatten</code> might “expand to” given a type argument alone:</p>
+
+<ul>
+ <li>
+  <p><code>flatten @[Int]</code> is just <code>id</code>, since the <code>Flatten [a]</code> instance is selected.</p></li>
+ <li>
+  <p><code>flatten @[[Int]]</code> is <code>flatten @[Int] . concat</code>, since the <code>Flatten [[a]]</code> instance is selected. That then becomes <code>id . concat</code>, which can be further simplified to just <code>concat</code>.</p></li>
+ <li>
+  <p><code>flatten @[[[Int]]]</code> is <code>flatten @[[Int]] . concat</code>, which simplifies to <code>concat . concat</code> by the same reasoning above.</p></li>
+ <li>
+  <p><code>flatten @[[[[Int]]]]</code> is then <code>concat . concat . concat</code>, and so on.</p></li></ul>
+
+<p>This meshes quite naturally with our intuition of typeclasses as functions from types to terms. Each application of <code>flatten</code> takes a type as an argument and produces some number of composed <code>concat</code>s as a result. From this perspective, <code>Flatten</code> is performing a kind of compile-time code generation, synthesizing an expression to do the concatenation on the fly by inspecting the type information.</p>
+
+<p>This framing is one of the key ideas that makes TMP so powerful, and indeed, it explains how it’s worthy of the name <em>metaprogramming</em>. As we continue to more sophisticated examples of TMP, try to keep this perspective in mind.</p>
+
+<h1 id="part-2-generic-programming">Part 2: Generic programming</h1>
+
+<p>Part 1 of this blog post established the foundational techniques used in TMP, all of which are useful on their own. If you’ve read up to this point, you now know enough to start applying TMP yourself, and the remainder of this blog post will simply continue to build upon what you already know.</p>
+
+<p>In the previous section, we discussed how to use TMP to write a generic <code>flatten</code> operation. In this section, we’ll aim a bit higher: totally generic functions that operate on <em>arbitrary</em> datatypes.</p>
+
+<h2 id="open-type-families-and-associated-types">Open type families and associated types</h2>
+
+<p>Before we can dive into examples, we need to revisit type families. In the previous sections, we discussed closed type families, but we did not cover their counterpart, <em>open type families</em>. Like closed type families, open type families are effectively functions from types to types, but unlike closed type families, they are not defined with a predefined set of equations. Instead, new equations are added separately using <code>type instance</code> declarations. For example, we could define our <code>Sum</code> family from above like this:</p>
+
+<div class="brush: haskell">
+ <div class="source">
+  <pre><span></span><span class="kr">type</span> <span class="kr">family</span> <span class="kt">Sum</span> <span class="n">a</span> <span class="n">b</span>
+<span class="kr">type</span> <span class="kr">instance</span> <span class="kt">Sum</span> <span class="kt">Z</span> <span class="n">b</span> <span class="ow">=</span> <span class="n">b</span>
+<span class="kr">type</span> <span class="kr">instance</span> <span class="kt">Sum</span> <span class="p">(</span><span class="kt">S</span> <span class="n">a</span><span class="p">)</span> <span class="n">b</span> <span class="ow">=</span> <span class="kt">S</span> <span class="p">(</span><span class="kt">Sum</span> <span class="n">a</span> <span class="n">b</span><span class="p">)</span>
+</pre></div>
+
+</div>
+
+<p>In the case of <code>Sum</code>, this would not be very useful, and indeed, <code>Sum</code> is much better expressed as a closed type family than an open one. But the advantage of open type families is similar to the advantage of typeclasses: new equations can be added at any time, even in modules other than the one that declares the open type family.</p>
+
+<p>This extensibility means open type families are used less for type-level computation and more for type-level maps that associate types with other types. For example, one might define a <code>Key</code> open type family that relates types to the types used to index them:</p>
+
+<div class="brush: haskell">
+ <div class="source">
+  <pre><span></span><span class="kr">type</span> <span class="kr">family</span> <span class="kt">Key</span> <span class="n">a</span>
+<span class="kr">type</span> <span class="kr">instance</span> <span class="kt">Key</span> <span class="p">(</span><span class="kt">Vector</span> <span class="n">a</span><span class="p">)</span> <span class="ow">=</span> <span class="kt">Int</span>
+<span class="kr">type</span> <span class="kr">instance</span> <span class="kt">Key</span> <span class="p">(</span><span class="kt">Map</span> <span class="n">k</span> <span class="n">v</span><span class="p">)</span> <span class="ow">=</span> <span class="n">k</span>
+<span class="kr">type</span> <span class="kr">instance</span> <span class="kt">Key</span> <span class="p">(</span><span class="kt">Trie</span> <span class="n">a</span><span class="p">)</span> <span class="ow">=</span> <span class="kt">ByteString</span>
+</pre></div>
+
+</div>
+
+<p>This can be combined with a typeclass to provide a generic way to see if a data structure contains a given key:</p>
+
+<div class="brush: haskell">
+ <div class="source">
+  <pre><span></span><span class="kr">class</span> <span class="kt">HasKey</span> <span class="n">a</span> <span class="kr">where</span>
+  <span class="n">hasKey</span> <span class="ow">::</span> <span class="kt">Key</span> <span class="n">a</span> <span class="ow">-&gt;</span> <span class="n">a</span> <span class="ow">-&gt;</span> <span class="kt">Bool</span>
+
+<span class="kr">instance</span> <span class="kt">HasKey</span> <span class="p">(</span><span class="kt">Vector</span> <span class="n">a</span><span class="p">)</span> <span class="kr">where</span>
+  <span class="n">hasKey</span> <span class="n">i</span> <span class="n">vec</span> <span class="ow">=</span> <span class="n">i</span> <span class="o">&gt;=</span> <span class="mi">0</span> <span class="o">&amp;&amp;</span> <span class="n">i</span> <span class="o">&lt;</span> <span class="kt">Data</span><span class="o">.</span><span class="kt">Vector</span><span class="o">.</span><span class="n">length</span> <span class="n">vec</span>
+
+<span class="kr">instance</span> <span class="kt">HasKey</span> <span class="p">(</span><span class="kt">Map</span> <span class="n">k</span> <span class="n">v</span><span class="p">)</span> <span class="kr">where</span>
+  <span class="n">hasKey</span> <span class="ow">=</span> <span class="kt">Data</span><span class="o">.</span><span class="kt">Map</span><span class="o">.</span><span class="n">member</span>
+
+<span class="kr">instance</span> <span class="kt">HasKey</span> <span class="p">(</span><span class="kt">Trie</span> <span class="n">a</span><span class="p">)</span> <span class="kr">where</span>
+  <span class="n">hasKey</span> <span class="ow">=</span> <span class="kt">Data</span><span class="o">.</span><span class="kt">Trie</span><span class="o">.</span><span class="n">member</span>
+</pre></div>
+
+</div>
+
+<p>In this case, anyone could define their own data structure, define instances of <code>Key</code> and <code>HasKey</code> for their data structure, and use <code>hasKey</code> to see if it contains a given key, regardless of the structure of those keys. In fact, it’s so common for open type families and typeclasses to cooperate in this way that GHC provides the option to make the connection explicit by defining them together:</p>
+
+<div class="brush: haskell">
+ <div class="source">
+  <pre><span></span><span class="kr">class</span> <span class="kt">HasKey</span> <span class="n">a</span> <span class="kr">where</span>
+  <span class="kr">type</span> <span class="kt">Key</span> <span class="n">a</span>
+  <span class="n">hasKey</span> <span class="ow">::</span> <span class="kt">Key</span> <span class="n">a</span> <span class="ow">-&gt;</span> <span class="n">a</span> <span class="ow">-&gt;</span> <span class="kt">Bool</span>
+
+<span class="kr">instance</span> <span class="kt">HasKey</span> <span class="p">(</span><span class="kt">Vector</span> <span class="n">a</span><span class="p">)</span> <span class="kr">where</span>
+  <span class="kr">type</span> <span class="kt">Key</span> <span class="p">(</span><span class="kt">Vector</span> <span class="n">a</span><span class="p">)</span> <span class="ow">=</span> <span class="kt">Int</span>
+  <span class="n">hasKey</span> <span class="n">i</span> <span class="n">vec</span> <span class="ow">=</span> <span class="n">i</span> <span class="o">&gt;=</span> <span class="mi">0</span> <span class="o">&amp;&amp;</span> <span class="n">i</span> <span class="o">&lt;</span> <span class="kt">Data</span><span class="o">.</span><span class="kt">Vector</span><span class="o">.</span><span class="n">length</span> <span class="n">vec</span>
+
+<span class="kr">instance</span> <span class="kt">HasKey</span> <span class="p">(</span><span class="kt">Map</span> <span class="n">k</span> <span class="n">v</span><span class="p">)</span> <span class="kr">where</span>
+  <span class="kr">type</span> <span class="kt">Key</span> <span class="p">(</span><span class="kt">Map</span> <span class="n">k</span> <span class="n">v</span><span class="p">)</span> <span class="ow">=</span> <span class="n">k</span>
+  <span class="n">hasKey</span> <span class="ow">=</span> <span class="kt">Data</span><span class="o">.</span><span class="kt">Map</span><span class="o">.</span><span class="n">member</span>
+
+<span class="kr">instance</span> <span class="kt">HasKey</span> <span class="p">(</span><span class="kt">Trie</span> <span class="n">a</span><span class="p">)</span> <span class="kr">where</span>
+  <span class="kr">type</span> <span class="kt">Key</span> <span class="p">(</span><span class="kt">Trie</span> <span class="n">a</span><span class="p">)</span> <span class="ow">=</span> <span class="kt">ByteString</span>
+  <span class="n">hasKey</span> <span class="ow">=</span> <span class="kt">Data</span><span class="o">.</span><span class="kt">Trie</span><span class="o">.</span><span class="n">member</span>
+</pre></div>
+
+</div>
+
+<p>An open family declared inside a typeclass like this is called an <em>associated type</em>. It works exactly the same way as the separate definitions of <code>Key</code> and <code>HasKey</code>, it just uses a different syntax. Note that although the <code>family</code> and <code>instance</code> keywords have disappeared from the declarations, that is only an abbreviation; the keywords are simply implicitly added (and explicitly writing them is still allowed, though most people do not).</p>
+
+<p>Open type families and associated types are extremely useful for abstracting over similar types with slightly different structure, and libraries like <a href="https://hackage.haskell.org/package/mono-traversable"><code>mono-traversable</code></a> are examples of how they can be used to that end for their full effect. However, those use cases can’t really be classified as TMP, just using typeclasses for their traditional purpose of operation overloading.</p>
+
+<p>However, that doesn’t mean open type families aren’t useful for TMP. In fact, one use case of TMP makes <em>heavy</em> use of open type families: datatype-generic programming.</p>
+
+<h2 id="example-2-datatype-generic-programming">Example 2: Datatype-generic programming</h2>
+
+<p><em>Datatype-generic programming</em> refers to a class of techniques for writing generic functions that operate on arbitrary data structures. Some useful applications of datatype-generic programming include</p>
+
+<ul>
+ <li>
+  <p>equality, comparison, and hashing,</p></li>
+ <li>
+  <p>recursive traversal of self-similar data structures, and</p></li>
+ <li>
+  <p>serialization and deserialization,</p></li></ul>
+
+<p>among other things. The idea is that by exploiting the structure of datatype definitions themselves, it’s possible for a datatype-generic function to provide implementations of functionality like the above on <em>any</em> datatype.</p>
+
+<p>In Haskell, the most popular approach to datatype-generic programming leverages GHC generics, which is quite sophisticated. The <a href="https://hackage.haskell.org/package/base-4.14.1.0/docs/GHC-Generics.html">module documentation for <code>GHC.Generics</code></a> already includes a fairly lengthy explanation of how it works, so I will not regurgitate it here (that could fill a blog post of its own!), but I will show how to construct a simplified version of the system that highlights the key role of TMP.</p>
+
+<h3 id="generic-datatype-representations">Generic datatype representations</h3>
+
+<p>At the heart of the <code>Generic</code> class is a simple concept: all non-GADT Haskell datatypes can be represented as sums of products. For example, if we have</p>
+
+<div class="brush: haskell">
+ <div class="source">
+  <pre><span></span><span class="kr">data</span> <span class="kt">Authentication</span>
+  <span class="ow">=</span> <span class="kt">AuthBasic</span> <span class="kt">Username</span> <span class="kt">Password</span>
+  <span class="o">|</span> <span class="kt">AuthSSH</span> <span class="kt">PublicKey</span>
+</pre></div>
+
+</div>
+
+<p>then we have a type that is essentially equivalent to this one:</p>
+
+<div class="brush: haskell">
+ <div class="source">
+  <pre><span></span><span class="kr">type</span> <span class="kt">Authentication</span> <span class="ow">=</span> <span class="kt">Either</span> <span class="p">(</span><span class="kt">Username</span><span class="p">,</span> <span class="kt">Password</span><span class="p">)</span> <span class="kt">PublicKey</span>
+</pre></div>
+
+</div>
+
+<p>If we know how to define a function on a nested tree built out of <code>Either</code>s and pairs, then we know how to define it on <em>any</em> such datatype! This is where TMP comes in: recall the way we viewed <code>Flatten</code> as a mechanism for compile-time code generation based on type information. Could we use the same technique to generate implementations of equality, comparison, hashing, etc. from statically-known information about the structure of a datatype?</p>
+
+<p>The answer to that question is <em>yes</em>. To start, let’s consider a particularly simple example: suppose we want to write a generic function that counts the number of fields stored in an arbitrary constructor. For example, <code>numFields (AuthBasic "alyssa" "pass1234")</code> would return <code>2</code>, while <code>numFields (AuthSSH "&lt;key&gt;")</code> would return <code>1</code>. Not a very useful function, admittedly, but it’s a simple example of what generic programming can do.</p>
+
+<p>We’ll start by using TMP to implement a “generic” version of <code>numFields</code> that operates on trees of <code>Either</code>s and pairs as described above:</p>
+
+<div class="brush: haskell">
+ <div class="source">
+  <pre><span></span><span class="kr">class</span> <span class="kt">GNumFields</span> <span class="n">a</span> <span class="kr">where</span>
+  <span class="n">gnumFields</span> <span class="ow">::</span> <span class="n">a</span> <span class="ow">-&gt;</span> <span class="kt">Natural</span>
+
+<span class="c1">-- base case: leaf value</span>
+<span class="kr">instance</span> <span class="kt">GNumFields</span> <span class="n">a</span> <span class="kr">where</span>
+  <span class="n">gnumFields</span> <span class="kr">_</span> <span class="ow">=</span> <span class="mi">1</span>
+
+<span class="kr">instance</span> <span class="cm">{-# OVERLAPPING #-}</span> <span class="p">(</span><span class="kt">GNumFields</span> <span class="n">a</span><span class="p">,</span> <span class="kt">GNumFields</span> <span class="n">b</span><span class="p">)</span> <span class="ow">=&gt;</span> <span class="kt">GNumFields</span> <span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">)</span> <span class="kr">where</span>
+  <span class="n">gnumFields</span> <span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">)</span> <span class="ow">=</span> <span class="n">gnumFields</span> <span class="n">a</span> <span class="o">+</span> <span class="n">gnumFields</span> <span class="n">b</span>
+
+<span class="kr">instance</span> <span class="cm">{-# OVERLAPPING #-}</span> <span class="p">(</span><span class="kt">GNumFields</span> <span class="n">a</span><span class="p">,</span> <span class="kt">GNumFields</span> <span class="n">b</span><span class="p">)</span> <span class="ow">=&gt;</span> <span class="kt">GNumFields</span> <span class="p">(</span><span class="kt">Either</span> <span class="n">a</span> <span class="n">b</span><span class="p">)</span> <span class="kr">where</span>
+  <span class="n">gnumFields</span> <span class="p">(</span><span class="kt">Left</span> <span class="n">a</span><span class="p">)</span>  <span class="ow">=</span> <span class="n">gnumFields</span> <span class="n">a</span>
+  <span class="n">gnumFields</span> <span class="p">(</span><span class="kt">Right</span> <span class="n">b</span><span class="p">)</span> <span class="ow">=</span> <span class="n">gnumFields</span> <span class="n">b</span>
+</pre></div>
+
+</div>
+
+<p>Just like our <code>Flatten</code> class from earlier, <code>GNumFields</code> uses the type-level structure of its argument to choose what to do:</p>
+
+<ul>
+ <li>
+  <p>If we find a pair, that corresponds to a product, so we recur into both sides and sum the results.</p></li>
+ <li>
+  <p>If we find <code>Left</code> or <code>Right</code>, that corresponds to the “spine” differentiating different constructors, so we simply recur into the contained value.</p></li>
+ <li>
+  <p>In the case of any other value, we’re at a “leaf” in the tree of <code>Either</code>s and pairs, which corresponds to a single field, so we just return <code>1</code>.</p></li></ul>
+
+<p>Now if we call <code>gnumFields (Left ("alyssa", "pass1234"))</code>, we’ll get <code>2</code>, and if we call <code>gnumFields (Right "&lt;key&gt;")</code>, we’ll get <code>1</code>. All that’s left to do is write a bit of code that converts our <code>Authentication</code> type to a tree of <code>Either</code>s and pairs:</p>
+
+<div class="brush: haskell">
+ <div class="source">
+  <pre><span></span><span class="nf">genericizeAuthentication</span> <span class="ow">::</span> <span class="kt">Authentication</span> <span class="ow">-&gt;</span> <span class="kt">Either</span> <span class="p">(</span><span class="kt">Username</span><span class="p">,</span> <span class="kt">Password</span><span class="p">)</span> <span class="kt">PublicKey</span>
+<span class="nf">genericizeAuthentication</span> <span class="p">(</span><span class="kt">AuthBasic</span> <span class="n">user</span> <span class="n">pass</span><span class="p">)</span> <span class="ow">=</span> <span class="kt">Left</span> <span class="p">(</span><span class="n">user</span><span class="p">,</span> <span class="n">pass</span><span class="p">)</span>
+<span class="nf">genericizeAuthentication</span> <span class="p">(</span><span class="kt">AuthSSH</span> <span class="n">key</span><span class="p">)</span>         <span class="ow">=</span> <span class="kt">Right</span> <span class="n">key</span>
+
+<span class="nf">numFieldsAuthentication</span> <span class="ow">::</span> <span class="kt">Authentication</span> <span class="ow">-&gt;</span> <span class="kt">Natural</span>
+<span class="nf">numFieldsAuthentication</span> <span class="ow">=</span> <span class="n">gnumFields</span> <span class="o">.</span> <span class="n">genericizeAuthentication</span>
+</pre></div>
+
+</div>
+
+<p>Now we get the results we want on our <code>Authentication</code> type using <code>numFieldsAuthentication</code>, but we’re not done yet, since it only works on <code>Authentication</code> values. Is there a way to define a generic <code>numFields</code> function that works on arbitrary datatypes that implement this conversion to sums-of-products? Yes, with another typeclass:</p>
+
+<div class="brush: haskell">
+ <div class="source">
+  <pre><span></span><span class="kr">class</span> <span class="kt">Generic</span> <span class="n">a</span> <span class="kr">where</span>
+  <span class="kr">type</span> <span class="kt">Rep</span> <span class="n">a</span>
+  <span class="n">genericize</span> <span class="ow">::</span> <span class="n">a</span> <span class="ow">-&gt;</span> <span class="kt">Rep</span> <span class="n">a</span>
+
+<span class="kr">instance</span> <span class="kt">Generic</span> <span class="kt">Authentication</span> <span class="kr">where</span>
+  <span class="kr">type</span> <span class="kt">Rep</span> <span class="kt">Authentication</span> <span class="ow">=</span> <span class="kt">Either</span> <span class="p">(</span><span class="kt">Username</span><span class="p">,</span> <span class="kt">Password</span><span class="p">)</span> <span class="kt">PublicKey</span>
+  <span class="n">genericize</span> <span class="p">(</span><span class="kt">AuthBasic</span> <span class="n">user</span> <span class="n">pass</span><span class="p">)</span> <span class="ow">=</span> <span class="kt">Left</span> <span class="p">(</span><span class="n">user</span><span class="p">,</span> <span class="n">pass</span><span class="p">)</span>
+  <span class="n">genericize</span> <span class="p">(</span><span class="kt">AuthSSH</span> <span class="n">key</span><span class="p">)</span>         <span class="ow">=</span> <span class="kt">Right</span> <span class="n">key</span>
+
+<span class="nf">numFields</span> <span class="ow">::</span> <span class="p">(</span><span class="kt">Generic</span> <span class="n">a</span><span class="p">,</span> <span class="kt">GNumFields</span> <span class="p">(</span><span class="kt">Rep</span> <span class="n">a</span><span class="p">))</span> <span class="ow">=&gt;</span> <span class="n">a</span> <span class="ow">-&gt;</span> <span class="kt">Natural</span>
+<span class="nf">numFields</span> <span class="ow">=</span> <span class="n">gnumFields</span> <span class="o">.</span> <span class="n">genericize</span>
+</pre></div>
+
+</div>
+
+<p>Now <code>numFields (AuthBasic "alyssa" "pass1234")</code> returns <code>2</code>, as desired, and it will <em>also</em> work with any datatype that provides a <code>Generic</code> instance. If the above code makes your head spin, don’t worry: this is by far the most complicated piece of code in this blog post up to this point. Let’s break down how it works piece by piece:</p>
+
+<ul>
+ <li>
+  <p>First, we define the <code>Generic</code> class, comprised of two parts:</p>
+  <ol>
+   <li>
+    <p>The <code>Rep a</code> associated type maps a type <code>a</code> onto its generic, sums-of-products representation, i.e. one built out of combinations of <code>Either</code> and pairs.</p></li>
+   <li>
+    <p>The <code>genericize</code> method converts an actual <em>value</em> of type <code>a</code> to the equivalent value using the sums-of-products representation.</p></li></ol></li>
+ <li>
+  <p>Next, we define a <code>Generic</code> instance for <code>Authentication</code>. <code>Rep Authentication</code> is the sums-of-products representation we described above, and <code>genericize</code> is likewise <code>genericizeAuthentication</code> from above.</p></li>
+ <li>
+  <p>Finally, we define <code>numFields</code> as a function with a <code>GNumFields (Rep a)</code> constraint. This is where all the magic happens:</p>
+  <ul>
+   <li>
+    <p>When we apply <code>numFields</code> to a datatype, <code>Rep</code> retrieves its generic, sums-of-products representation type.</p></li>
+   <li>
+    <p>The <code>GNumFields</code> class then uses various TMP techniques we’ve already described so far in this blog post to generate a <code>numFields</code> implementation on the fly from the structure of <code>Rep a</code>.</p></li>
+   <li>
+    <p>Finally, that generated <code>numFields</code> implementation is applied to the genericized term-level value, and the result is produced.</p></li></ul></li></ul>
+
+<p>After all that, I suspect you might think this seems like a very convoluted way to define the (rather unhelpful) <code>numFields</code> operation. Surely just defining <code>numFields</code> on each type directly would be far easier? Indeed, if we were just considering <code>numFields</code>, you’d be right, but in fact we get much more than that. Using the same machinery, we can continue to define other generic operations—equality, comparison, etc.—the same way we defined <code>numFields</code>, and all of them would automatically work on <code>Authentication</code> because they all leverage the same <code>Generic</code> instance!</p>
+
+<p>This is the basic value proposition of generic programming: we can do a little work up front to normalize our datatype to a generic representation <em>once</em>, then get a whole buffet of generic operations on it for free. In Haskell, the code generation capabilities of TMP is a key piece of that puzzle.</p>
+
+<h3 id="improving-our-definition-of-generic">Improving our definition of <code>Generic</code></h3>
+
+<p>You may note that the definition of <code>Generic</code> provided above does not match the one in <code>GHC.Generic</code>. Indeed, our naïve approach suffers from several flaws that the real version does not. This is not a <code>GHC.Generics</code> tutorial, so I will not discuss every detail of the full implementation, but I will highlight a few improvements relevant to the broader theme of TMP.</p>
+
+<h4 id="distinguishing-leaves-from-the-spine">Distinguishing leaves from the spine</h4>
+
+<p>One problem with our version of <code>Generic</code> is that it provides no way to distinguish an <code>Either</code> or pair that should be considered a “leaf”, as in a type like this:</p>
+
+<div class="brush: haskell">
+ <div class="source">
+  <pre><span></span><span class="kr">data</span> <span class="kt">Foo</span> <span class="ow">=</span> <span class="kt">A</span> <span class="p">(</span><span class="kt">Either</span> <span class="kt">Int</span> <span class="kt">String</span><span class="p">)</span> <span class="o">|</span> <span class="kt">B</span> <span class="p">(</span><span class="kt">Char</span><span class="p">,</span> <span class="kt">Bool</span><span class="p">)</span>
+</pre></div>
+
+</div>
+
+<p>Given this type, <code>Rep Foo</code> should be <code>Either (Either Int String) (Char, Bool)</code>, and <code>numFields (Right ('a', True))</code> will erroneously return <code>2</code> rather than <code>1</code>. To fix this, we can introduce a simple wrapper newtype that distinguishes leaves specifically:</p>
+
+<div class="brush: haskell">
+ <div class="source">
+  <pre><span></span><span class="kr">newtype</span> <span class="kt">Leaf</span> <span class="n">a</span> <span class="ow">=</span> <span class="kt">Leaf</span> <span class="p">{</span> <span class="n">getLeaf</span> <span class="ow">::</span> <span class="n">a</span> <span class="p">}</span>
+</pre></div>
+
+</div>
+
+<p>Now our <code>Generic</code> instances look like this:</p>
+
+<div class="brush: haskell">
+ <div class="source">
+  <pre><span></span><span class="kr">instance</span> <span class="kt">Generic</span> <span class="kt">Authentication</span> <span class="kr">where</span>
+  <span class="kr">type</span> <span class="kt">Rep</span> <span class="kt">Authentication</span> <span class="ow">=</span> <span class="kt">Either</span> <span class="p">(</span><span class="kt">Leaf</span> <span class="kt">Username</span><span class="p">,</span> <span class="kt">Leaf</span> <span class="kt">Password</span><span class="p">)</span> <span class="p">(</span><span class="kt">Leaf</span> <span class="kt">PublicKey</span><span class="p">)</span>
+  <span class="n">genericize</span> <span class="p">(</span><span class="kt">AuthBasic</span> <span class="n">user</span> <span class="n">pass</span><span class="p">)</span> <span class="ow">=</span> <span class="kt">Left</span> <span class="p">(</span><span class="kt">Leaf</span> <span class="n">user</span><span class="p">,</span> <span class="kt">Leaf</span> <span class="n">pass</span><span class="p">)</span>
+  <span class="n">genericize</span> <span class="p">(</span><span class="kt">AuthSSH</span> <span class="n">key</span><span class="p">)</span>         <span class="ow">=</span> <span class="kt">Right</span> <span class="p">(</span><span class="kt">Leaf</span> <span class="n">key</span><span class="p">)</span>
+
+<span class="kr">instance</span> <span class="kt">Generic</span> <span class="kt">Foo</span> <span class="kr">where</span>
+  <span class="kr">type</span> <span class="kt">Rep</span> <span class="kt">Foo</span> <span class="ow">=</span> <span class="kt">Either</span> <span class="p">(</span><span class="kt">Leaf</span> <span class="p">(</span><span class="kt">Either</span> <span class="kt">Int</span> <span class="kt">String</span><span class="p">))</span> <span class="p">(</span><span class="kt">Leaf</span> <span class="p">(</span><span class="kt">Char</span><span class="p">,</span> <span class="kt">Bool</span><span class="p">))</span>
+  <span class="n">genericize</span> <span class="p">(</span><span class="kt">A</span> <span class="n">x</span><span class="p">)</span> <span class="ow">=</span> <span class="kt">Left</span> <span class="p">(</span><span class="kt">Leaf</span> <span class="n">x</span><span class="p">)</span>
+  <span class="n">genericize</span> <span class="p">(</span><span class="kt">B</span> <span class="n">x</span><span class="p">)</span> <span class="ow">=</span> <span class="kt">Right</span> <span class="p">(</span><span class="kt">Leaf</span> <span class="n">x</span><span class="p">)</span>
+</pre></div>
+
+</div>
+
+<p>Since the <code>Leaf</code> constructor now distinguishes a leaf, rather than the absence of an <code>Either</code> or <code>(,)</code> constructor, we’ll have to update our <code>GNumFields</code> instances as well. However, this has the additional pleasant effect of eliminating the need for overlapping instances:</p>
+
+<div class="brush: haskell">
+ <div class="source">
+  <pre><span></span><span class="kr">instance</span> <span class="kt">GNumFields</span> <span class="p">(</span><span class="kt">Leaf</span> <span class="n">a</span><span class="p">)</span> <span class="kr">where</span>  
+  <span class="n">gnumFields</span> <span class="kr">_</span> <span class="ow">=</span> <span class="mi">1</span>
+
+<span class="kr">instance</span> <span class="p">(</span><span class="kt">GNumFields</span> <span class="n">a</span><span class="p">,</span> <span class="kt">GNumFields</span> <span class="n">b</span><span class="p">)</span> <span class="ow">=&gt;</span> <span class="kt">GNumFields</span> <span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">)</span> <span class="kr">where</span>
+  <span class="n">gnumFields</span> <span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">)</span> <span class="ow">=</span> <span class="n">gnumFields</span> <span class="n">a</span> <span class="o">+</span> <span class="n">gnumFields</span> <span class="n">b</span>
+
+<span class="kr">instance</span> <span class="p">(</span><span class="kt">GNumFields</span> <span class="n">a</span><span class="p">,</span> <span class="kt">GNumFields</span> <span class="n">b</span><span class="p">)</span> <span class="ow">=&gt;</span> <span class="kt">GNumFields</span> <span class="p">(</span><span class="kt">Either</span> <span class="n">a</span> <span class="n">b</span><span class="p">)</span> <span class="kr">where</span>
+  <span class="n">gnumFields</span> <span class="p">(</span><span class="kt">Left</span> <span class="n">a</span><span class="p">)</span>  <span class="ow">=</span> <span class="n">gnumFields</span> <span class="n">a</span>
+  <span class="n">gnumFields</span> <span class="p">(</span><span class="kt">Right</span> <span class="n">b</span><span class="p">)</span> <span class="ow">=</span> <span class="n">gnumFields</span> <span class="n">b</span>
+</pre></div>
+
+</div>
+
+<p>This is a good example of why overlapping instances can be so seductive, but they often have unintended consequences. Even when doing TMP, explicit tags are almost always preferable.</p>
+
+<h4 id="handling-empty-constructors">Handling empty constructors</h4>
+
+<p>Suppose we have a type with nullary data constructors, like the standard <code>Bool</code> type:</p>
+
+<div class="brush: haskell">
+ <div class="source">
+  <pre><span></span><span class="kr">data</span> <span class="kt">Bool</span> <span class="ow">=</span> <span class="kt">False</span> <span class="o">|</span> <span class="kt">True</span>
+</pre></div>
+
+</div>
+
+<p>How do we write a <code>Generic</code> instance for <code>Bool</code>? Using just <code>Either</code>, <code>(,)</code>, and <code>Leaf</code>, we can’t, but if we are willing to add a case for <code>()</code>, we can use it to denote nullary constructors:</p>
+
+<div class="brush: haskell">
+ <div class="source">
+  <pre><span></span><span class="kr">instance</span> <span class="kt">GNumFields</span> <span class="nb">()</span> <span class="kr">where</span>
+  <span class="n">gnumFields</span> <span class="kr">_</span> <span class="ow">=</span> <span class="mi">0</span>
+
+<span class="kr">instance</span> <span class="kt">Generic</span> <span class="kt">Bool</span> <span class="kr">where</span>
+  <span class="kr">type</span> <span class="kt">Rep</span> <span class="kt">Bool</span> <span class="ow">=</span> <span class="kt">Either</span> <span class="nb">()</span> <span class="nb">()</span>
+  <span class="n">genericize</span> <span class="kt">False</span> <span class="ow">=</span> <span class="kt">Left</span> <span class="nb">()</span>
+  <span class="n">genericize</span> <span class="kt">True</span>  <span class="ow">=</span> <span class="kt">Right</span> <span class="nb">()</span>
+</pre></div>
+
+</div>
+
+<p>In a similar vein, we could use <code>Void</code> to represent datatypes that don’t have any constructors at all.</p>
+
+<h3 id="continuing-from-here">Continuing from here</h3>
+
+<p>The full version of <code>Generic</code> has a variety of further improvements useful for generic programming, including:</p>
+
+<ul>
+ <li>
+  <p>Support for converting from <code>Rep a</code> to <code>a</code>.</p></li>
+ <li>
+  <p>Special indication of self-recursive datatypes, making generic tree traversals possible.</p></li>
+ <li>
+  <p>Type-level information about datatype constructor and record accessor names, allowing them to be used in serialization.</p></li>
+ <li>
+  <p>Fully automatic generation of <code>Generic</code> instances via <a href="https://downloads.haskell.org/ghc/9.0.1/docs/html/users_guide/exts/generics.html#extension-DeriveGeneric">the <code>DeriveGeneric</code> extension</a>, which reduces the per-type boilerplate to essentially nothing.</p></li></ul>
+
+<p>The <a href="https://hackage.haskell.org/package/base-4.14.1.0/docs/GHC-Generics.html">module documentation for <code>GHC.Generics</code></a> discusses the full system in detail, and it provides an additional example that uses the same essential TMP techniques discussed here.</p>
+
+<h1 id="part-3-dependent-typing">Part 3: Dependent typing</h1>
+
+<p>It’s time for the third and final part of this blog post: an introduction to dependently typed programming in Haskell. A full treatment of dependently typed programming is far, far too vast to be contained in a single blog post, so I will not attempt to do so here. Rather, I will cover some basic idioms for doing dependent programming and highlight how TMP can be valuable when doing so.</p>
+
+<h2 id="datatype-promotion">Datatype promotion</h2>
+
+<p>In part 1, we used uninhabited datatypes like <code>Z</code> and <code>S a</code> to define new type-level constants. This works, but it is awkward. Imagine for a moment that we wanted to work with type-level booleans. Using our previous approach, we could define two empty datatypes, <code>True</code> and <code>False</code>:</p>
+
+<div class="brush: haskell">
+ <div class="source">
+  <pre><span></span><span class="kr">data</span> <span class="kt">True</span>
+<span class="kr">data</span> <span class="kt">False</span>
+</pre></div>
+
+</div>
+
+<p>Now we could define type families to provide operations on these types, such as <code>Not</code>:</p>
+
+<div class="brush: haskell">
+ <div class="source">
+  <pre><span></span><span class="kr">type</span> <span class="kr">family</span> <span class="kt">Not</span> <span class="n">a</span> <span class="kr">where</span>
+  <span class="kt">Not</span> <span class="kt">True</span>  <span class="ow">=</span> <span class="kt">False</span>
+  <span class="kt">Not</span> <span class="kt">False</span> <span class="ow">=</span> <span class="kt">True</span>
+</pre></div>
+
+</div>
+
+<p>However, this has some frustrating downsides:</p>
+
+<ul>
+ <li>
+  <p>First, it’s simply inconvenient that we have to define these new <code>True</code> and <code>False</code> “dummy” types, which are completely distinct from the <code>Bool</code> type provided by the prelude.</p></li>
+ <li>
+  <p>More significantly, it means <code>Not</code> has a very unhelpful kind:</p>
+  <div class="brush: haskell">
+   <div class="source">
+    <pre><span></span><span class="nf">ghci</span><span class="o">&gt;</span> <span class="kt">:</span><span class="n">kind</span> <span class="kt">Not</span>
+<span class="kt">Not</span> <span class="ow">::</span> <span class="o">*</span> <span class="ow">-&gt;</span> <span class="o">*</span>
+</pre></div>
+
+</div>
+  <p>Even though <code>Not</code> is only <em>supposed</em> to be applied to <code>True</code> or <code>False</code>, its kind allows it to be applied to any type at all. You can see this in practice if you try to evaluate something like <code>Not Char</code>:</p>
+  <div class="brush: haskell">
+   <div class="source">
+    <pre><span></span><span class="nf">ghci</span><span class="o">&gt;</span> <span class="kt">:</span><span class="n">kind</span><span class="o">!</span> <span class="kt">Not</span> <span class="kt">Char</span>
+<span class="kt">Not</span> <span class="kt">Char</span> <span class="ow">::</span> <span class="o">*</span>
+<span class="ow">=</span> <span class="kt">Not</span> <span class="kt">Char</span>
+</pre></div>
+
+</div>
+  <p>Rather than getting an error, GHC simply spits <code>Not Char</code> back at us. This is a somewhat unintuitive property of closed type families: if none of the clauses match, the type family just gets “stuck,” not reducing any further. This can lead to very confusing type errors later in the typechecking process.</p></li></ul>
+
+<p>One way to think about <code>Not</code> is that it is largely <em>dynamically kinded</em> in the same way some languages are dynamically typed. That isn’t entirely true, as we technically <em>will</em> get a kind error if we try to apply <code>Not</code> to a type constructor rather than a type, such as <code>Maybe</code>:</p>
+
+<pre><code>ghci&gt; :kind! Not Maybe
+
+&lt;interactive&gt;:1:5: error:
+    • Expecting one more argument to ‘Maybe’
+      Expected a type, but ‘Maybe’ has kind ‘* -&gt; *’</code></pre>
+
+<p>…but <code>*</code> is still a very big kind, much bigger than we would like to permit for <code>Not</code>.</p>
+
+<p>To help with both these problems, GHC provides <em>datatype promotion</em> via <a href="https://downloads.haskell.org/ghc/9.0.1/docs/html/users_guide/exts/data_kinds.html">the <code>DataKinds</code> language extension</a>. The idea is that for each normal, non-GADT type definition like</p>
+
+<div class="brush: haskell">
+ <div class="source">
+  <pre><span></span><span class="kr">data</span> <span class="kt">Bool</span> <span class="ow">=</span> <span class="kt">False</span> <span class="o">|</span> <span class="kt">True</span>
+</pre></div>
+
+</div>
+
+<p>then in addition to the normal type constructor and value constructors, GHC also defines several <em>promoted</em> constructors:</p>
+
+<ul>
+ <li>
+  <p><code>Bool</code> is allowed as both a type and a kind.</p></li>
+ <li>
+  <p><code>'True</code> and <code>'False</code> are defined as new types of kind <code>Bool</code>.</p></li></ul>
+
+<p>We can see this in action if we remove our <code>data True</code> and <code>data False</code> declarations and adjust our definition of <code>Not</code> to use promoted constructors:</p>
+
+<div class="brush: haskell">
+ <div class="source">
+  <pre><span></span><span class="cm">{-# LANGUAGE DataKinds #-}</span>
+
+<span class="kr">type</span> <span class="kr">family</span> <span class="kt">Not</span> <span class="n">a</span> <span class="kr">where</span>
+  <span class="kt">Not</span> <span class="kt">&#39;True</span>  <span class="ow">=</span> <span class="kt">&#39;False</span>
+  <span class="kt">Not</span> <span class="kt">&#39;False</span> <span class="ow">=</span> <span class="kt">&#39;True</span>
+</pre></div>
+
+</div>
+
+<p>Now the inferred kind of <code>Not</code> is no longer <code>* -&gt; *</code>:</p>
+
+<div class="brush: haskell">
+ <div class="source">
+  <pre><span></span><span class="nf">ghci</span><span class="o">&gt;</span> <span class="kt">:</span><span class="n">kind</span> <span class="kt">Not</span>
+<span class="kt">Not</span> <span class="ow">::</span> <span class="kt">Bool</span> <span class="ow">-&gt;</span> <span class="kt">Bool</span>
+</pre></div>
+
+</div>
+
+<p>Consequently, we will now get a kind error if we attempt to apply <code>Not</code> to anything other than <code>'True</code> or <code>'False</code>:</p>
+
+<pre><code>ghci&gt; :kind! Not Char
+
+&lt;interactive&gt;:1:5: error:
+    • Expected kind ‘Bool’, but ‘Char’ has kind ‘*’</code></pre>
+
+<p>This is a nice improvement. We can make a similar change to our definitions involving type-level natural numbers:</p>
+
+<div class="brush: haskell">
+ <div class="source">
+  <pre><span></span><span class="kr">data</span> <span class="kt">Nat</span> <span class="ow">=</span> <span class="kt">Z</span> <span class="o">|</span> <span class="kt">S</span> <span class="kt">Nat</span>
+
+<span class="kr">class</span> <span class="kt">ReifyNat</span> <span class="p">(</span><span class="n">a</span> <span class="ow">::</span> <span class="kt">Nat</span><span class="p">)</span> <span class="kr">where</span>
+  <span class="n">reifyNat</span> <span class="ow">::</span> <span class="kt">Natural</span>
+
+<span class="kr">instance</span> <span class="kt">ReifyNat</span> <span class="kt">&#39;Z</span> <span class="kr">where</span>
+  <span class="n">reifyNat</span> <span class="ow">=</span> <span class="mi">0</span>
+
+<span class="kr">instance</span> <span class="kt">ReifyNat</span> <span class="n">a</span> <span class="ow">=&gt;</span> <span class="kt">ReifyNat</span> <span class="p">(</span><span class="kt">&#39;S</span> <span class="n">a</span><span class="p">)</span> <span class="kr">where</span>
+  <span class="n">reifyNat</span> <span class="ow">=</span> <span class="mi">1</span> <span class="o">+</span> <span class="n">reifyNat</span> <span class="o">@</span><span class="n">a</span>
+</pre></div>
+
+</div>
+
+<p>Note that we need to add an explicit kind signature on the definition of the <code>ReifyNat</code> typeclass, since otherwise GHC will assume <code>a</code> has kind <code>*</code>, since nothing in the types of the typeclass methods suggests otherwise. In addition to making it clearer that <code>Z</code> and <code>S</code> are related, this prevents someone from coming along and defining a nonsensical instance like <code>ReifyNat Char</code>, which previously would have been allowed but will now be rejected with a kind error.</p>
+
+<p>Datatype promotion is not strictly required to do TMP, but makes the process significantly less painful. It makes Haskell’s kind language extensible in the same way its type language is, which allows type-level programming to enjoy static typechecking (or more accurately, static kindchecking) in the same way term-level programming does.</p>
+
+<h2 id="gadts-and-proof-terms">GADTs and proof terms</h2>
+
+<p>So far in this blog post, we have discussed several different function-like things:</p>
+
+<ul>
+ <li>
+  <p>Ordinary Haskell functions are functions from terms to terms.</p></li>
+ <li>
+  <p>Type families are functions from types to types.</p></li>
+ <li>
+  <p>Typeclasses are functions from types to terms.</p></li></ul>
+
+<p>A curious reader may wonder about the existence of a fourth class of function:</p>
+
+<ul>
+ <li><em>???</em> are functions from terms to types.</li></ul>
+
+<p>To reason about what could go in the <em>???</em> above, we must consider what “a function from terms to types” would even mean. Functions from terms to terms and types to types are straightforward enough. Functions from types to terms are a little trickier, but they make intuitive sense: we use information known at compile-time to generate runtime behavior. But how could information possibly flow in the other direction? How could we possibly turn runtime information into compile-time information without being able to predict the future?</p>
+
+<p>In general, we cannot. However, one feature of Haskell allows a restricted form of seemingly doing the impossible—turning runtime information into compile-time information—and that’s GADTs.</p>
+
+<p>GADTs<sup><a href="#2021-03-25-an-introduction-to-typeclass-metaprogramming-footnote-4-definition" name="2021-03-25-an-introduction-to-typeclass-metaprogramming-footnote-4-return">4</a></sup> are <a href="https://downloads.haskell.org/ghc/9.0.1/docs/html/users_guide/exts/gadt.html">described in detail in the GHC User’s Guide</a>, but the key idea for our purposes is that <em>pattern-matching on a GADT constructor can refine type information</em>. Here’s a simple, silly example:</p>
+
+<div class="brush: haskell">
+ <div class="source">
+  <pre><span></span><span class="kr">data</span> <span class="kt">WhatIsIt</span> <span class="n">a</span> <span class="kr">where</span>
+  <span class="kt">ABool</span> <span class="ow">::</span> <span class="kt">WhatIsIt</span> <span class="kt">Bool</span>
+  <span class="kt">AnInt</span> <span class="ow">::</span> <span class="kt">WhatIsIt</span> <span class="kt">Int</span>
+
+<span class="nf">doSomething</span> <span class="ow">::</span> <span class="kt">WhatIsIt</span> <span class="n">a</span> <span class="ow">-&gt;</span> <span class="n">a</span> <span class="ow">-&gt;</span> <span class="n">a</span>
+<span class="nf">doSomething</span> <span class="kt">ABool</span> <span class="n">x</span> <span class="ow">=</span> <span class="n">not</span> <span class="n">x</span>
+<span class="nf">doSomething</span> <span class="kt">AnInt</span> <span class="n">x</span> <span class="ow">=</span> <span class="n">x</span> <span class="o">+</span> <span class="mi">1</span>
+</pre></div>
+
+</div>
+
+<p>Here, <code>WhatIsIt</code> is a datatype with two nullary constructors, <code>ABool</code> and <code>AnInt</code>, similar to a normal, non-GADT datatype like this one:</p>
+
+<div class="brush: haskell">
+ <div class="source">
+  <pre><span></span><span class="kr">data</span> <span class="kt">WhatIsIt</span> <span class="n">a</span> <span class="ow">=</span> <span class="kt">ABool</span> <span class="o">|</span> <span class="kt">AnInt</span>
+</pre></div>
+
+</div>
+
+<p>What’s special about GADTs is that each constructor is given an explicit type signature. With the plain ADT definition above, <code>ABool</code> and <code>AnInt</code> would both have the type <code>forall a. WhatIsIt a</code>, but in the GADT definition, we explicitly fix <code>a</code> to <code>Bool</code> in the type of <code>ABool</code> and to <code>Int</code> in the type of <code>AnInt</code>.</p>
+
+<p>This simple feature allows us to do very interesting things. The <code>doSomething</code> function is polymorphic in <code>a</code>, but on the right-hand side of the first equation, <code>x</code> has type <code>Bool</code>, while on the right-hand side of the second equation, <code>x</code> has type <code>Int</code>. This is because the <code>WhatIsIt a</code> argument effectively constrains the type of <code>a</code>, as we can see by experimenting with <code>doSomething</code> in GHCi:</p>
+
+<pre><code>ghci&gt; doSomething ABool True
+False
+ghci&gt; doSomething AnInt 10
+11
+ghci&gt; doSomething AnInt True
+
+error:
+    • Couldn't match expected type ‘Int’ with actual type ‘Bool’
+    • In the second argument of ‘doSomething’, namely ‘True’
+      In the expression: doSomething AnInt True
+      In an equation for ‘it’: it = doSomething AnInt True</code></pre>
+
+<p>One way to think about GADTs is as “proofs” or “witnesses” of type equalities. The <code>ABool</code> constructor is a proof of <code>a ~ Bool</code>, while the <code>AnInt</code> constructor is a proof of <code>a ~ Int</code>. When you construct <code>ABool</code> or <code>AnInt</code>, you must be able to satisfy the equality, and it is in a sense “packed into” the constructor value. When code pattern-matches on the constructor, the equality is “unpacked from” the value, and the equality becomes available on the right-hand side of the pattern match.</p>
+
+<p>GADTs can be much more sophisticated than our simple <code>WhatIsIt</code> type above. Just like normal ADTs, GADT constructors can have parameters, which makes it possible to write inductive datatypes that carry type equality proofs with them:</p>
+
+<div class="brush: haskell">
+ <div class="source">
+  <pre><span></span><span class="kr">infixr</span> <span class="mi">5</span> <span class="p">`</span><span class="kt">HCons</span><span class="p">`</span>
+
+<span class="kr">data</span> <span class="kt">HList</span> <span class="n">as</span> <span class="kr">where</span>
+  <span class="kt">HNil</span>  <span class="ow">::</span> <span class="kt">HList</span> <span class="kt">&#39;[]</span>
+  <span class="kt">HCons</span> <span class="ow">::</span> <span class="n">a</span> <span class="ow">-&gt;</span> <span class="kt">HList</span> <span class="n">as</span> <span class="ow">-&gt;</span> <span class="kt">HList</span> <span class="p">(</span><span class="n">a</span> <span class="sc">&#39;</span><span class="err">: as)</span>
+</pre></div>
+
+</div>
+
+<p>This type is a <em>heterogenous list</em>, a list that can contain elements of different types:</p>
+
+<div class="brush: haskell">
+ <div class="source">
+  <pre><span></span><span class="nf">ghci</span><span class="o">&gt;</span> <span class="kt">:</span><span class="n">t</span> <span class="kt">True</span> <span class="p">`</span><span class="kt">HCons</span><span class="p">`</span> <span class="s">"hello"</span> <span class="p">`</span><span class="kt">HCons</span><span class="p">`</span> <span class="mi">42</span> <span class="p">`</span><span class="kt">HCons</span><span class="p">`</span> <span class="kt">HNil</span>
+<span class="kt">True</span> <span class="p">`</span><span class="kt">HCons</span><span class="p">`</span> <span class="s">"hello"</span> <span class="p">`</span><span class="kt">HCons</span><span class="p">`</span> <span class="mi">42</span> <span class="p">`</span><span class="kt">HCons</span><span class="p">`</span> <span class="kt">HNil</span>
+  <span class="ow">::</span> <span class="kt">Num</span> <span class="n">a</span> <span class="ow">=&gt;</span> <span class="kt">HList</span> <span class="kt">&#39;[Bool, [Char]</span><span class="p">,</span> <span class="n">a</span><span class="p">]</span>
+</pre></div>
+
+</div>
+
+<p>An <code>HList</code> is parameterized by a type-level list that keeps track of the types of its elements, which allows us to highlight another interesting property of GADTs: if we restrict that type information, the GHC pattern exhaustiveness checker will take the restriction into account. For example, we can write a completely total <code>head</code> function on <code>HList</code>s like this:</p>
+
+<div class="brush: haskell">
+ <div class="source">
+  <pre><span></span><span class="nf">head</span> <span class="ow">::</span> <span class="kt">HList</span> <span class="p">(</span><span class="n">a</span> <span class="sc">&#39;</span><span class="err">: as) -&gt; a</span>
+<span class="nf">head</span> <span class="p">(</span><span class="n">x</span> <span class="p">`</span><span class="kt">HCons</span><span class="p">`</span> <span class="kr">_</span><span class="p">)</span> <span class="ow">=</span> <span class="n">x</span>
+</pre></div>
+
+</div>
+
+<p>Remarkably, GHC does not complain that this definition of <code>head</code> is non-exhaustive. Since we specified that the argument must be of type <code>HList (a ': as)</code> in the type signature for <code>head</code>, GHC knows that the argument <em>cannot</em> be <code>HNil</code> (which would have the type <code>HList '[]</code>), so it doesn’t ask us to handle that case.</p>
+
+<p>These examples illustrate the way GADTs serve as a general-purpose construct for relating type- and term-level information. Information flows bidirectionally: type information refines the set of type constructors that can be matched on, and matching on type constructors exposes new type equalities.</p>
+
+<h3 id="proofs-that-work-together">Proofs that work together</h3>
+
+<p>This interplay is wonderfully compositional. Suppose we wanted to write a function that accepts an <code>HList</code> of exactly 1, 2, or 3 elements. There’s no easy way to express that in the type signature the way we did with <code>head</code>, so it might seem like all we can do is write an entirely new container datatype that has three constructors, one for each case.</p>
+
+<p>However, a more interesting solution exists that takes advantage of the bidirectional nature of GADTs. We can start by writing a <em>proof term</em> that contains no values, it just encapsulates type equalities on a type-level list:</p>
+
+<div class="brush: haskell">
+ <div class="source">
+  <pre><span></span><span class="kr">data</span> <span class="kt">OneToThree</span> <span class="n">a</span> <span class="n">b</span> <span class="n">c</span> <span class="n">as</span> <span class="kr">where</span>
+  <span class="kt">One</span>   <span class="ow">::</span> <span class="kt">OneToThree</span> <span class="n">a</span> <span class="n">b</span> <span class="n">c</span> <span class="kt">&#39;[a]</span>
+  <span class="kt">Two</span>   <span class="ow">::</span> <span class="kt">OneToThree</span> <span class="n">a</span> <span class="n">b</span> <span class="n">c</span> <span class="kt">&#39;[a, b]</span>
+  <span class="kt">Three</span> <span class="ow">::</span> <span class="kt">OneToThree</span> <span class="n">a</span> <span class="n">b</span> <span class="n">c</span> <span class="kt">&#39;[a, b, c]</span>
+</pre></div>
+
+</div>
+
+<p>We call it a proof term because a value of type <code>OneToThree a b c as</code> constitutes a <em>proof</em> that <code>as</code> has exactly 1, 2, or 3 elements. Using <code>OneToThree</code>, we can write a function that accepts an <code>HList</code> accompanied by a proof term:</p>
+
+<div class="brush: haskell">
+ <div class="source">
+  <pre><span></span><span class="nf">sumUpToThree</span> <span class="ow">::</span> <span class="kt">OneToThree</span> <span class="kt">Int</span> <span class="kt">Int</span> <span class="kt">Int</span> <span class="n">as</span> <span class="ow">-&gt;</span> <span class="kt">HList</span> <span class="n">as</span> <span class="ow">-&gt;</span> <span class="kt">Int</span>
+<span class="nf">sumUpToThree</span> <span class="kt">One</span>   <span class="p">(</span><span class="n">x</span> <span class="p">`</span><span class="kt">HCons</span><span class="p">`</span> <span class="kt">HNil</span><span class="p">)</span>                     <span class="ow">=</span> <span class="n">x</span>
+<span class="nf">sumUpToThree</span> <span class="kt">Two</span>   <span class="p">(</span><span class="n">x</span> <span class="p">`</span><span class="kt">HCons</span><span class="p">`</span> <span class="n">y</span> <span class="p">`</span><span class="kt">HCons</span><span class="p">`</span> <span class="kt">HNil</span><span class="p">)</span>           <span class="ow">=</span> <span class="n">x</span> <span class="o">+</span> <span class="n">y</span>
+<span class="nf">sumUpToThree</span> <span class="kt">Three</span> <span class="p">(</span><span class="n">x</span> <span class="p">`</span><span class="kt">HCons</span><span class="p">`</span> <span class="n">y</span> <span class="p">`</span><span class="kt">HCons</span><span class="p">`</span> <span class="n">z</span> <span class="p">`</span><span class="kt">HCons</span><span class="p">`</span> <span class="kt">HNil</span><span class="p">)</span> <span class="ow">=</span> <span class="n">x</span> <span class="o">+</span> <span class="n">y</span> <span class="o">+</span> <span class="n">z</span>
+</pre></div>
+
+</div>
+
+<p>As with <code>head</code>, this function is completely exhaustive, in this case because we take full advantage of the bidirectional nature of GADTs:</p>
+
+<ul>
+ <li>
+  <p>When we match on the <code>OneToThree</code> proof term, information flows from the term level to the type level, refining the type of <code>as</code> in that branch.</p></li>
+ <li>
+  <p>The refined type of <code>as</code> then flows back down to the term level, restricting the shape the <code>HList</code> can take and refinine the set of patterns we have to match.</p></li></ul>
+
+<p>Of course, this example is not especially useful, but in general proof terms can encode any number of useful properties. For example, we can write a proof term that ensures an <code>HList</code> has an even number of elements:</p>
+
+<div class="brush: haskell">
+ <div class="source">
+  <pre><span></span><span class="kr">data</span> <span class="kt">Even</span> <span class="n">as</span> <span class="kr">where</span>
+  <span class="kt">EvenNil</span>  <span class="ow">::</span> <span class="kt">Even</span> <span class="kt">&#39;[]</span>
+  <span class="kt">EvenCons</span> <span class="ow">::</span> <span class="kt">Even</span> <span class="n">as</span> <span class="ow">-&gt;</span> <span class="kt">Even</span> <span class="p">(</span><span class="n">a</span> <span class="sc">&#39;</span><span class="err">: b</span><span class="sc"> &#39;</span><span class="kt">:</span> <span class="n">as</span><span class="p">)</span>
+</pre></div>
+
+</div>
+
+<p>This is a proof which itself has inductive structure: <code>EvenCons</code> takes a proof that <code>as</code> has an even number of elements and produces a proof that adding two more elements preserves the evenness. We can combine this with a type family to write a function that “pairs up” elements in an <code>HList</code>:</p>
+
+<div class="brush: haskell">
+ <div class="source">
+  <pre><span></span><span class="kr">type</span> <span class="kr">family</span> <span class="kt">PairUp</span> <span class="n">as</span> <span class="kr">where</span>
+  <span class="kt">PairUp</span> <span class="kt">&#39;[]</span>            <span class="ow">=</span> <span class="kt">&#39;[]</span>
+  <span class="kt">PairUp</span> <span class="p">(</span><span class="n">a</span> <span class="sc">&#39;</span><span class="err">: b</span><span class="sc"> &#39;</span><span class="kt">:</span> <span class="n">as</span><span class="p">)</span> <span class="ow">=</span> <span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">)</span> <span class="sc">&#39;</span><span class="err">: PairUp as</span>
+
+<span class="nf">pairUp</span> <span class="ow">::</span> <span class="kt">Even</span> <span class="n">as</span> <span class="ow">-&gt;</span> <span class="kt">HList</span> <span class="n">as</span> <span class="ow">-&gt;</span> <span class="kt">HList</span> <span class="p">(</span><span class="kt">PairUp</span> <span class="n">as</span><span class="p">)</span>
+<span class="nf">pairUp</span> <span class="kt">EvenNil</span>         <span class="kt">HNil</span>                     <span class="ow">=</span> <span class="kt">HNil</span>
+<span class="nf">pairUp</span> <span class="p">(</span><span class="kt">EvenCons</span> <span class="n">even</span><span class="p">)</span> <span class="p">(</span><span class="n">x</span> <span class="p">`</span><span class="kt">HCons</span><span class="p">`</span> <span class="n">y</span> <span class="p">`</span><span class="kt">HCons</span><span class="p">`</span> <span class="n">xs</span><span class="p">)</span> <span class="ow">=</span> <span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">)</span> <span class="p">`</span><span class="kt">HCons</span><span class="p">`</span> <span class="n">pairUp</span> <span class="n">even</span> <span class="n">xs</span>
+</pre></div>
+
+</div>
+
+<p>Once again, this definition is completely exhaustive, and we can show that it works in GHCi:</p>
+
+<div class="brush: haskell">
+ <div class="source">
+  <pre><span></span><span class="nf">ghci</span><span class="o">&gt;</span> <span class="n">pairUp</span> <span class="p">(</span><span class="kt">EvenCons</span> <span class="o">$</span> <span class="kt">EvenCons</span> <span class="kt">EvenNil</span><span class="p">)</span>
+             <span class="p">(</span><span class="kt">True</span> <span class="p">`</span><span class="kt">HCons</span><span class="p">`</span> <span class="sc">&#39;a&#39;</span> <span class="p">`</span><span class="kt">HCons</span><span class="p">`</span> <span class="nb">()</span> <span class="p">`</span><span class="kt">HCons</span><span class="p">`</span> <span class="s">"foo"</span> <span class="p">`</span><span class="kt">HCons</span><span class="p">`</span> <span class="kt">HNil</span><span class="p">)</span>
+<span class="p">(</span><span class="kt">True</span><span class="p">,</span><span class="sc">&#39;a&#39;</span><span class="p">)</span> <span class="p">`</span><span class="kt">HCons</span><span class="p">`</span> <span class="p">(</span><span class="nb">()</span><span class="p">,</span><span class="s">"foo"</span><span class="p">)</span> <span class="p">`</span><span class="kt">HCons</span><span class="p">`</span> <span class="kt">HNil</span>
+</pre></div>
+
+</div>
+
+<p>This ability to capture properties of a type using auxiliary proof terms, rather than having to define an entirely new type, is one of the things that makes dependently typed programming so powerful.</p>
+
+<h3 id="proof-inference">Proof inference</h3>
+
+<p>While our definition of <code>pairUp</code> is interesting, you may be skeptical of its practical utility. It’s fiddly and inconvenient to have to pass the <code>Even</code> proof term explicitly, since it must be updated every time the length of the list changes. Fortunately, this is where TMP comes in.</p>
+
+<p>Remember that typeclasses are functions from types to terms. As its happens, a value of type <code>Even as</code> can be mechanically produced from the structure of the type <code>as</code>. This suggests that we could use TMP to automatically generate <code>Even</code> proofs, and indeed, we can. In fact, it’s not at all complicated:</p>
+
+<div class="brush: haskell">
+ <div class="source">
+  <pre><span></span><span class="kr">class</span> <span class="kt">IsEven</span> <span class="n">as</span> <span class="kr">where</span>
+  <span class="n">evenProof</span> <span class="ow">::</span> <span class="kt">Even</span> <span class="n">as</span>
+
+<span class="kr">instance</span> <span class="kt">IsEven</span> <span class="kt">&#39;[]</span> <span class="kr">where</span>
+  <span class="n">evenProof</span> <span class="ow">=</span> <span class="kt">EvenNil</span>
+
+<span class="kr">instance</span> <span class="kt">IsEven</span> <span class="n">as</span> <span class="ow">=&gt;</span> <span class="kt">IsEven</span> <span class="p">(</span><span class="n">a</span> <span class="sc">&#39;</span><span class="err">: b</span><span class="sc"> &#39;</span><span class="kt">:</span> <span class="n">as</span><span class="p">)</span> <span class="kr">where</span>
+  <span class="n">evenProof</span> <span class="ow">=</span> <span class="kt">EvenCons</span> <span class="n">evenProof</span>
+</pre></div>
+
+</div>
+
+<p>We can now adjust our <code>pairUp</code> function to use <code>IsEven</code> instead of an explicit <code>Even</code> argument:</p>
+
+<div class="brush: haskell">
+ <div class="source">
+  <pre><span></span><span class="nf">pairUp</span> <span class="ow">::</span> <span class="kt">IsEven</span> <span class="n">as</span> <span class="ow">=&gt;</span> <span class="kt">HList</span> <span class="n">as</span> <span class="ow">-&gt;</span> <span class="kt">HList</span> <span class="p">(</span><span class="kt">PairUp</span> <span class="n">as</span><span class="p">)</span>
+<span class="nf">pairUp</span> <span class="ow">=</span> <span class="n">go</span> <span class="n">evenProof</span> <span class="kr">where</span>
+  <span class="n">go</span> <span class="ow">::</span> <span class="kt">Even</span> <span class="n">as</span> <span class="ow">-&gt;</span> <span class="kt">HList</span> <span class="n">as</span> <span class="ow">-&gt;</span> <span class="kt">HList</span> <span class="p">(</span><span class="kt">PairUp</span> <span class="n">as</span><span class="p">)</span>
+  <span class="n">go</span> <span class="kt">EvenNil</span>         <span class="kt">HNil</span>                     <span class="ow">=</span> <span class="kt">HNil</span>
+  <span class="n">go</span> <span class="p">(</span><span class="kt">EvenCons</span> <span class="n">even</span><span class="p">)</span> <span class="p">(</span><span class="n">x</span> <span class="p">`</span><span class="kt">HCons</span><span class="p">`</span> <span class="n">y</span> <span class="p">`</span><span class="kt">HCons</span><span class="p">`</span> <span class="n">xs</span><span class="p">)</span> <span class="ow">=</span> <span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">)</span> <span class="p">`</span><span class="kt">HCons</span><span class="p">`</span> <span class="n">go</span> <span class="n">even</span> <span class="n">xs</span>
+</pre></div>
+
+</div>
+
+<p>This is essentially identical to its old definition, but by acquiring the proof via <code>IsEven</code> rather than passing it explicitly, we can call <code>pairUp</code> without having to construct a proof manually:</p>
+
+<div class="brush: haskell">
+ <div class="source">
+  <pre><span></span><span class="nf">ghci</span><span class="o">&gt;</span> <span class="n">pairUp</span> <span class="p">(</span><span class="kt">True</span> <span class="p">`</span><span class="kt">HCons</span><span class="p">`</span> <span class="sc">&#39;a&#39;</span> <span class="p">`</span><span class="kt">HCons</span><span class="p">`</span> <span class="nb">()</span> <span class="p">`</span><span class="kt">HCons</span><span class="p">`</span> <span class="s">"foo"</span> <span class="p">`</span><span class="kt">HCons</span><span class="p">`</span> <span class="kt">HNil</span><span class="p">)</span>
+<span class="p">(</span><span class="kt">True</span><span class="p">,</span><span class="sc">&#39;a&#39;</span><span class="p">)</span> <span class="p">`</span><span class="kt">HCons</span><span class="p">`</span> <span class="p">(</span><span class="nb">()</span><span class="p">,</span><span class="s">"foo"</span><span class="p">)</span> <span class="p">`</span><span class="kt">HCons</span><span class="p">`</span> <span class="kt">HNil</span>
+</pre></div>
+
+</div>
+
+<p>This is rather remarkable. Using TMP, we are able to get GHC to <em>automatically construct a proof that a list is even</em>, with no programmer guidance beyond writing the <code>IsEven</code> typeclass. This relies once more on the perspective that typeclasses are functions that accept types and generate term-level code: <code>IsEven</code> is a function that accepts a type-level list and generates an <code>Even</code> proof term.</p>
+
+<p>From this perspective, <strong>typeclasses are a way of specifying a proof search algorithm</strong> to the compiler. In the case of <code>IsEven</code>, the proofs being generated are rather simple, so the proof search algorithm is quite mechanical. But in general, typeclasses can be used to perform proof search of significant complexity, given a sufficiently clever encoding into the type system.</p>
+
+<h2 id="aside-gadts-versus-type-families">Aside: GADTs versus type families</h2>
+
+<p>Before moving on, I want to explicitly call attention to the relationship between GADTs and type families. Though at first glance they may seem markedly different, there are some similarities between the two, and sometimes they may be used to accomplish similar things.</p>
+
+<p>Consider again the type of the <code>pairUp</code> function above (without the typeclass for simplicity):</p>
+
+<div class="brush: haskell">
+ <div class="source">
+  <pre><span></span><span class="nf">pairUp</span> <span class="ow">::</span> <span class="kt">Even</span> <span class="n">as</span> <span class="ow">-&gt;</span> <span class="kt">HList</span> <span class="n">as</span> <span class="ow">-&gt;</span> <span class="kt">HList</span> <span class="p">(</span><span class="kt">PairUp</span> <span class="n">as</span><span class="p">)</span>
+</pre></div>
+
+</div>
+
+<p>We used both a GADT, <code>Even</code>, and a type family, <code>PairUp</code>. But we could have, in theory, used <em>only</em> a GADT and eliminated the type family altogether. Consider this variation on the <code>Even</code> proof term:</p>
+
+<div class="brush: haskell">
+ <div class="source">
+  <pre><span></span><span class="kr">data</span> <span class="kt">EvenPairs</span> <span class="n">as</span> <span class="n">bs</span> <span class="kr">where</span>
+  <span class="kt">EvenNil</span>  <span class="ow">::</span> <span class="kt">EvenPairs</span> <span class="kt">&#39;[]</span> <span class="kt">&#39;[]</span>
+  <span class="kt">EvenCons</span> <span class="ow">::</span> <span class="kt">EvenPairs</span> <span class="n">as</span> <span class="n">bs</span> <span class="ow">-&gt;</span> <span class="kt">EvenPairs</span> <span class="p">(</span><span class="n">a</span> <span class="sc">&#39;</span><span class="err">: b</span><span class="sc"> &#39;</span><span class="kt">:</span> <span class="n">as</span><span class="p">)</span> <span class="p">((</span><span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">)</span> <span class="sc">&#39;</span><span class="err">: bs)</span>
+</pre></div>
+
+</div>
+
+<p>This type has two type parameters rather than one, and though there’s no distinction between the two from GHC’s point of view, it can be useful to think of <code>as</code> as an “input” parameter and <code>bs</code> as an “output” parameter. The idea is that any <code>EvenPairs</code> proof relates both an even-length list type and its paired up equivalent:</p>
+
+<ul>
+ <li>
+  <p><code>EvenNil</code> has type <code>EvenPairs '[] '[]</code>,</p></li>
+ <li>
+  <p><code>EvenCons EvenNil</code> has type <code>EvenPairs '[a, b] '[(a, b)]</code>,</p></li>
+ <li>
+  <p><code>EvenCons (EvenCons EvenNil)</code> has type <code>EvenPairs '[a, b, c, d] '[(a, b), (c, d)]</code>,</p></li>
+ <li>
+  <p>…and so on.</p></li></ul>
+
+<p>This allows us to reformulate our <code>pairUp</code> type signature this way:</p>
+
+<div class="brush: haskell">
+ <div class="source">
+  <pre><span></span><span class="nf">pairUp</span> <span class="ow">::</span> <span class="kt">EvenPairs</span> <span class="n">as</span> <span class="n">bs</span> <span class="ow">-&gt;</span> <span class="kt">HList</span> <span class="n">as</span> <span class="ow">-&gt;</span> <span class="kt">HList</span> <span class="n">bs</span>
+</pre></div>
+
+</div>
+
+<p>The definition is otherwise unchanged. The <code>PairUp</code> type family is completely gone, because now <code>EvenPairs</code> itself defines the relation. In this way, GADTs can be used like type-level functions!</p>
+
+<p>The inverse, however, is not true, at least not directly: we cannot eliminate the GADT altogether and exclusively use type families. One way to attempt doing so would be to define a type family that returns a constraint rather than a type:</p>
+
+<div class="brush: haskell">
+ <div class="source">
+  <pre><span></span><span class="kr">import</span> <span class="nn">Data.Kind</span> <span class="p">(</span><span class="kt">Constraint</span><span class="p">)</span>
+
+<span class="kr">type</span> <span class="kr">family</span> <span class="kt">IsEvenTF</span> <span class="n">as</span> <span class="ow">::</span> <span class="kt">Constraint</span> <span class="kr">where</span>
+  <span class="kt">IsEvenTF</span> <span class="kt">&#39;[]</span>            <span class="ow">=</span> <span class="nb">()</span>
+  <span class="kt">IsEvenTF</span> <span class="p">(</span><span class="kr">_</span> <span class="sc">&#39;</span><span class="err">: _</span><span class="sc"> &#39;</span><span class="kt">:</span> <span class="n">as</span><span class="p">)</span> <span class="ow">=</span> <span class="kt">IsEvenTF</span> <span class="n">as</span>
+</pre></div>
+
+</div>
+
+<p>The idea here is that <code>IsEvenTF as</code> produces a constraint can only be satisfied if <code>as</code> has an even number of elements, since that’s the only way it will eventually reduce to <code>()</code>, which in this case means the empty set of constraints, not the unit type (yes, the syntax for that is confusing). And in fact, it’s true that putting <code>IsEvenTF as =&gt;</code> in a type signature successfully restricts <code>as</code> to be an even-length list, but it doesn’t allow us to write <code>pairUp</code>. To see why, we can try the following definition:</p>
+
+<div class="brush: haskell">
+ <div class="source">
+  <pre><span></span><span class="nf">pairUp</span> <span class="ow">::</span> <span class="kt">IsEvenTF</span> <span class="n">as</span> <span class="ow">=&gt;</span> <span class="kt">HList</span> <span class="n">as</span> <span class="ow">-&gt;</span> <span class="kt">HList</span> <span class="p">(</span><span class="kt">PairUp</span> <span class="n">as</span><span class="p">)</span>
+<span class="nf">pairUp</span> <span class="kt">HNil</span>                     <span class="ow">=</span> <span class="kt">HNil</span>
+<span class="nf">pairUp</span> <span class="p">(</span><span class="n">x</span> <span class="p">`</span><span class="kt">HCons</span><span class="p">`</span> <span class="n">y</span> <span class="p">`</span><span class="kt">HCons</span><span class="p">`</span> <span class="n">xs</span><span class="p">)</span> <span class="ow">=</span> <span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">)</span> <span class="p">`</span><span class="kt">HCons</span><span class="p">`</span> <span class="n">pairUp</span> <span class="n">xs</span>
+</pre></div>
+
+</div>
+
+<p>Unlike the version using the GADT, this version of <code>pairUp</code> is not considered exhaustive:</p>
+
+<pre><code>warning: [-Wincomplete-patterns]
+    Pattern match(es) are non-exhaustive
+    In an equation for ‘pairUp’: Patterns not matched: HCons _ HNil</code></pre>
+
+<p>This is because type families don’t provide the same bidirectional flow of information that GADTs do, they’re only type-level functions. The constraint generated by <code>IsEvenTF</code> provides no term-level evidence about the shape of <code>as</code>, so we can’t branch on it the way we can branch on the <code>Even</code> GADT.<sup><a href="#2021-03-25-an-introduction-to-typeclass-metaprogramming-footnote-5-definition" name="2021-03-25-an-introduction-to-typeclass-metaprogramming-footnote-5-return">5</a></sup> (In a sense, <code>IsEvenTF</code> is doing <a href="/blog/2019/11/05/parse-don-t-validate/">validation, not parsing</a>.)</p>
+
+<p>For this reason, I caution against overuse of type families. Their simplicity is seductive, but all too often you pay for that simplicity with inflexibility. GADTs combined with TMP for proof inference can provide the best of both worlds: complete control over the term-level proof that gets generated while still letting the compiler do most of the work for you.</p>
+
+<h2 id="guiding-type-inference">Guiding type inference</h2>
+
+<p>So far, this blog post has given relatively little attention to type inference. That is in some part a testament to the robustness of GHC’s type inference algorithm: even when fairly sophisticated TMP is involved, GHC often manages to propagate enough type information that type annotations are rarely needed.</p>
+
+<p>However, when doing TMP, it would be irresponsible to not at least consider the type inference properties of programs. Type inference is what drives the whole typeclass resolution process to begin with, so poor type inference can easily make your fancy TMP construction next to useless. To take advantage of GHC to the fullest extent, programs should proactively guide the typechecker to help it infer as much as possible as often as possible.</p>
+
+<p>To illustrate what that can look like, suppose we want to use TMP to generate an <code>HList</code> full of <code>()</code> values of an arbitrary length:</p>
+
+<div class="brush: haskell">
+ <div class="source">
+  <pre><span></span><span class="kr">class</span> <span class="kt">UnitList</span> <span class="n">as</span> <span class="kr">where</span>
+  <span class="n">unitList</span> <span class="ow">::</span> <span class="kt">HList</span> <span class="n">as</span>
+
+<span class="kr">instance</span> <span class="kt">UnitList</span> <span class="kt">&#39;[]</span> <span class="kr">where</span>
+  <span class="n">unitList</span> <span class="ow">=</span> <span class="kt">HNil</span>
+
+<span class="kr">instance</span> <span class="kt">UnitList</span> <span class="n">as</span> <span class="ow">=&gt;</span> <span class="kt">UnitList</span> <span class="p">(</span><span class="nb">()</span> <span class="sc">&#39;</span><span class="err">: as) where</span>
+  <span class="n">unitList</span> <span class="ow">=</span> <span class="nb">()</span> <span class="p">`</span><span class="kt">HCons</span><span class="p">`</span> <span class="n">unitList</span>
+</pre></div>
+
+</div>
+
+<p>Testing in GHCi, we can see it behaves as desired:</p>
+
+<div class="brush: haskell">
+ <div class="source">
+  <pre><span></span><span class="nf">ghci</span><span class="o">&gt;</span> <span class="n">unitList</span> <span class="ow">::</span> <span class="kt">HList</span> <span class="kt">&#39;[(), (), ()]</span>
+<span class="nb">()</span> <span class="p">`</span><span class="kt">HCons</span><span class="p">`</span> <span class="nb">()</span> <span class="p">`</span><span class="kt">HCons</span><span class="p">`</span> <span class="nb">()</span> <span class="p">`</span><span class="kt">HCons</span><span class="p">`</span> <span class="kt">HNil</span>
+</pre></div>
+
+</div>
+
+<p>Now suppose we write a function that accepts a list containing exactly one element and returns it:</p>
+
+<div class="brush: haskell">
+ <div class="source">
+  <pre><span></span><span class="nf">unsingleton</span> <span class="ow">::</span> <span class="kt">HList</span> <span class="kt">&#39;[a]</span> <span class="ow">-&gt;</span> <span class="n">a</span>
+<span class="nf">unsingleton</span> <span class="p">(</span><span class="n">x</span> <span class="p">`</span><span class="kt">HCons</span><span class="p">`</span> <span class="kt">HNil</span><span class="p">)</span> <span class="ow">=</span> <span class="n">x</span>
+</pre></div>
+
+</div>
+
+<p>Naturally, we would expect these to compose without a hitch. If we write <code>unsingleton unitList</code>, our TMP should generate a list of length 1, and we should get back <code>()</code>. However, it may surprise you to learn that <em>isn’t</em>, in fact, what happens:<sup><a href="#2021-03-25-an-introduction-to-typeclass-metaprogramming-footnote-6-definition" name="2021-03-25-an-introduction-to-typeclass-metaprogramming-footnote-6-return">6</a></sup></p>
+
+<pre><code>ghci&gt; unsingleton unitList
+
+error:
+    • Ambiguous type variable ‘a0’ arising from a use of ‘unitList’
+      prevents the constraint ‘(UnitList '[a0])’ from being solved.
+      Probable fix: use a type annotation to specify what ‘a0’ should be.
+      These potential instances exist:
+        instance UnitList as =&gt; UnitList (() : as)</code></pre>
+
+<p>What went wrong? The type error says that <code>a0</code> is ambiguous, but it only lists a single matching <code>UnitList</code> instance—the one we want—so how can it be ambiguous which one to select?</p>
+
+<p>The problem stems from the way we defined <code>UnitList</code>. When we wrote the instance</p>
+
+<div class="brush: haskell">
+ <div class="source">
+  <pre><span></span><span class="kr">instance</span> <span class="kt">UnitList</span> <span class="n">as</span> <span class="ow">=&gt;</span> <span class="kt">UnitList</span> <span class="p">(</span><span class="nb">()</span> <span class="sc">&#39;</span><span class="err">: as) where</span>
+</pre></div>
+
+</div>
+
+<p>we said the first element of the type-level list must be <code>()</code>, so there’s nothing stopping someone from coming along and defining another instance:</p>
+
+<div class="brush: haskell">
+ <div class="source">
+  <pre><span></span><span class="kr">instance</span> <span class="kt">UnitList</span> <span class="n">as</span> <span class="ow">=&gt;</span> <span class="kt">UnitList</span> <span class="p">(</span><span class="kt">Int</span> <span class="sc">&#39;</span><span class="err">: as) where</span>
+  <span class="n">unitList</span> <span class="ow">=</span> <span class="mi">0</span> <span class="p">`</span><span class="kt">HCons</span><span class="p">`</span> <span class="n">unitList</span>
+</pre></div>
+
+</div>
+
+<p>In that case, GHC would have no way to know which instance to pick. Nothing in the type of <code>unsingleton</code> forces the element in the list to have type <code>()</code>, so both instances are equally valid. To hedge against this future possibility, GHC rejects the program as ambiguous from the start.</p>
+
+<p>Of course, this isn’t what we want. The <code>UnitList</code> class is supposed to <em>always</em> return a list of <code>()</code> values, so how can we force GHC to pick our instance anyway? The answer is to play a trick:</p>
+
+<div class="brush: haskell">
+ <div class="source">
+  <pre><span></span><span class="kr">instance</span> <span class="p">(</span><span class="n">a</span> <span class="o">~</span> <span class="nb">()</span><span class="p">,</span> <span class="kt">UnitList</span> <span class="n">as</span><span class="p">)</span> <span class="ow">=&gt;</span> <span class="kt">UnitList</span> <span class="p">(</span><span class="n">a</span> <span class="sc">&#39;</span><span class="err">: as) where</span>
+  <span class="n">unitList</span> <span class="ow">=</span> <span class="nb">()</span> <span class="p">`</span><span class="kt">HCons</span><span class="p">`</span> <span class="n">unitList</span>
+</pre></div>
+
+</div>
+
+<p>Here we’ve changed the instance so that it has the shape <code>UnitList (a ': as)</code>, with a type variable in place of the <code>()</code>, but we also added an equality constraint that forces <code>a</code> to be <code>()</code>. Intuitively, you might think these two instances are completely identical, but in fact they are not! As proof, our example now typechecks:</p>
+
+<div class="brush: haskell">
+ <div class="source">
+  <pre><span></span><span class="nf">ghci</span><span class="o">&gt;</span> <span class="n">unsingleton</span> <span class="n">unitList</span>
+<span class="nb">()</span>
+</pre></div>
+
+</div>
+
+<p>To understand why, it’s important to understand how GHC’s typeclass resolution algorithm works. Let’s start by establishing some terminology. Note that every instance declaration has the following shape:</p>
+
+<div class="brush: haskell">
+ <div class="source">
+  <pre><span></span><span class="kr">instance</span> <span class="o">&lt;</span><span class="n">constraints</span><span class="o">&gt;</span> <span class="ow">=&gt;</span> <span class="kt">C</span> <span class="o">&lt;</span><span class="n">types</span><span class="o">&gt;</span>
+</pre></div>
+
+</div>
+
+<p>The part to the left of the <code>=&gt;</code> is known as the <em>instance context</em>, while the part to the right is known as the <em>instance head</em>. Now for the important bit: when GHC attempts to pick which typeclass instance to use to solve a typeclass constraint, <strong>only the instance head matters, and the instance context is completely ignored</strong>. Once GHC picks an instance, it commits to its choice, and only then does it consider the instance context.</p>
+
+<p>This explains why our two <code>UnitList</code> instances behave differently:</p>
+
+<ul>
+ <li>
+  <p>Given the instance head <code>UnitList (() ': as)</code>, GHC won’t select the instance unless it knows the first element of the list is <code>()</code>.</p></li>
+ <li>
+  <p>But given the instance head <code>UnitList (a ': as)</code>, GHC will pick the instance regardless of the type of the first element. All that matters is that the list is at least one element long.</p></li></ul>
+
+<p>After the <code>UnitList (a ': as)</code> instance is selected, GHC attempts to solve the constraints in the instance context, including the <code>a ~ ()</code> constraint. This <em>forces</em> <code>a</code> to be <code>()</code>, resolving the ambiguity and allowing type inference to proceed.</p>
+
+<p>This distinction might seem excessively subtle, but in practice it is enormously useful. It means you, the programmer, have direct control over the type inference process:</p>
+
+<ul>
+ <li>
+  <p>If you put a type in the instance head, you’re asking GHC to figure out how to make the types match up by some other means. Sometimes that’s very useful, since perhaps you want that type to inform which instance to pick.</p></li>
+ <li>
+  <p>But if you put an equality constraint in the instance context, the roles are reversed: you’re saying to the compiler “you don’t tell me, I’ll tell <em>you</em> what type this is,” effectively giving you a role in type inference itself.</p></li></ul>
+
+<p>From this perspective, typeclass instances with equality constraints make GHC’s type inference algorithm extensible. You get to pick which decisions are made and when, and crucially, you can use knowledge of your own program structure to expose more information to the typechecker.</p>
+
+<p>Given all of the above, consider again the definition of <code>IsEven</code> from earlier:</p>
+
+<div class="brush: haskell">
+ <div class="source">
+  <pre><span></span><span class="kr">class</span> <span class="kt">IsEven</span> <span class="n">as</span> <span class="kr">where</span>
+  <span class="n">evenProof</span> <span class="ow">::</span> <span class="kt">Even</span> <span class="n">as</span>
+
+<span class="kr">instance</span> <span class="kt">IsEven</span> <span class="kt">&#39;[]</span> <span class="kr">where</span>
+  <span class="n">evenProof</span> <span class="ow">=</span> <span class="kt">EvenNil</span>
+
+<span class="kr">instance</span> <span class="kt">IsEven</span> <span class="n">as</span> <span class="ow">=&gt;</span> <span class="kt">IsEven</span> <span class="p">(</span><span class="n">a</span> <span class="sc">&#39;</span><span class="err">: b</span><span class="sc"> &#39;</span><span class="kt">:</span> <span class="n">as</span><span class="p">)</span> <span class="kr">where</span>
+  <span class="n">evenProof</span> <span class="ow">=</span> <span class="kt">EvenCons</span> <span class="n">evenProof</span>
+</pre></div>
+
+</div>
+
+<p>Though it didn’t cause any problems in the examples we tried, this definition isn’t optimized for type inference. If GHC needed to solve an <code>IsEven (a ': b0)</code> constraint, where <code>b0</code> is an ambiguous type variable, it would get stuck, since it doesn’t know that someone won’t come along and define an <code>IsEven '[a]</code> instance in the future.</p>
+
+<p>To fix this, we can apply the same trick we used for <code>UnitList</code>, just in a slightly different way:</p>
+
+<div class="brush: haskell">
+ <div class="source">
+  <pre><span></span><span class="kr">instance</span> <span class="p">(</span><span class="n">as</span> <span class="o">~</span> <span class="p">(</span><span class="n">b</span> <span class="sc">&#39;</span><span class="err">: bs), IsEven bs) =&gt; IsEven (a</span><span class="sc"> &#39;</span><span class="kt">:</span> <span class="n">as</span><span class="p">)</span> <span class="kr">where</span>
+  <span class="n">evenProof</span> <span class="ow">=</span> <span class="kt">EvenCons</span> <span class="n">evenProof</span>
+</pre></div>
+
+</div>
+
+<p>Again, the idea is to move the type information we <em>learn</em> from picking this instance into the instance context, allowing it to guide type inference rather than making type inference figure it out from some other source. Consistently applying this transformation can <strong>dramatically</strong> improve type inference in programs that make heavy use of TMP.</p>
+
+<h2 id="example-3-subtyping-constraints">Example 3: Subtyping constraints</h2>
+
+<p>At last, we have reached the final example of this blog post. For this one, I have the pleasure of providing a real-world example from a production Haskell codebase: while I was working at <a href="https://hasura.io/">Hasura</a>, I had the opportunity to design an internal parser combinator library that captures aspects of the <a href="https://graphql.org/">GraphQL</a> type system. One such aspect of that type system is a form of subtyping; GraphQL essentially has two “kinds” of types—input types and output types—but some types can be used as both.</p>
+
+<p>Haskell has no built-in support for subtyping, so most Haskell programs do their best to get away with parametric polymorphism instead. However, in our case, we actually need to distinguish (at runtime) types in the “both” category from those that are exclusively input or exclusively output types. Consequently, our <code>GQLKind</code> datatype has three cases:</p>
+
+<div class="brush: haskell">
+ <div class="source">
+  <pre><span></span><span class="kr">data</span> <span class="kt">GQLKind</span>
+  <span class="ow">=</span> <span class="kt">Both</span>
+  <span class="o">|</span> <span class="kt">Input</span>
+  <span class="o">|</span> <span class="kt">Output</span>
+</pre></div>
+
+</div>
+
+<p>We use <code>DataKind</code>-promoted versions of this <code>GQLKind</code> type as a parameter to a <code>GQLType</code> GADT:</p>
+
+<div class="brush: haskell">
+ <div class="source">
+  <pre><span></span><span class="kr">data</span> <span class="kt">GQLType</span> <span class="n">k</span> <span class="kr">where</span>
+  <span class="kt">TScalar</span>      <span class="ow">::</span> <span class="kt">GQLType</span> <span class="kt">&#39;Both</span>
+  <span class="kt">TInputObject</span> <span class="ow">::</span> <span class="kt">InputObjectInfo</span> <span class="ow">-&gt;</span> <span class="kt">GQLType</span> <span class="kt">&#39;Input</span>
+  <span class="kt">TIObject</span>     <span class="ow">::</span> <span class="kt">ObjectInfo</span> <span class="ow">-&gt;</span> <span class="kt">GQLType</span> <span class="kt">&#39;Output</span>
+  <span class="c1">-- ...and so on...</span>
+</pre></div>
+
+</div>
+
+<p>This allows us to write functions that only accept input types or only accept output types, which is a wonderful property to be able to guarantee at compile-time! But there’s a problem: if we write a function that only accepts values of type <code>GQLType 'Input</code>, we can’t pass a <code>GQLType 'Both</code>, even though we really ought to be able to.</p>
+
+<p>To fix this, we can use a little dependently typed programming. First, we’ll define a type to represent proof terms that witness a subkinding relationship:</p>
+
+<div class="brush: haskell">
+ <div class="source">
+  <pre><span></span><span class="kr">data</span> <span class="kt">SubKind</span> <span class="n">k1</span> <span class="n">k2</span> <span class="kr">where</span>
+  <span class="kt">KRefl</span> <span class="ow">::</span> <span class="kt">SubKind</span> <span class="n">k</span> <span class="n">k</span>
+  <span class="kt">KBoth</span> <span class="ow">::</span> <span class="kt">SubKind</span> <span class="kt">&#39;Both</span> <span class="n">k</span>
+</pre></div>
+
+</div>
+
+<p>The first case, <code>KRefl</code>, states that every kind is trivially a subkind of itself. The second case, <code>KBoth</code>, states that <code>Both</code> is a subkind of any kind at all. (This is a particularly literal example of <a href="/blog/2020/08/13/types-as-axioms-or-playing-god-with-static-types/">using a type to define axioms</a>.) The next step is to use TMP to implement proof inference:</p>
+
+<div class="brush: haskell">
+ <div class="source">
+  <pre><span></span><span class="kr">class</span> <span class="kt">IsSubKind</span> <span class="n">k1</span> <span class="n">k2</span> <span class="kr">where</span>
+  <span class="n">subKindProof</span> <span class="ow">::</span> <span class="kt">SubKind</span> <span class="n">k1</span> <span class="n">k2</span>
+
+<span class="kr">instance</span> <span class="kt">IsSubKind</span> <span class="kt">&#39;Both</span> <span class="n">k</span> <span class="kr">where</span>
+  <span class="n">subKindProof</span> <span class="ow">=</span> <span class="kt">KBoth</span>
+
+<span class="kr">instance</span> <span class="p">(</span><span class="n">k</span> <span class="o">~</span> <span class="kt">&#39;Input</span><span class="p">)</span> <span class="ow">=&gt;</span> <span class="kt">IsSubKind</span> <span class="kt">&#39;Input</span> <span class="n">k</span> <span class="kr">where</span>
+  <span class="n">subKindProof</span> <span class="ow">=</span> <span class="kt">KRefl</span>
+
+<span class="kr">instance</span> <span class="p">(</span><span class="n">k</span> <span class="o">~</span> <span class="kt">&#39;Output</span><span class="p">)</span> <span class="ow">=&gt;</span> <span class="kt">IsSubKind</span> <span class="kt">&#39;Output</span> <span class="n">k</span> <span class="kr">where</span>
+  <span class="n">subKindProof</span> <span class="ow">=</span> <span class="kt">KRefl</span>
+</pre></div>
+
+</div>
+
+<p>These instances use the type equality trick described in the previous section to guide type inference, ensuring that if we ever need to prove that <code>k</code> is a superkind of <code>'Input</code> or <code>'Output</code>, type inference will force them to be equal.</p>
+
+<p>Using <code>IsSubKind</code>, we can easily resolve the problem described above. Rather than write a function with a type like this:</p>
+
+<div class="brush: haskell">
+ <div class="source">
+  <pre><span></span><span class="nf">nullable</span> <span class="ow">::</span> <span class="kt">GQLParser</span> <span class="kt">&#39;Input</span> <span class="n">a</span> <span class="ow">-&gt;</span> <span class="kt">GQLParser</span> <span class="kt">&#39;Input</span> <span class="p">(</span><span class="kt">Maybe</span> <span class="n">a</span><span class="p">)</span>
+</pre></div>
+
+</div>
+
+<p>…we simply use an <code>IsSubKind</code> constraint, instead:</p>
+
+<div class="brush: haskell">
+ <div class="source">
+  <pre><span></span><span class="nf">nullable</span> <span class="ow">::</span> <span class="kt">IsSubKind</span> <span class="n">k</span> <span class="kt">&#39;Input</span> <span class="ow">=&gt;</span> <span class="kt">GQLParser</span> <span class="n">k</span> <span class="n">a</span> <span class="ow">-&gt;</span> <span class="kt">GQLParser</span> <span class="n">k</span> <span class="p">(</span><span class="kt">Maybe</span> <span class="n">a</span><span class="p">)</span>
+</pre></div>
+
+</div>
+
+<p>Now both <code>'Input</code> and <code>'Both</code> kinds are accepted. In my experience, this caused no trouble at all for callers of these functions; everything worked completely automatically. <em>Consuming</em> the <code>SubKind</code> proofs was slightly more involved, but only ever so slightly. For example, we have a type family that looks like this:</p>
+
+<div class="brush: haskell">
+ <div class="source">
+  <pre><span></span><span class="kr">type</span> <span class="kr">family</span> <span class="kt">ParserInput</span> <span class="n">k</span> <span class="kr">where</span>
+  <span class="kt">ParserInput</span> <span class="kt">&#39;Both</span>   <span class="ow">=</span> <span class="kt">InputValue</span>
+  <span class="kt">ParserInput</span> <span class="kt">&#39;Input</span>  <span class="ow">=</span> <span class="kt">InputValue</span>
+  <span class="kt">ParserInput</span> <span class="kt">&#39;Output</span> <span class="ow">=</span> <span class="kt">SelectionSet</span>
+</pre></div>
+
+</div>
+
+<p>This type family is used to determine what a <code>GQLParser k a</code> actually consumes as input, based on the kind of the GraphQL type it corresponds to. In some functions, we need to prove to GHC that <code>IsSubKind k 'Input</code> implies <code>ParserInput k ~ InputValue</code>.</p>
+
+<p>Fortunately, that is very easy to do using <a href="https://hackage.haskell.org/package/base-4.14.1.0/docs/Data-Type-Equality.html">the <code>(:~:)</code> type from <code>Data.Type.Equality</code> in <code>base</code></a> to capture a term-level witness of a type equality. It’s an ordinary Haskell GADT that happens to have an infix type constructor, and this is its definition:</p>
+
+<div class="brush: haskell">
+ <div class="source">
+  <pre><span></span><span class="kr">data</span> <span class="n">a</span> <span class="kt">:~:</span> <span class="n">b</span> <span class="kr">where</span>
+  <span class="kt">Refl</span> <span class="ow">::</span> <span class="n">a</span> <span class="kt">:~:</span> <span class="n">a</span>
+</pre></div>
+
+</div>
+
+<p>Just as with any other GADT, <code>(:~:)</code> can be used to pack up type equalities and unpack them later; <code>a :~: b</code> just happens to be the GADT that corresponds precisely to the equality <code>a ~ b</code>. Using <code>(:~:)</code>, we can write a reusable proof that <code>IsSubKind k 'Input</code> implies <code>ParserInput k ~ InputValue</code>:</p>
+
+<div class="brush: haskell">
+ <div class="source">
+  <pre><span></span><span class="nf">inputParserInput</span> <span class="ow">::</span> <span class="n">forall</span> <span class="n">k</span><span class="o">.</span> <span class="kt">IsSubKind</span> <span class="n">k</span> <span class="kt">&#39;Input</span> <span class="ow">=&gt;</span> <span class="kt">ParserInput</span> <span class="n">k</span> <span class="kt">:~:</span> <span class="kt">InputValue</span>
+<span class="nf">inputParserInput</span> <span class="ow">=</span> <span class="kr">case</span> <span class="n">subKindProof</span> <span class="o">@</span><span class="n">k</span> <span class="o">@</span><span class="kt">&#39;Input</span> <span class="kr">of</span>
+  <span class="kt">KRefl</span> <span class="ow">-&gt;</span> <span class="kt">Refl</span>
+  <span class="kt">KBoth</span> <span class="ow">-&gt;</span> <span class="kt">Refl</span>
+</pre></div>
+
+</div>
+
+<p>This function is a very simple proof by cases, where <code>Refl</code> can be read as “Q.E.D.”:</p>
+
+<ul>
+ <li>
+  <p>In the first case, matching on <code>KRefl</code> refines <code>k</code> to <code>'Input</code>, and <code>ParserInput 'Input</code> is <code>InputValue</code> by definition of <code>ParserInput</code>.</p></li>
+ <li>
+  <p>Likewise, in the second case, matching on <code>KBoth</code> refines <code>k</code> to <code>'Both</code>, and <code>ParserInput 'Both</code> is also <code>InputValue</code> by definition of <code>ParserInput</code>.</p></li></ul>
+
+<p>This <code>inputParserInput</code> helper allows functions like <code>nullable</code>, which internally need <code>ParserInput k ~ InputValue</code>, to take the form</p>
+
+<div class="brush: haskell">
+ <div class="source">
+  <pre><span></span><span class="nf">nullable</span> <span class="ow">::</span> <span class="n">forall</span> <span class="n">k</span> <span class="n">a</span><span class="o">.</span> <span class="kt">IsSubKind</span> <span class="n">k</span> <span class="kt">&#39;Input</span> <span class="ow">=&gt;</span> <span class="kt">GQLParser</span> <span class="n">k</span> <span class="n">a</span> <span class="ow">-&gt;</span> <span class="kt">GQLParser</span> <span class="n">k</span> <span class="p">(</span><span class="kt">Maybe</span> <span class="n">a</span><span class="p">)</span>
+<span class="nf">nullable</span> <span class="n">parser</span> <span class="ow">=</span> <span class="kr">case</span> <span class="n">inputParserInput</span> <span class="o">@</span><span class="n">k</span> <span class="kr">of</span>
+  <span class="kt">Refl</span> <span class="ow">-&gt;</span> <span class="cm">{- ...implementation goes here... -}</span>
+</pre></div>
+
+</div>
+
+<p>Overall, this burden is quite minimal, so the additional type safety is more than worth the effort. The same could not be said without <code>IsSubKind</code> doing work to infer the proofs at each use site, so in this case, TMP has certainly paid its weight!</p>
+
+<h1 id="wrapping-up-and-closing-thoughts">Wrapping up and closing thoughts</h1>
+
+<p>So concludes my introduction to Haskell TMP. As seems to happen all too often with my blog posts, this one has grown rather long, so allow me to provide a summary of the most important points:</p>
+
+<ul>
+ <li>
+  <p>Typeclass metaprogramming is a powerful technique for performing type-directed code generation, making it a form of “value inference” that infers values from types.</p></li>
+ <li>
+  <p>Unlike most other metaprogramming mechanisms, TMP has a wonderful synergy with type inference, which allows it to take advantage of information the programmer may not have even written explicitly.</p></li>
+ <li>
+  <p>Though I’ve called the technique “<em>typeclass</em> metaprogramming,” TMP really leverages the entirety of the modern GHC type system. Type families, GADTs, promoted types, and more all have their place in usefully applying type-level programming.</p></li>
+ <li>
+  <p>Finally, since TMP relies so heavily on type inference to do its job, it’s crucial to be thoughtful about how you design type-level code to give the typechecker as many opportunities to succeed as you possibly can.</p></li></ul>
+
+<p>The individual applications of TMP covered in this blog post—type-level computation, generic programming, and dependent typing—are all useful in their own right, and this post does not linger on any of them long enough to do any of them justice. That is, perhaps, the cost one pays when trying to discuss such an abstract, general technique. However, I hope that readers can see the forest for the trees and understand how TMP can be a set of techniques in their own right, applicable to the topics described above and more.</p>
+
+<p>Readers may note that this blog post targets a slightly different audience than my other recent writing has been. That is a conscious choice: there is an unfortunate dearth of resources to help intermediate Haskell programmers become advanced Haskell programmers, in part because it’s hard to write them. The lack of resources makes tackling topics like this rather difficult, as too often it feels as though an entire web of concepts must be explained all at once, with no obvious incremental path that provides sufficient motivation every step of the way.</p>
+
+<p>It remains to be seen whether my stab at the problem will be successful. But on the chance that it is, I suspect some readers will be curious about where to go next. Here are some ideas:</p>
+
+<ul>
+ <li>
+  <p>As mentioned earlier in this blog post, <a href="https://hackage.haskell.org/package/base-4.14.1.0/docs/GHC-Generics.html">the <code>GHC.Generics</code> module documentation</a> is a great resource if you want to explore generic programming further, and generic programming is a great way to put TMP to practical use.</p></li>
+ <li>
+  <p>I have long believed that <a href="https://downloads.haskell.org/ghc/9.0.1/docs/html/users_guide/">the GHC User’s Guide</a> is a criminally under-read and underappreciated piece of documentation. It is a treasure trove of knowledge, and I highly recommend reading through the sections on type-related language extensions if you want to get a better grasp of the mechanics of the Haskell type system.</p></li>
+ <li>
+  <p>Finally, if dependently typed programming in Haskell intrigues you, and you don’t mind staring into the sun, the <a href="https://hackage.haskell.org/package/singletons">singletons</a> library provides abstractions and design patterns that can considerably cut down on the boilerplate. (Also, <a href="https://cs.brynmawr.edu/~rae/papers/2012/singletons/paper.pdf">the accompanying paper</a> is definitely worth a read if you’d like to go down that route.)</p></li></ul>
+
+<p>Even if you don’t decide to pursue type-level programming in Haskell, I hope this blog post helps make some of the concepts involved less mystical and intimidating. I, for one, think this stuff is worth the effort involved in understanding. After all, you never know when it might come in handy.</p>
+
+<div class="footnotes">
+ <ol>
+  <li id="2021-03-25-an-introduction-to-typeclass-metaprogramming-footnote-1-definition" class="footnote-definition">
+   <p>Not to be confused with C++’s <a href="https://en.wikipedia.org/wiki/Template_metaprogramming"><em>template</em> metaprogramming</a>, though there are significant similarities between the two techniques.&nbsp;<a href="#2021-03-25-an-introduction-to-typeclass-metaprogramming-footnote-1-return">↩</a></p></li>
+  <li id="2021-03-25-an-introduction-to-typeclass-metaprogramming-footnote-2-definition" class="footnote-definition">
+   <p>There have been proposals to introduce ordered instances, known in the literature as <a href="https://homepage.cs.uiowa.edu/~jgmorrs/pubs/morris-icfp2010-instances.pdf"><em>instance chains</em></a>, but as of this writing, GHC does not implement them.&nbsp;<a href="#2021-03-25-an-introduction-to-typeclass-metaprogramming-footnote-2-return">↩</a></p></li>
+  <li id="2021-03-25-an-introduction-to-typeclass-metaprogramming-footnote-3-definition" class="footnote-definition">
+   <p>Note that this also preserves an important property of the Haskell type system, parametricity. A function like <code>id :: a -&gt; a</code> shouldn’t be allowed to do different things depending on which type is chosen for <code>a</code>, which our first version of <code>guardUnit</code> tried to violate. Typeclasses, being functions on types, can naturally do different things given different types, so a typeclass constraint is precisely what gives us the power to violate parametricity.&nbsp;<a href="#2021-03-25-an-introduction-to-typeclass-metaprogramming-footnote-3-return">↩</a></p></li>
+  <li id="2021-03-25-an-introduction-to-typeclass-metaprogramming-footnote-4-definition" class="footnote-definition">
+   <p>Short for <em>generalized algebraic datatypes</em>, which is a rather unhelpful name for actually understanding what they are or what they’re for.&nbsp;<a href="#2021-03-25-an-introduction-to-typeclass-metaprogramming-footnote-4-return">↩</a></p></li>
+  <li id="2021-03-25-an-introduction-to-typeclass-metaprogramming-footnote-5-definition" class="footnote-definition">
+   <p>If GHC allowed lightweight existential quantification, we could make that term-level evidence available with a sufficiently clever definition for <code>IsEvenTF</code>:</p>
+   <div class="brush: haskell">
+    <div class="source">
+     <pre><span></span><span class="kr">type</span> <span class="kr">family</span> <span class="kt">IsEvenTF</span> <span class="n">as</span> <span class="ow">::</span> <span class="kt">Constraint</span> <span class="kr">where</span>
+  <span class="kt">IsEvenTF</span> <span class="kt">&#39;[]</span>       <span class="ow">=</span> <span class="nb">()</span>
+  <span class="kt">IsEvenTF</span> <span class="p">(</span><span class="n">a</span> <span class="sc">&#39;</span><span class="err">: as) = exists b a</span><span class="sc">s&#39;</span><span class="o">.</span> <span class="p">(</span><span class="n">as</span> <span class="o">~</span> <span class="p">(</span><span class="n">b</span> <span class="sc">&#39;</span><span class="err">: a</span><span class="sc">s&#39;</span><span class="p">),</span> <span class="kt">IsEvenTF</span> <span class="n">as&#39;</span><span class="p">)</span>
+</pre></div>
+
+</div>
+   <p>The type refinement provided by matching on <code>HCons</code> would be enough for the second case of <code>IsEvenTF</code> to be selected, which would provide an equality proof that <code>as</code> has at least two elements. Sadly, GHC does not support anything of this sort, and it’s unclear if it would be tractable to implement at all.&nbsp;<a href="#2021-03-25-an-introduction-to-typeclass-metaprogramming-footnote-5-return">↩</a></p></li>
+  <li id="2021-03-25-an-introduction-to-typeclass-metaprogramming-footnote-6-definition" class="footnote-definition">
+   <p>Actually, I’ve cheated a little bit here, because <code>unsingleton unitList</code> really does typecheck in GHCi under normal circumstances. That’s because <a href="https://downloads.haskell.org/ghc/9.0.1/docs/html/users_guide/ghci.html#extension-ExtendedDefaultRules">the <code>ExtendedDefaultRules</code> extension</a> is enabled in GHCi by default, which defaults ambiguous type variables to <code>()</code>, which happens to be exactly what’s needed to make this contrived example typecheck. However, that doesn’t say anything very useful, since the same expression really would fail to typecheck inside a Haskell module, so I’ve turned <code>ExtendedDefaultRules</code> off to illustrate the problem.&nbsp;<a href="#2021-03-25-an-introduction-to-typeclass-metaprogramming-footnote-6-return">↩</a></p></li></ol></div>
+  <footer>
+    <ul class="pager">
+      <li class="previous">
+
+      </li>
+      <li class="next">
+        <a href="/blog/2020/11/01/names-are-not-type-safety/"><em>Names are not type safety</em> &rarr;</a>
+      </li>
+    </ul>
+  </footer>
+</article>
+        </div>
+      </section>
+      <footer>
+        <div class="content">
+          <h2 id="copyright-notice">© 2021, Alexis King</h2>
+          <h3>
+            Built with <a href="https://github.com/greghendershott/frog">Frog</a>, the
+            <strong>fr</strong>ozen bl<strong>og</strong> tool.
+          </h3>
+          <h3>
+            Feeds are available via <a href="/feeds/all.atom.xml">Atom</a>
+            or <a href="/feeds/all.rss.xml">RSS</a>.
+          </h3>
+        </div>
+      </footer>
+    </div>
+  </body>
+</html>

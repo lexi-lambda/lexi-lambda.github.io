@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <title>Rascal: a Haskell with more parentheses</title>
+    <meta name="description" content="**Note**: since the writing of this blog post, Rascal has been renamed to Hackett. You can read about why in the followup blog post.  “Hey! You got your Haskell in my Racket!”  “No, you got _your_ Racket in _my_ Haskell!”  Welcome to the Rascal programmin...">
+    <meta name="author"      content="Alexis King">
+    <meta name="keywords"    content="hackett, racket, haskell, programming languages, functional programming">
+    <meta name="viewport"    content="width=device-width, initial-scale=1.0">
+    <link rel="icon"      href="/favicon.ico">
+    <link rel="canonical" href="http://lexi-lambda.github.io/blog/2017/01/02/rascal-a-haskell-with-more-parentheses/">
+    <link rel="next" href="/blog/2016/10/03/using-types-to-unit-test-in-haskell/">
+    <link rel="prev" href="/blog/2017/01/05/rascal-is-now-hackett-plus-some-answers-to-questions/">
+    <!-- CSS -->
+    <link rel="stylesheet" type="text/css" href="https://fonts.googleapis.com/css?family=Merriweather+Sans:400,300,300italic,400italic,700,700italic,800,800italic|Merriweather:400,300,300italic,400italic,700,700italic,900,900italic|Fira+Code:300,400,500,600,700">
+    <link rel="stylesheet" type="text/css" href="/css/application.min.css">
+    <link rel="stylesheet" type="text/css" href="/css/pygments.min.css">
+    <!-- Feeds -->
+    <link rel="alternate" type="application/atom+xml"
+          href="/feeds/all.atom.xml" title="Atom Feed">
+    <link rel="alternate" type="application/rss+xml"
+          href="/feeds/all.rss.xml" title="RSS Feed">
+    <!-- JS -->
+    <!-- <script src="/js/application.min.js"></script> -->
+    <script type="text/javascript">
+      (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+      (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+      m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+      })(window,document,'script','//www.google-analytics.com/analytics.js','ga');
+
+      ga('create', 'UA-65250372-1', 'auto');
+      ga('send', 'pageview');
+    </script>
+  </head>
+  <body>
+    <div id="page-content">
+      <!-- Navigation Bar -->
+      <header>
+        <nav role="navigation" class="navigation-bar">
+          <ul class="navigation-items left">
+            <li id="blog-title-header"><a href="/"><h1>Alexis King</h1></a></li>
+          </ul>
+          <ul class="navigation-items center"></ul>
+          <ul class="navigation-items right">
+            <li><a href="/">Home</a></li>
+            <li><a href="/resume.html">About Me</a></li>
+          </ul>
+        </nav>
+      </header>
+      <section role="main">
+        <!-- Main column -->
+        <div class="content" class="col-md-12">
+
+
+
+          <article class="main">
+  <header>
+    <h1 class="title">Rascal: a Haskell with more parentheses</h1>
+    <div class='date-and-tags'>
+      <time datetime="2017-01-02T09:16:42">
+        2017-01-02
+      </time>
+      <span style="margin: 0 3px">⦿</span>
+      <span class="tags"><a href="/tags/hackett.html">hackett</a>, <a href="/tags/racket.html">racket</a>, <a href="/tags/haskell.html">haskell</a>, <a href="/tags/programming-languages.html">programming languages</a>, <a href="/tags/functional-programming.html">functional programming</a></span>
+    </div>
+  </header>
+
+<blockquote>
+ <p><strong>Note</strong>: since the writing of this blog post, Rascal has been renamed to Hackett. You can read about why in <a href="/blog/2017/01/05/rascal-is-now-hackett-plus-some-answers-to-questions/">the followup blog post</a>.</p></blockquote>
+
+<p>“Hey! You got your Haskell in my Racket!”</p>
+
+<p>“No, you got <em>your</em> Racket in <em>my</em> Haskell!”</p>
+
+<p>Welcome to the <a href="https://github.com/lexi-lambda/hackett">Rascal</a> programming language.</p>
+<!-- more-->
+
+<h1 id="why-rascal">Why Rascal?</h1>
+
+<p>Why yet <em>another</em> programming language? Anyone who knows me knows that I already have two programming languages that I <em>really</em> like: Haskell and Racket. Really, I think they’re both great! Each brings some things to the table that aren’t really available in any other programming language I’ve ever used.</p>
+
+<p>Haskell, in many ways, is a programming language that fits my mental model of how to structure programs better than any other programming language I’ve used. Some people would vehemently disagree, and it seems that there is almost certainly some heavy subjectivity in how people think about programming. I think Haskell’s model is awesome once you get used to it, though, but this blog post is not really going to try and convince you why you should care about Haskell (though that <em>is</em> something I want to write at some point). What you <em>should</em> understand, though, is that to me, Haskell is pretty close to what I want in a programming language.</p>
+
+<p>At the same time, though, Haskell has problems, and a lot of that revolves around its story for metaprogramming. “Metaprogramming” is another M word that people seem to be very afraid of, and for good reason: most metaprogramming systems are ad-hoc, unsafe, unpredictable footguns that require delicate care to use properly, and <em>even then</em> the resulting code is brittle and difficult to understand. Haskell doesn’t suffer from this problem as much as some languages, but it isn’t perfect by any means: Haskell has at least two different metaprogramming systems (generics and Template Haskell) that are designed for different tasks, but they’re both limited in scope and both tend to be pretty complicated to use.</p>
+
+<p>Discussing the merits and drawbacks of Haskell’s various metaprogramming capabilities is also outside the scope of this blog post, but there’s one <em>fact</em> that I want to bring up, which is that <strong>Haskell does not provide any mechanism for adding syntactic abstractions to the language</strong>. What do I mean by this? Well, in order to understand what a “syntactic abstraction” is and why you should care about it, I want to shift gears a little and take a look at why Racket is so amazing.</p>
+
+<h2 id="a-programmable-programming-language-theory-and-practice">A programmable programming language: theory and practice</h2>
+
+<p>I feel confident in saying that Racket has <em>the</em> most advanced macro system in the world, and it is pretty much unparalleled in that space. There are many languages with powerful type systems, but Racket is more or less alone in many of the niches it occupies. Racket has a large number of innovations that I don’t know of in any other programming language, and a significant portion of them focus on making Racket a <a href="http://www.ccs.neu.edu/home/matthias/manifesto/">programmable programming language, a language for building languages</a>.</p>
+
+<p>This lofty goal is backed up by decades of research, providing Racket with an unparalleled toolkit for creating languages that can communicate, be extended, and even cooperate with tooling to provide introspection and error diagnostics. Working in Haskell feels like carefully designing a mould that cleanly and precisely fits your domain, carefully carving, cutting, and whittling. In contrast, working with Racket feels like moulding your domain until it looks the way <em>you</em> want it to look, poking and prodding at a pliable substrate. The sheer <em>ease</em> of it all is impossible for me to convey in words, so <a href="https://twitter.com/andmkent_/status/724036694773628930">you will have to see it for yourself</a>.</p>
+
+<p>All this stuff is super abstract, though. What does it mean for practical programming, and why should you care? Well, I’m not going to try and sell you if you’re extremely skeptical, but if you’re interested, <a href="https://www.youtube.com/watch?v=TfehOLha-18">I gave a talk on some of Racket’s linguistic capabilities last year called <em>Languages in an Afternoon</em></a>. If you’re curious, give it a watch, and you might find yourself (hopefully) a little impressed. If you prefer reading, well, I have some <a href="/blog/2015/12/21/adts-in-typed-racket-with-macros/">blog posts</a> on this very blog that <a href="/blog/2015/08/30/managing-application-configuration-with-envy/">demonstrate what Racket can do</a>.</p>
+
+<p>The basic idea, though, is that by having a simple syntax and a powerful macro system with a formalization of lexical scope, users can effectively invent entirely new language constructs as ordinary libraries, constructs that would have to be core forms in other programming languages. For example, Racket supports pattern-matching, but it isn’t built into the compiler: it’s simply implemented in the <code>racket/match</code> module distributed with Racket. Not only is it defined in ordinary Racket code, it’s actually <em>extensible</em>, so users can add their own pattern-matching forms that cooperate with <code>match</code>.</p>
+
+<p>This is the power of a macro system to produce “syntactic abstractions”, things that can transform the way a user thinks of the code they’re writing. Racket has the unique capability of making these abstractions both easy to write and watertight, so instead of being a scary tool you have to handle with extreme care, you can easily whip up a powerful, user-friendly embedded domain specific language in a matter of <em>minutes</em>, and it’ll be safe, provide error reporting for misuse, and cooperate with existing tooling pretty much out of the box.</p>
+
+<h2 id="fusing-haskell-and-racket">Fusing Haskell and Racket</h2>
+
+<p>So, let’s assume that we <em>do</em> want Haskell’s strong type system and that we <em>also</em> want a powerful metaprogramming model that permits syntactic extensions. What would that look like? Well, one way we could do it is to put one in front of the other: macro expansion is, by nature, a compile-time pass, so we could stick a macroexpander in front of the typechecker. This leads to a simple technique: first, macroexpand the program to erase the macros, then typecheck it and erase the types, then send the resulting code off to be compiled. This technique has the following properties:</p>
+
+<ol>
+ <li>
+  <p>First of all, <strong>it’s easy to implement</strong>. Racket’s macroexpander, while complex, is well-documented in academic literature and works extremely well in practice. In fact, this strategy has already been implemented! Typed Racket, the gradually-typed sister language of Racket, expands every program before typechecking. It would be possible to effectively create a “Lisp-flavored Haskell” by using this technique, and it might not even be that hard.</p></li>
+ <li>
+  <p>Unfortunately, there’s a huge problem with this approach: <strong>type information is not available at macroexpansion time</strong>. This is the real dealbreaker with the “expand, then typecheck” model, since static type information is some of the most useful information possibly available to a macro writer. In an ideal world, macros should not only have access to type information, they should be able to manipulate it and metaprogram the typechecker as necessary, but if macroexpansion is a separate phase from typechecking, then that information simply doesn’t exist yet.</p></li></ol>
+
+<p>For me, the second option is unacceptable. I am <em>not</em> satisfied by a “Lisp-flavored Haskell”; I want my types and macros to be able to cooperate and communicate with each other. The trouble, though, is that solving that problem is really, really hard! For a couple years now, I’ve been wishing this ideal language existed, but I’ve had no idea how to make it actually work. Template Haskell implements a highly restricted system of interweaving typechecking and splice evaluation, but it effectively does it by running the typechecker and the splice expander alternately, splitting the source into chunks and typechecking them one at a time. This works okay for Template Haskell, but for the more powerful macro system I am looking for, it wouldn’t scale.</p>
+
+<p>There’s something a little bit curious, though, about the problem as I just described it. The processes of “macroexpanding the program to erase the macros” and “typechecking the program to erase the types” sound awfully similar. It seems like maybe these are two sides of the same coin, and it would be wonderful if we could encode one in terms of the other, effectively turning the two passes into a single, unified pass. Unfortunately, while this sounds great, I had no idea how to do this (and it didn’t help that I really had no idea how existing type systems were actually implemented).</p>
+
+<p>Fortunately, last year, Stephen Chang, Alex Knauth, and Ben Greenman put together a rather exciting paper called <a href="http://www.ccs.neu.edu/home/stchang/popl2017/"><em>Type Systems as Macros</em></a>, which does precisely what I just described, and it delivers it all in a remarkably simple and elegant presentation. The idea is to “distribute” the task of typechecking over the individual forms of the language, leveraging existing macro communication facilities avaiable in the Racket macroexpander to propagate type information as macros are expanded. To me, it was exactly what I was looking for, and I almost immediately started playing with it and seeing what I could do with it.</p>
+
+<p>The result is <a href="https://github.com/lexi-lambda/hackett"><em>Rascal</em></a>, a programming language built in the Racket ecosystem that attempts to implement a Haskell-like type system.</p>
+
+<h1 id="a-first-peek-at-rascal">A first peek at Rascal</h1>
+
+<p>Rascal is a very new programming language I’ve only been working on over the past few months. It is extremely experimental, riddled with bugs, half-baked, and may turn your computer into scrambled eggs. Still, while I might not recommend that you actually <em>use</em> it just yet, I want to try and share what it is I’m working on, since I’d bet at least a few other people will find it interesting, too.</p>
+
+<p>First, let me say this up front: <strong>Rascal is probably a lot closer to Haskell than Racket</strong>. That might come as a surprise, given that Rascal has very Lisp-y syntax, it’s written in Racket, and it runs on the Racket platform, but semantically, Rascal is mostly just Haskell 98. This is important, because it may come as a surprise, given that there are so few statically typed Lisps, but there’s obviously no inherent reason that Lisps need to be dynamically typed. They just seem to have mostly evolved that way.</p>
+
+<p>Taking a look at a snippet of Rascal code, it’s easy to see that the language doesn’t work quite like a traditional Lisp, though:<sup><a href="#2017-01-02-rascal-a-haskell-with-more-parentheses-footnote-1-definition" name="2017-01-02-rascal-a-haskell-with-more-parentheses-footnote-1-return">1</a></sup></p>
+
+<pre><code>(def+ map-every-other : (forall [a] {{a -&gt; a} -&gt; (List a) -&gt; (List a)})
+  [_ nil            -&gt; nil]
+  [_ {x :: nil}     -&gt; {x :: nil}]
+  [f {x :: y :: ys} -&gt; {x :: (f y) :: (map-every-other f ys)}])</code></pre>
+
+<p>This is a Lisp with all the goodies you would expect out of Haskell: static types, parametric polymorphism, automatically curried functions, algebraic datatypes, pattern-matching, infix operators, and of course, <em>typeclasses</em>. Yes, with Rascal you can have your monads in all their statically dispatched glory:</p>
+
+<pre><code>(data (Maybe a)
+  (just a)
+  nothing)
+
+(instance (Monad Maybe)
+  [join (case-lambda
+          [(just (just x)) (just x)]
+          [_               nothing])])</code></pre>
+
+<p>So far, though, this really <em>is</em> just “Haskell with parentheses”. As alluded to above, however, Rascal is a bit more than that.</p>
+
+<h2 id="core-forms-can-be-implemented-as-derived-concepts">Core forms can be implemented as derived concepts</h2>
+
+<p>Rascal’s type system is currently very simple, being nothing more than Hindley-Milner plus ad-hoc polymorphism in the form of typeclasses. Something interesting to note about it is that it does not implement ADTs or pattern-matching anywhere in the core! In fact, ADTs are defined as two macros <code>data</code> and <code>case</code>, in an entirely separate module, which can be imported just like any other library.</p>
+
+<p>The main <code>rascal</code> language provides ADTs by default, of course, but it would be perfectly possible to produce a <code>rascal/kernel</code> language which does not include them at all. In this particular case, it seems unlikely that Rascal programmers would want their own implementation of ADTs, but it’s an interesting proof of concept, and it hints at other “core” features that could be implemented using macros.</p>
+
+<p>Simple syntactic transformations are, of course, trivially defined as macros. Haskell <code>do</code> notation is defined as <a href="https://github.com/lexi-lambda/hackett/blob/87d001a82c86fb66544d25c37ffba9be1ac63464/rascal-lib/rascal/monad.rkt#L48-L58">an eleven-line macro in <code>rascal/monad</code></a>, and GHC’s useful <code>LambdaCase</code> extension is also possible to implement without modifying Rascal at all. This is useful, because there are many syntactic shorthands that are extremely useful to implement, but don’t make any sense to be in GHC because they are specific to certain libraries or applications. Racket’s macro system makes those not only possible, but actually pretty easy.</p>
+
+<p>While the extent of what is possible to implement as derived forms remains to be seen, many useful GHC features seem quite possible to implement without touching the core language, including things like <code>GeneralizedNewtypeDeriving</code> and other generic deriving mechanisms like <code>GHC.Generics</code>, <code>DeriveGeneric</code>, and <code>DeriveAnyClass</code>.</p>
+
+<h2 id="the-language-is-not-enough">The language is not enough</h2>
+
+<p>No language is perfect. Most people would agree with this, but I would take it a step further: no language is even sufficient! This makes a lot of sense, given that general-purpose programming languages are designed to do <em>everything</em>, and it’s impossible to do everything well.</p>
+
+<p>Haskell programmers know this, and they happily endorse the creation of embedded domain specific languages. These are fantastic, and we need more of them. Things like <a href="http://hackage.haskell.org/package/servant">servant</a> let me write a third of the code I might otherwise need to, and the most readable code is the code you didn’t have to write in the first place. DSLs are good.</p>
+
+<p>Unfortunately, building DSLs is traditionally difficult, largely in part because building embedded DSLs means figuring out a way to encode your domain into your host language of choice. Sometimes, your domain simply does not elegantly map to your host language’s syntax or semantics, and you have to come up with a compromise. This is easy to see with servant, which, while it does a remarkably good job, still has to resort to some very clever type magic to create some semblance of an API description in Haskell types:</p>
+
+<pre><code>type UserAPI = "users" :&gt; Get '[JSON] [User]
+          :&lt;|&gt; "users" :&gt; ReqBody '[JSON] User :&gt; Post '[JSON] User
+          :&lt;|&gt; "users" :&gt; Capture "userid" Integer
+                       :&gt; Get '[JSON] User
+          :&lt;|&gt; "users" :&gt; Capture "userid" Integer
+                       :&gt; ReqBody '[JSON] User
+                       :&gt; Put '[JSON] User</code></pre>
+
+<p>The above code is <em>remarkably</em> readable for what it is, but what if we didn’t have to worry about working within the constraints of Haskell’s syntax? What if we could design a syntax that was truly the best for the job? Perhaps we would come up with something like this:</p>
+
+<pre><code>(define-api User-API
+  #:content-types [JSON]
+  [GET  "users"                    =&gt; (List User)]
+  [POST "users"                    =&gt; User -&gt; User]
+  [GET  "users" [userid : Integer] =&gt; User]
+  [PUT  "users" [userid : Integer] =&gt; User -&gt; User])</code></pre>
+
+<p>This would be extremely easy to write with Racket’s macro-writing utilities, and it could even be made extensible. This could also avoid having to do the complicated typeclass trickery servant has to perform to then generate code from the above specification, since it would be much easier to just generate the necessary code directly (which still maintaining type safety).</p>
+
+<p>In addition to the type-level hacks that Haskell programmers often have to pull in order to make these kinds of fancy DSLs work, free monads tend to be used to create domain-specific languages. This works okay for some DSLs, but remember that when you use a free monad, you are effectively writing a <em>runtime interpreter</em> for your language! Macros, on the other hand, are compiled, and you get ability to <em>compile</em> your DSL to code that can be optimized by all the existing facilities of the compiler toolchain.</p>
+
+<h1 id="rascal-is-embryonic">Rascal is embryonic</h1>
+
+<p>I’m pretty excited about Rascal. I think that it could have the potential to do some pretty interesting things, and I have some ideas in my head for how having macros in a Haskell-like language could change things. I also think that, based on what I’ve seen so far, having both macros and a Haskell-like type system could give rise to <em>completely</em> different programming paradigms than exist in either Haskell or Racket today. My gut tells me that this is a case where the whole might actually be greater than the sum of its parts.</p>
+
+<p>That said, Rascal doesn’t really exist yet. Yes, <a href="https://github.com/lexi-lambda/hackett">there is a GitHub repository</a>, and it has some code in it that does… something. Unfortunately, the code is also currently extremely buggy, to the point of being borderline broken, and it’s also in such early stages that you can’t really do <em>anything</em> interesting with it, aside from some tiny toy programs.</p>
+
+<p>As I have worked on Rascal, I’ve come to a somewhat unfortunate conclusion, which is that I really have almost zero interest in implementing type systems. I felt that way before I started the project, but I was hoping that maybe once I got into them, I would find them more interesting. Unfortunately, as much as I love working with powerful type systems (and really, I adore working with Haskell and using all the fancy features GHC provides), I find implementing the software that makes them tick completely dull.</p>
+
+<p>Still, I’m willing to invest the time to get something that I can use. Even so, resources for practical type system implementation are scarce. I want to thank <a href="https://web.cecs.pdx.edu/~mpj/">Mark P Jones</a> for his wonderful resource <a href="https://web.cecs.pdx.edu/~mpj/thih/">Typing Haskell in Haskell</a>, without which getting to where I am now would likely have been impossible. I also want to thank <a href="http://www.stephendiehl.com">Stephen Diehl</a> for his wonderful <a href="http://dev.stephendiehl.com/fun/">Write You a Haskell</a> series, which was also wonderfully useful to study, even if it is unfinished and doesn’t cover anything beyond ML just yet.</p>
+
+<p>Even with these wonderful resources, I’ve come to the realization that <strong>I probably can’t do all of this on my own</strong>. I consider myself pretty familiar with macros and macro expanders at this point, but I don’t know much about type systems (at least not their implementation), and I could absolutely use some help. So if you’re interested in Rascal and think you might be able to pitch in, please: I would appreciate even the littlest bits of help or guidance!</p>
+
+<p>In the meantime, I will try to keep picking away at Rascal in the small amount of free time I currently have. Thanks, as always, to all the amazing people who have contributed to the tools I’ve been using for this project: special thanks to the authors of <em>Type Systems as Macros</em> for their help as well as the people I mentioned just above, and also to all of the people who have built Racket and Haskell and made them what they are today. Without them, Rascal would most definitely not exist.</p>
+
+<div class="footnotes">
+ <ol>
+  <li id="2017-01-02-rascal-a-haskell-with-more-parentheses-footnote-1-definition" class="footnote-definition">
+   <p>Note that most of the Rascal code in this blog post probably doesn’t actually work on the current Rascal implementation. Pretty much all of it can be implemented in the current implementation, the syntax just isn’t quite as nice yet.&nbsp;<a href="#2017-01-02-rascal-a-haskell-with-more-parentheses-footnote-1-return">↩</a></p></li></ol></div>
+  <footer>
+    <ul class="pager">
+      <li class="previous">
+        <a href="/blog/2017/01/05/rascal-is-now-hackett-plus-some-answers-to-questions/">&larr; <em>Rascal is now Hackett, plus some answers to questions</em></a>
+      </li>
+      <li class="next">
+        <a href="/blog/2016/10/03/using-types-to-unit-test-in-haskell/"><em>Using types to unit-test in Haskell</em> &rarr;</a>
+      </li>
+    </ul>
+  </footer>
+</article>
+        </div>
+      </section>
+      <footer>
+        <div class="content">
+          <h2 id="copyright-notice">© 2021, Alexis King</h2>
+          <h3>
+            Built with <a href="https://github.com/greghendershott/frog">Frog</a>, the
+            <strong>fr</strong>ozen bl<strong>og</strong> tool.
+          </h3>
+          <h3>
+            Feeds are available via <a href="/feeds/all.atom.xml">Atom</a>
+            or <a href="/feeds/all.rss.xml">RSS</a>.
+          </h3>
+        </div>
+      </footer>
+    </div>
+  </body>
+</html>

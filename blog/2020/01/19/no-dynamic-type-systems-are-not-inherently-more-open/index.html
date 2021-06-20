@@ -1,0 +1,405 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <title>No, dynamic type systems are not inherently more open</title>
+    <meta name="description" content="Internet debates about typing disciplines continue to be plagued by a pervasive myth that dynamic type systems are inherently better at modeling “open world” domains. The argument usually goes like this: the goal of static typing is to pin everything down...">
+    <meta name="author"      content="Alexis King">
+    <meta name="keywords"    content="types, haskell, programming languages, functional programming">
+    <meta name="viewport"    content="width=device-width, initial-scale=1.0">
+    <link rel="icon"      href="/favicon.ico">
+    <link rel="canonical" href="http://lexi-lambda.github.io/blog/2020/01/19/no-dynamic-type-systems-are-not-inherently-more-open/">
+    <link rel="next" href="/blog/2019/11/05/parse-don-t-validate/">
+    <link rel="prev" href="/blog/2020/08/13/types-as-axioms-or-playing-god-with-static-types/">
+    <!-- CSS -->
+    <link rel="stylesheet" type="text/css" href="https://fonts.googleapis.com/css?family=Merriweather+Sans:400,300,300italic,400italic,700,700italic,800,800italic|Merriweather:400,300,300italic,400italic,700,700italic,900,900italic|Fira+Code:300,400,500,600,700">
+    <link rel="stylesheet" type="text/css" href="/css/application.min.css">
+    <link rel="stylesheet" type="text/css" href="/css/pygments.min.css">
+    <!-- Feeds -->
+    <link rel="alternate" type="application/atom+xml"
+          href="/feeds/all.atom.xml" title="Atom Feed">
+    <link rel="alternate" type="application/rss+xml"
+          href="/feeds/all.rss.xml" title="RSS Feed">
+    <!-- JS -->
+    <!-- <script src="/js/application.min.js"></script> -->
+    <script type="text/javascript">
+      (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+      (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+      m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+      })(window,document,'script','//www.google-analytics.com/analytics.js','ga');
+
+      ga('create', 'UA-65250372-1', 'auto');
+      ga('send', 'pageview');
+    </script>
+  </head>
+  <body>
+    <div id="page-content">
+      <!-- Navigation Bar -->
+      <header>
+        <nav role="navigation" class="navigation-bar">
+          <ul class="navigation-items left">
+            <li id="blog-title-header"><a href="/"><h1>Alexis King</h1></a></li>
+          </ul>
+          <ul class="navigation-items center"></ul>
+          <ul class="navigation-items right">
+            <li><a href="/">Home</a></li>
+            <li><a href="/resume.html">About Me</a></li>
+          </ul>
+        </nav>
+      </header>
+      <section role="main">
+        <!-- Main column -->
+        <div class="content" class="col-md-12">
+
+
+
+          <article class="main">
+  <header>
+    <h1 class="title">No, dynamic type systems are not inherently more open</h1>
+    <div class='date-and-tags'>
+      <time datetime="2020-01-19T00:00:00">
+        2020-01-19
+      </time>
+      <span style="margin: 0 3px">⦿</span>
+      <span class="tags"><a href="/tags/types.html">types</a>, <a href="/tags/haskell.html">haskell</a>, <a href="/tags/programming-languages.html">programming languages</a>, <a href="/tags/functional-programming.html">functional programming</a></span>
+    </div>
+  </header>
+
+<p>Internet debates about typing disciplines continue to be plagued by a pervasive myth that dynamic type systems are inherently better at modeling “open world” domains. The argument usually goes like this: the goal of static typing is to pin everything down as much as possible, but in the real world, that just isn’t practical. Real systems should be loosely coupled and worry about data representation as little as possible, so dynamic types lead to a more robust system in the large.</p>
+
+<p>This story sounds compelling, but it isn’t true. The flaw is in the premise: static types are <em>not</em> about “classifying the world” or pinning down the structure of every value in a system. The reality is that static type systems allow specifying exactly how much a component needs to know about the structure of its inputs, and conversely, how much it doesn’t. Indeed, in practice static type systems excel at processing data with only a partially-known structure, as they can be used to ensure application logic doesn’t accidentally assume too much.</p>
+<!-- more-->
+
+<h1 id="two-typing-fallacies">Two typing fallacies</h1>
+
+<p>I’ve wanted to write this blog post for a while, but what finally made me decide to do it were misinformed comments responding to <a href="/blog/2019/11/05/parse-don-t-validate/">my previous blog post</a>. Two comments in particular caught my eye, <a href="https://www.reddit.com/r/programming/comments/dt0w63/parse_dont_validate/f6ulpsy/">the first of which was posted on /r/programming</a>:</p>
+
+<blockquote>
+ <p>Strongly disagree with the post […] it promotes a fundamentally entangled and static view of the world. It assumes that we can or should theorize about what is &ldquo;valid&rdquo; input at the edge between the program and the world, thus introducing a strong sense of coupling through the entire software, where failure to conform to some schema will automatically crash the program.</p>
+ <p>This is touted as a feature here but imagine if the internet worked like this. A server changes their JSON output, and we need to recompile and reprogram the entire internet. This is the static view that is promoted as a feature here. […] The &ldquo;parser mentality&rdquo; is fundamentally rigid and global, whereas robust system design should be decentralised and leave interpretation of data to the receiver.</p></blockquote>
+
+<p>Given the argument being made in the blog post—that you should use precise types whenever possible—one can see where this misinterpretation comes from. How could a proxy server possibly be written in such a style, since it cannot anticipate the structure of its payloads? The commenter’s conclusion is that strict static typing is at odds with programs that don’t know the structure of their inputs ahead of time.</p>
+
+<p><a href="https://news.ycombinator.com/item?id=21479933">The second comment was left on Hacker News</a>, and it is significantly shorter than the first one:</p>
+
+<blockquote>
+ <p>What would be the type signature of, say, Python&rsquo;s <code>pickle.load()</code>?</p></blockquote>
+
+<p>This is a different kind of argument, one that relies on the fact that the types of reflective operations may depend on runtime values, which makes them challenging to capture with static types. This argument suggests that static types limit expressiveness because they forbid such operations outright.</p>
+
+<p>Both these arguments are fallacious, but in order to show why, we have to make explicit an implicit claim. The two comments focus primarily on illustrating how static type systems can’t process data of an unknown shape, but they simultaneously advance an implicit belief: that dynamically typed languages <em>can</em> process data of an unknown shape. As we’ll see, this belief is misguided; programs are not capable of processing data of a truly unknown shape regardless of typing discipline, and static type systems only make already-present assumptions explicit.</p>
+
+<h1 id="you-cant-process-what-you-dont-know">You can’t process what you don’t know</h1>
+
+<p>The claim is simple: in a static type system, you must declare the shape of data ahead of time, but in a dynamic type system, the type can be, well, dynamic! It sounds self-evident, so much so that Rich Hickey has practically built a speaking career upon its emotional appeal. The only problem is it isn’t true.</p>
+
+<p>The hypothetical scenario usually goes like this. Say you have a distributed system, and services in the system emit events that can be consumed by any other service that might need them. Each event is accompanied by a payload, which listening services can use to inform further action. The payload itself is minimally-structured, schemaless data encoded using a generic interchange format such as JSON or <a href="https://github.com/edn-format/edn">EDN</a>.</p>
+
+<p>As a simple example, a login service might emit an event like this one whenever a new user signs up:</p>
+
+<div class="brush: json">
+ <div class="source">
+  <pre><span></span><span class="p">{</span>
+  <span class="nt">"event_type"</span><span class="p">:</span> <span class="s2">"signup"</span><span class="p">,</span>
+  <span class="nt">"timestamp"</span><span class="p">:</span> <span class="s2">"2020-01-19T05:37:09Z"</span><span class="p">,</span>
+  <span class="nt">"data"</span><span class="p">:</span> <span class="p">{</span>
+    <span class="nt">"user"</span><span class="p">:</span> <span class="p">{</span>
+      <span class="nt">"id"</span><span class="p">:</span> <span class="mi">42</span><span class="p">,</span>
+      <span class="nt">"name"</span><span class="p">:</span> <span class="s2">"Alyssa"</span><span class="p">,</span>
+      <span class="nt">"email"</span><span class="p">:</span> <span class="s2">"alyssa@example.com"</span>
+    <span class="p">}</span>
+  <span class="p">}</span>
+<span class="p">}</span>
+</pre></div>
+
+</div>
+
+<p>Some downstream services might listen for these <code>signup</code> events and take further action whenever they are emitted. For example, a transactional email service might send a welcome email whenever a new user signs up. If the service were written in JavaScript, the handler might look something like this:</p>
+
+<div class="brush: js">
+ <div class="source">
+  <pre><span></span><span class="kr">const</span> <span class="nx">handleEvent</span> <span class="o">=</span> <span class="p">({</span> <span class="nx">event_type</span><span class="p">,</span> <span class="nx">data</span> <span class="p">})</span> <span class="p">=&gt;</span> <span class="p">{</span>
+  <span class="k">switch</span> <span class="p">(</span><span class="nx">event_type</span><span class="p">)</span> <span class="p">{</span>
+    <span class="k">case</span> <span class="s1">&#39;login&#39;</span><span class="o">:</span>
+      <span class="cm">/* ... */</span>
+      <span class="k">break</span>
+    <span class="k">case</span> <span class="s1">&#39;signup&#39;</span><span class="o">:</span>
+      <span class="nx">sendEmail</span><span class="p">(</span><span class="nx">data</span><span class="p">.</span><span class="nx">user</span><span class="p">.</span><span class="nx">email</span><span class="p">,</span> <span class="sb">`Welcome to Blockchain Emporium, </span><span class="si">${</span><span class="nx">data</span><span class="p">.</span><span class="nx">user</span><span class="p">.</span><span class="nx">name</span><span class="si">}</span><span class="sb">!`</span><span class="p">)</span>
+      <span class="k">break</span>
+  <span class="p">}</span>
+<span class="p">}</span>
+</pre></div>
+
+</div>
+
+<p>But what if this service were written in Haskell instead? Being good, reality-fearing Haskell programmers who <a href="/blog/2019/11/05/parse-don-t-validate/">parse, not validate</a>, the Haskell code might look something like this, instead:</p>
+
+<div class="brush: haskell">
+ <div class="source">
+  <pre><span></span><span class="kr">data</span> <span class="kt">Event</span> <span class="ow">=</span> <span class="kt">Login</span> <span class="kt">LoginPayload</span> <span class="o">|</span> <span class="kt">Signup</span> <span class="kt">SignupPayload</span>
+<span class="kr">data</span> <span class="kt">LoginPayload</span> <span class="ow">=</span> <span class="kt">LoginPayload</span> <span class="p">{</span> <span class="n">userId</span> <span class="ow">::</span> <span class="kt">Int</span> <span class="p">}</span>
+<span class="kr">data</span> <span class="kt">SignupPayload</span> <span class="ow">=</span> <span class="kt">SignupPayload</span>
+  <span class="p">{</span> <span class="n">userId</span> <span class="ow">::</span> <span class="kt">Int</span>
+  <span class="p">,</span> <span class="n">userName</span> <span class="ow">::</span> <span class="kt">Text</span>
+  <span class="p">,</span> <span class="n">userEmail</span> <span class="ow">::</span> <span class="kt">Text</span> <span class="p">}</span>
+
+<span class="kr">instance</span> <span class="kt">FromJSON</span> <span class="kt">Event</span> <span class="kr">where</span>
+  <span class="n">parseJSON</span> <span class="ow">=</span> <span class="n">withObject</span> <span class="s">"Event"</span> <span class="nf">\</span><span class="n">obj</span> <span class="ow">-&gt;</span> <span class="kr">do</span>
+    <span class="n">eventType</span> <span class="ow">&lt;-</span> <span class="n">obj</span> <span class="o">.:</span> <span class="s">"event_type"</span>
+    <span class="kr">case</span> <span class="n">eventType</span> <span class="kr">of</span>
+      <span class="s">"login"</span> <span class="ow">-&gt;</span> <span class="kt">Login</span> <span class="o">&lt;$&gt;</span> <span class="p">(</span><span class="n">obj</span> <span class="o">.:</span> <span class="s">"data"</span><span class="p">)</span>
+      <span class="s">"signup"</span> <span class="ow">-&gt;</span> <span class="kt">Signup</span> <span class="o">&lt;$&gt;</span> <span class="p">(</span><span class="n">obj</span> <span class="o">.:</span> <span class="s">"signup"</span><span class="p">)</span>
+      <span class="kr">_</span> <span class="ow">-&gt;</span> <span class="n">fail</span> <span class="o">$</span> <span class="s">"unknown event_type: "</span> <span class="o">&lt;&gt;</span> <span class="n">eventType</span>
+
+<span class="kr">instance</span> <span class="kt">FromJSON</span> <span class="kt">LoginPayload</span> <span class="kr">where</span> <span class="p">{</span> <span class="o">...</span> <span class="p">}</span>
+<span class="kr">instance</span> <span class="kt">FromJSON</span> <span class="kt">SignupPayload</span> <span class="kr">where</span> <span class="p">{</span> <span class="o">...</span> <span class="p">}</span>
+
+<span class="nf">handleEvent</span> <span class="ow">::</span> <span class="kt">JSON</span><span class="o">.</span><span class="kt">Value</span> <span class="ow">-&gt;</span> <span class="kt">IO</span> <span class="nb">()</span>
+<span class="nf">handleEvent</span> <span class="n">payload</span> <span class="ow">=</span> <span class="kr">case</span> <span class="n">fromJSON</span> <span class="n">payload</span> <span class="kr">of</span>
+  <span class="kt">Success</span> <span class="p">(</span><span class="kt">Login</span> <span class="kt">LoginPayload</span> <span class="p">{</span> <span class="n">userId</span> <span class="p">})</span> <span class="ow">-&gt;</span> <span class="cm">{- ... -}</span>
+  <span class="kt">Success</span> <span class="p">(</span><span class="kt">Signup</span> <span class="kt">SignupPayload</span> <span class="p">{</span> <span class="n">userName</span><span class="p">,</span> <span class="n">userEmail</span> <span class="p">})</span> <span class="ow">-&gt;</span>
+    <span class="n">sendEmail</span> <span class="n">userEmail</span> <span class="o">$</span> <span class="s">"Welcome to Blockchain Emporium, "</span> <span class="o">&lt;&gt;</span> <span class="n">userName</span> <span class="o">&lt;&gt;</span> <span class="s">"!"</span>
+  <span class="kt">Error</span> <span class="n">message</span> <span class="ow">-&gt;</span> <span class="n">fail</span> <span class="o">$</span> <span class="s">"could not parse event: "</span> <span class="o">&lt;&gt;</span> <span class="n">message</span>
+</pre></div>
+
+</div>
+
+<p>It’s definitely more boilerplate, but some extra overhead for type definitions is to be expected (and is greatly exaggerated in such tiny examples), and the arguments we’re discussing aren’t about boilerplate, anyway. The <em>real</em> problem with this version of the code, according to the Reddit comment from earlier, is that the Haskell code has to be updated whenever a service adds a new event type! A new case has to be added to the <code>Event</code> datatype, and it must be given new parsing logic. And what about when new fields get added to the payload? What a maintenance nightmare.</p>
+
+<p>In comparison, the JavaScript code is much more permissive. If a new event type is added, it will just fall through the <code>switch</code> and do nothing. If extra fields are added to the payload, the JavaScript code will just ignore them. Seems like a win for dynamic typing.</p>
+
+<p>Except that no, it isn’t. The only reason the statically typed program fails if we don’t update the <code>Event</code> type is that we wrote <code>handleEvent</code> that way. We could just have easily done the same thing in the JavaScript code, adding a default case that rejects unknown event types:</p>
+
+<div class="brush: js">
+ <div class="source">
+  <pre><span></span><span class="kr">const</span> <span class="nx">handleEvent</span> <span class="o">=</span> <span class="p">({</span> <span class="nx">event_type</span><span class="p">,</span> <span class="nx">data</span> <span class="p">})</span> <span class="p">=&gt;</span> <span class="p">{</span>
+  <span class="k">switch</span> <span class="p">(</span><span class="nx">event_type</span><span class="p">)</span> <span class="p">{</span>
+    <span class="cm">/* ... */</span>
+    <span class="k">default</span><span class="o">:</span>
+      <span class="k">throw</span> <span class="k">new</span> <span class="nb">Error</span><span class="p">(</span><span class="sb">`unknown event_type: </span><span class="si">${</span><span class="nx">event_type</span><span class="si">}</span><span class="sb">`</span><span class="p">)</span>
+  <span class="p">}</span>
+<span class="p">}</span>
+</pre></div>
+
+</div>
+
+<p>We didn’t do that, since in this case it would clearly be silly. If a service receives an event it doesn’t know about, it should just ignore it. This is a case where being permissive is clearly the correct behavior, and we can easily implement that in the Haskell code too:</p>
+
+<div class="brush: haskell">
+ <div class="source">
+  <pre><span></span><span class="nf">handleEvent</span> <span class="ow">::</span> <span class="kt">JSON</span><span class="o">.</span><span class="kt">Value</span> <span class="ow">-&gt;</span> <span class="kt">IO</span> <span class="nb">()</span>
+<span class="nf">handleEvent</span> <span class="n">payload</span> <span class="ow">=</span> <span class="kr">case</span> <span class="n">fromJSON</span> <span class="n">payload</span> <span class="kr">of</span>
+  <span class="cm">{- ... -}</span>
+  <span class="kt">Error</span> <span class="kr">_</span> <span class="ow">-&gt;</span> <span class="n">pure</span> <span class="nb">()</span>
+</pre></div>
+
+</div>
+
+<p>This is still in the spirit of “parse, don’t validate” because we’re still parsing the values we <em>do</em> care about as early as possible, so we don’t fall into the double-validation trap. At no point do we take a code path that depends on a value being well-formed without first ensuring (with the help of the type system) that it is, in fact, actually well-formed. We don’t have to respond to an ill-formed value by raising an error! We just have to be explicit about ignoring it.</p>
+
+<p>This illustrates an important point: the <code>Event</code> type in this Haskell code doesn’t describe “all possible events,” it describes all the events that the application cares about. Likewise, the code that parses those events’ payloads only worries about the fields the application needs, and it ignores extraneous ones. A static type system doesn’t require you eagerly write a schema for the whole universe, it simply requires you to be up front about the things you need.</p>
+
+<p>This turns out to have a lot of pleasant benefits even though knowledge about inputs is limited:</p>
+
+<ul>
+ <li>
+  <p>It’s easy to discover the assumptions of the Haskell program just by looking at the type definitions. We know, for example, that this application doesn’t care about the <code>timestamp</code> field, since it never appears in any of the payload types. In the dynamically-typed program, we’d have to audit every code path to see whether or not it inspects that field, which would be a lot of error-prone work!</p></li>
+ <li>
+  <p>What’s more, it turns out the Haskell code doesn’t actually <em>use</em> the <code>userId</code> field inside the <code>SignupPayload</code> type, so that type is overly conservative. If we want to ensure it isn’t actually needed (since, for example, maybe we’re phasing out providing the user ID in that payload entirely), we need only delete that record field; if the code typechecks, we can be confident it really doesn’t depend on that field.</p></li>
+ <li>
+  <p>Finally, we neatly avoid all the gotchas related to shotgun parsing <a href="/blog/2019/11/05/parse-don-t-validate/#the-danger-of-validation">mentioned in the previous blog post</a>, since we still haven’t compromised on any of those principles.</p></li></ul>
+
+<p>We’ve already invalidated the first half of the claim: that statically typed languages can’t deal with data where the structure isn’t completely known. Let’s now look at the other half, which states that dynamically typed languages can process data where the structure isn’t known at all. Maybe that still sounds right, but if you slow down and think about it more carefully, you’ll find it can’t be.</p>
+
+<p>The above JavaScript code makes all the same assumptions our Haskell code does: it assumes event payloads are JSON objects with an <code>event_type</code> field, and it assumes <code>signup</code> payloads include <code>data.user.name</code> and <code>data.user.email</code> fields. It certainly can’t do anything useful with truly unknown input! If a new event payload is added, our JavaScript code can’t magically adapt to handle it simply because it is dynamically typed. Dynamic typing just means the types of values are carried alongside them at runtime and checked as the program executes; the types are still there, and this program still implicitly relies on them being particular things.</p>
+
+<h1 id="keeping-opaque-data-opaque">Keeping opaque data opaque</h1>
+
+<p>In the previous section, we debunked the idea that statically typed systems can’t process partially-known data, but if you have been paying close attention, you may have noticed it did not fully refute the original claim.</p>
+
+<p>Although we were able to handle unknown data, we always simply discarded it, which would not fly if we were trying to implement some sort of proxying. For example, suppose we have a forwarding service that broadcasts events over a public network, attaching a signature to each payload to ensure it can’t be spoofed. We might implement this in JavaScript this way:</p>
+
+<div class="brush: js">
+ <div class="source">
+  <pre><span></span><span class="kr">const</span> <span class="nx">handleEvent</span> <span class="o">=</span> <span class="p">(</span><span class="nx">payload</span><span class="p">)</span> <span class="p">=&gt;</span> <span class="p">{</span>
+  <span class="kr">const</span> <span class="nx">signedPayload</span> <span class="o">=</span> <span class="p">{</span> <span class="p">...</span><span class="nx">payload</span><span class="p">,</span> <span class="nx">signature</span><span class="o">:</span> <span class="nx">signature</span><span class="p">(</span><span class="nx">payload</span><span class="p">)</span> <span class="p">}</span>
+  <span class="nx">retransmitEvent</span><span class="p">(</span><span class="nx">signedPayload</span><span class="p">)</span>
+<span class="p">}</span>
+</pre></div>
+
+</div>
+
+<p>In this case, we don’t care about the structure of the payload at all (the <code>signature</code> function just works on any valid JSON object), but we still have to preserve all the information. How could we do that in a statically typed language, since a statically-typed language would have to assign the payload a precise type?</p>
+
+<p>Once again, the answer involves rejecting the premise: there’s no need to give data a type that’s any more precise than the application needs. The same logic could be written in a straightforward way in Haskell:</p>
+
+<div class="brush: haskell">
+ <div class="source">
+  <pre><span></span><span class="nf">handleEvent</span> <span class="ow">::</span> <span class="kt">JSON</span><span class="o">.</span><span class="kt">Value</span> <span class="ow">-&gt;</span> <span class="kt">IO</span> <span class="nb">()</span>
+<span class="nf">handleEvent</span> <span class="p">(</span><span class="kt">Object</span> <span class="n">payload</span><span class="p">)</span> <span class="ow">=</span> <span class="kr">do</span>
+  <span class="kr">let</span> <span class="n">signedPayload</span> <span class="ow">=</span> <span class="kt">Map</span><span class="o">.</span><span class="n">insert</span> <span class="s">"signature"</span> <span class="p">(</span><span class="n">signature</span> <span class="n">payload</span><span class="p">)</span> <span class="n">payload</span>
+  <span class="n">retransmitEvent</span> <span class="n">signedPayload</span>
+<span class="nf">handleEvent</span> <span class="n">payload</span> <span class="ow">=</span> <span class="n">fail</span> <span class="o">$</span> <span class="s">"event payload was not an object "</span> <span class="o">&lt;&gt;</span> <span class="n">show</span> <span class="n">payload</span>
+</pre></div>
+
+</div>
+
+<p>In this case, since we don’t care about the structure of the payload, we manipulate a value of type <code>JSON.Value</code> directly. This type is extremely imprecise compared to our <code>Event</code> type from earlier—it can hold any legal JSON value, of any shape—but in this case, we <em>want</em> it to be imprecise.</p>
+
+<p>Thanks to that imprecision, the type system helped us here: it caught the fact that we’re assuming the payload is a JSON object, not some other JSON value, and it made us handle the non-object cases explicitly. In this case we chose to raise an error, but of course, as before, you could choose some other form of recovery if you wanted to. You just have to be explicit about it.</p>
+
+<p>Once more, note that the assumption we were forced to make explicit in Haskell is <em>also</em> made by the JavaScript code! If our JavaScript <code>handleEvent</code> function were called with a string rather than an object, it’s unlikely the behavior would be desirable, since an object spread on a string results in the following surprise:</p>
+
+<div class="brush: js">
+ <div class="source">
+  <pre><span></span><span class="o">&gt;</span> <span class="p">{</span> <span class="p">...</span><span class="s2">"payload"</span><span class="p">,</span> <span class="nx">signature</span><span class="o">:</span> <span class="s2">"sig"</span> <span class="p">}</span>
+<span class="p">{</span><span class="mi">0</span><span class="o">:</span> <span class="s2">"p"</span><span class="p">,</span> <span class="mi">1</span><span class="o">:</span> <span class="s2">"a"</span><span class="p">,</span> <span class="mi">2</span><span class="o">:</span> <span class="s2">"y"</span><span class="p">,</span> <span class="mi">3</span><span class="o">:</span> <span class="s2">"l"</span><span class="p">,</span> <span class="mi">4</span><span class="o">:</span> <span class="s2">"o"</span><span class="p">,</span> <span class="mi">5</span><span class="o">:</span> <span class="s2">"a"</span><span class="p">,</span> <span class="mi">6</span><span class="o">:</span> <span class="s2">"d"</span><span class="p">,</span> <span class="nx">signature</span><span class="o">:</span> <span class="s2">"sig"</span><span class="p">}</span>
+</pre></div>
+
+</div>
+
+<p>Oops. Once again, the parsing style of programming has helped us out, since if we didn’t “parse” the JSON value into an object by matching on the <code>Object</code> case explicitly, our code would not compile, and if we left off the fallthrough case, we’d get a warning about inexhaustive patterns.</p>
+
+<hr />
+
+<p>Let’s look at one more example of this phenomenon before moving on. Suppose we’re consuming an API that returns user IDs, and suppose those IDs happen to be UUIDs. A straightforward interpretation of “parse, don’t validate” might suggest we represent user IDs in our Haskell API client using a <code>UUID</code> type:</p>
+
+<div class="brush: haskell">
+ <div class="source">
+  <pre><span></span><span class="kr">type</span> <span class="kt">UserId</span> <span class="ow">=</span> <span class="kt">UUID</span>
+</pre></div>
+
+</div>
+
+<p>However, our Reddit commenter would likely take umbrage with this! Unless the API contract explicitly states that all user IDs will be UUIDs, this representation is overstepping our bounds. Although user IDs might be UUIDs today, perhaps they won’t be tomorrow, and then our code would break for no reason! Is this the fault of static type systems?</p>
+
+<p>Again, the answer is no. This is a case of improper data modeling, but the static type system is not at fault—it has simply been misused. The appropriate way to represent a <code>UserId</code> is to define a new, opaque type:</p>
+
+<div class="brush: haskell">
+ <div class="source">
+  <pre><span></span><span class="kr">newtype</span> <span class="kt">UserId</span> <span class="ow">=</span> <span class="kt">UserId</span> <span class="kt">Text</span>
+  <span class="kr">deriving</span> <span class="p">(</span><span class="kt">Eq</span><span class="p">,</span> <span class="kt">FromJSON</span><span class="p">,</span> <span class="kt">ToJSON</span><span class="p">)</span>
+</pre></div>
+
+</div>
+
+<p>Unlike the type alias defined above which simply creates a new name for the existing <code>UUID</code> type, this declaration creates a totally new <code>UserId</code> type that is distinct from all other types, including <code>Text</code>. If we keep the datatype’s constructor private (that is, we don’t export it from the module that defines this type), then the <em>only</em> way to produce a <code>UserId</code> will be to go through its <code>FromJSON</code> parser. Dually, the only things you can do with a <code>UserId</code> are compare it with other <code>UserId</code>s for equality or serialize it using the <code>ToJSON</code> instance. Nothing else is permitted: the type system will prevent you from depending on the remote service’s internal representation of user IDs.</p>
+
+<p>This illustrates another way that static type systems can provide strong, useful guarantees when manipulating completely opaque data. The runtime representation of a <code>UserId</code> is really just a string, but the type system does not allow you to accidentally use it like it’s a string, nor does it allow you to forge a new <code>UserId</code> out of thin air from an arbitrary string.<sup><a href="#2020-01-19-no-dynamic-type-systems-are-not-inherently-more-open-footnote-1-definition" name="2020-01-19-no-dynamic-type-systems-are-not-inherently-more-open-footnote-1-return">1</a></sup></p>
+
+<p>The type system is not a ball and chain forcing you to describe the representation of every value that enters and leaves your program in exquisite detail. Rather, it’s a tool that you can use in whatever way best suits your needs.</p>
+
+<h1 id="reflection-is-not-special">Reflection is not special</h1>
+
+<p>We’ve now thoroughly debunked the claims made by the first commenter, but the question posed by the second commenter may still seem like a loophole in our logic. What <em>is</em> the type of Python’s <code>pickle.load()</code>? For those unfamiliar, <a href="https://docs.python.org/3/library/pickle.html">Python’s cutely-named <code>pickle</code> library</a> allows serializing and deserializing entire Python object graphs. Any object can be serialized and stored in a file using <code>pickle.dump()</code>, and it can be deserialized at a later point in time using <code>pickle.load()</code>.</p>
+
+<p>What makes this appear challenging to our static type system is that the type of value produced by <code>pickle.load()</code> is difficult to predict—it depends entirely on whatever happened to be written to that file using <code>pickle.dump()</code>. This seems inherently dynamic, since we cannot possibly know what type of value it will produce at compile-time. At first blush, this is something a dynamically typed system can pull off, but a statically-typed one just can’t.</p>
+
+<p>However, it turns out this situation is actually identical to the previous examples using JSON, and the fact that Python’s pickling serializes native Python objects directly does not change things. Why? Well, consider what happens <em>after</em> a program calls <code>pickle.load()</code>. Say you write the following function:</p>
+
+<div class="brush: python">
+ <div class="source">
+  <pre><span></span><span class="k">def</span> <span class="nf">load_value</span><span class="p">(</span><span class="n">f</span><span class="p">):</span>
+  <span class="n">val</span> <span class="o">=</span> <span class="n">pickle</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">f</span><span class="p">)</span>
+  <span class="c1"># do something with `val`</span>
+</pre></div>
+
+</div>
+
+<p>The trouble is that <code>val</code> can now be of <em>any</em> type, and just as you can’t do anything useful with truly unknown, unstructured input, you can’t do anything with a value unless you know at least something about it. If you call any method or access any field on the result, then you’ve already made an assumption about what sort of thing <code>pickle.load(f)</code> returned—and it turns out those assumptions <em>are</em> <code>val</code>’s type!</p>
+
+<p>For example, imagine the only thing you do with <code>val</code> is call the <code>val.foo()</code> method and return its result, which is expected to be a string. If we were writing Java, then the expected type of <code>val</code> would be quite straightforward—we’d expect it to be an instance of the following interface:</p>
+
+<div class="brush: java">
+ <div class="source">
+  <pre><span></span><span class="kd">interface</span> <span class="nc">Foo</span> <span class="kd">extends</span> <span class="n">Serializable</span> <span class="o">{</span>
+  <span class="n">String</span> <span class="nf">foo</span><span class="o">();</span>
+<span class="o">}</span>
+</pre></div>
+
+</div>
+
+<p>And indeed, it turns out a <code>pickle.load()</code>-like function can be given a perfectly reasonable type in Java:</p>
+
+<div class="brush: java">
+ <div class="source">
+  <pre><span></span><span class="kd">static</span> <span class="o">&lt;</span><span class="n">T</span> <span class="kd">extends</span> <span class="n">Serializable</span><span class="o">&gt;</span> <span class="n">Optional</span><span class="o">&lt;</span><span class="n">T</span><span class="o">&gt;</span> <span class="nf">load</span><span class="o">(</span><span class="n">InputStream</span> <span class="n">in</span><span class="o">,</span> <span class="n">Class</span><span class="o">&lt;?</span> <span class="kd">extends</span> <span class="n">T</span><span class="o">&gt;</span> <span class="n">cls</span><span class="o">);</span>
+</pre></div>
+
+</div>
+
+<p>Nitpickers will complain that this isn’t the same as <code>pickle.load()</code>, since you have to pass a <code>Class&lt;T&gt;</code> token to choose what type of thing you want ahead of time. However, nothing is stopping you from passing <code>Serializable.class</code> and branching on the type later, after the object has been loaded. And that’s the key point: the instant you do <em>anything</em> with the object, you must know something about its type, even in a dynamically typed language! The statically-typed language just forces you to be more explicit about it, just as it did when we were talking about JSON payloads.</p>
+
+<hr />
+
+<p>Can we do this in Haskell, too? Absolutely—we can use <a href="https://hackage.haskell.org/package/serialise">the <code>serialise</code> library</a>, which has a similar API to the Java one mentioned above. It also happens to have a very similar interface to <a href="https://hackage.haskell.org/package/aeson">the Haskell JSON library, aeson</a>, as it turns out the problem of dealing with unknown JSON data is not terribly different from dealing with an unknown Haskell value—at some point, you have to do a little bit of parsing to do anything with the value.</p>
+
+<p>That said, while you <em>can</em> emulate the dynamic typing of <code>pickle.load()</code> if you really want to by deferring the type check until the last possible moment, the reality is that doing so is almost never actually useful. At some point, you have to make assumptions about the structure of the value in order to use it, and you know what those assumptions are because <em>you wrote the code</em>. While there are extremely rare exceptions to this that require true dynamic code loading (such as, say, implementing a REPL for your programming language), they do not occur in day-to-day programming, and programmers in statically-typed languages are perfectly happy to supply their assumptions up front.</p>
+
+<p>This is one of the fundamental disconnects between the static typing camp and the dynamic typing camp. Programmers working in statically-typed languages are perplexed when a programmer suggests they can do something in a dynamically typed language that a statically-typed language “fundamentally” prevents, since a programmer in a statically-typed language may reply the value has simply not been given a sufficiently precise type. From the perspective of a programmer working in a dynamically-typed language, the type system restricts the space of legal behaviors, but from the perspective of a programmer working in a statically-typed language, the set of legal behaviors <em>is</em> a value’s type.</p>
+
+<p>Neither of these perspectives are actually inaccurate, from the appropriate point of view. Static type systems <em>do</em> impose restrictions on program structure, as it is provably impossible to reject <em>all</em> bad programs in a Turing-complete language without also rejecting some good ones (this is <a href="https://en.wikipedia.org/wiki/Rice's_theorem">Rice’s theorem</a>). But it is simultaneously true that the impossibility of solving the general problem does not preclude solving a slightly more restricted version of the problem in a useful way, and a lot of the so-called “fundamental” inabilities of static type systems are not fundamental at all.</p>
+
+<h1 id="appendix-the-reality-behind-the-myths">Appendix: the reality behind the myths</h1>
+
+<p>The key thesis of this blog post has now been delivered: static type systems are not fundamentally worse than dynamic type systems at processing data with an open or partially-known structure. The sorts of claims made in the comments cited at the beginning of this blog post are not accurate depictions of what statically-typed program construction is like, and they misunderstand the limitations of static typing disciplines while exaggerating the capabilities of dynamically typed disciplines.</p>
+
+<p>However, although greatly exaggerated, these myths do have some basis in reality. They appear to have developed at least in part from a misunderstanding about the differences between structural and nominal typing. This difference is unfortunately too big to address in this blog post, as it could likely fill several blog posts of its own. About six months ago I attempted to write a blog post on the subject, but I didn’t think it came out very compelling, so I scrapped it. Maybe someday I’ll find a better way to communicate the ideas.</p>
+
+<p>Although I can’t give it the full treatment it deserves right now, I’d still like to touch on the idea briefly so that interested readers may be able to find other resources on the subject should they wish to do so. The key idea is that many dynamically typed languages idiomatically reuse simple data structures like hashmaps to represent what in statically-typed languages are often represented by bespoke datatypes (usually defined as classes or structs).</p>
+
+<p>These two styles facilitate very different flavors of programming. A JavaScript or Clojure program may represent a record as a hashmap from string or symbol keys to values, written using object or hash literals and manipulated using ordinary functions from the standard library that manipulate keys and values in a generic way. This makes it straightforward to take two records and union their fields or to take an arbitrary (or even dynamic) subselection of fields from an existing record.</p>
+
+<p>In contrast, most static type systems do not allow such free-form manipulation of records because records are not maps at all but unique types distinct from all other types. These types are uniquely identified by their (fully-qualified) name, hence the term <em>nominal typing</em>. If you wish to take a subselection of a struct’s fields, you must define an entirely new struct; doing this often creates an explosion of awkward boilerplate.</p>
+
+<p>This is one of the main ideas that Rich Hickey has discussed in many of his talks that criticize static typing. He has advanced the idea that this ability to fluidly merge, separate, and transform records makes dynamic typing particularly suited to the domain of distributed, open systems. Unfortunately, this rhetoric has two significant flaws:</p>
+
+<ol>
+ <li>
+  <p>It skirts too close to calling this a fundamental limitation of type systems, suggesting that it is not simply inconvenient but <em>impossible</em> to model such systems in a nominal, static type system. Not only is this not true (as this blog post has demonstrated), it misdirects people away from the point of his that actually has value: the practical, pragmatic advantage of a more structural approach to data modeling.</p></li>
+ <li>
+  <p>It confuses the structural/nominal distinction with the dynamic/static distinction, incorrectly creating the impression that the fluid merging and splitting of records represented as key-value maps is only possible in a dynamically typed language. In fact, not only can statically-typed languages support structural typing, many dynamically-typed languages also support nominal typing. These axes have historically loosely correlated, but they are theoretically orthogonal.</p></li></ol>
+
+<p>For counterexamples to these claims, consider Python classes, which are quite nominal despite being dynamic, and TypeScript interfaces, which are structural despite being static. Indeed, modern statically-typed languages are increasingly acquiring native support for structurally-typed records. In these systems, record types work much like hashes in Clojure—they are not distinct, named types but rather anonymous collections of key-value pairs—and they support many of the same expressive manipulation operations that Clojure’s hashes do, all within a statically-typed framework.</p>
+
+<p>If you are interested in exploring static type systems with strong support for structural typing, I would recommend taking a look at any of TypeScript, Flow, PureScript, Elm, OCaml, or Reason, all of which have some sort of support for structurally typed records. What I would <em>not</em> recommend for this purpose is Haskell, which has abysmal support for structural typing; Haskell is (for various reasons outside the scope of this blog post) aggressively nominal.<sup><a href="#2020-01-19-no-dynamic-type-systems-are-not-inherently-more-open-footnote-2-definition" name="2020-01-19-no-dynamic-type-systems-are-not-inherently-more-open-footnote-2-return">2</a></sup></p>
+
+<p>Does this mean Haskell is bad, or that it cannot be practically used to solve these kinds of problems? No, certainly not; there are many ways to model these problems in Haskell that work well enough, though some of them suffer from significant boilerplate. The core thesis of this blog post applies just as much to Haskell as it does to any of the other languages I mentioned above. However, I would be remiss not to mention this distinction, as it may give programmers from a dynamically-typed background who have historically found statically-typed languages much more frustrating to work with a better understanding of the <em>real</em> reason they feel that way. (Essentially all mainstream, statically-typed OOP languages are even more nominal than Haskell!)</p>
+
+<p>As closing thoughts: this blog post is not intended to start a flame war, nor is it intended to be an assault on dynamically typed programming. There are many patterns in dynamically-typed languages that are genuinely difficult to translate into a statically-typed context, and I think discussions of those patterns can be productive. The purpose of this blog post is to clarify why one particular discussion is <em>not</em> productive, so please: stop making these arguments. There are much more productive conversations to have about typing than this.</p>
+
+<div class="footnotes">
+ <ol>
+  <li id="2020-01-19-no-dynamic-type-systems-are-not-inherently-more-open-footnote-1-definition" class="footnote-definition">
+   <p>Technically, you could abuse the <code>FromJSON</code> instance to convert an arbitrary string to a <code>UserId</code>, but this would not be as easy as it sounds, since <code>fromJSON</code> can fail. This means you’d somehow have to handle that failure case, so this trick would be unlikely to get you very far unless you’re already in a context where you’re doing input parsing… at which point it would be easier to just do the right thing. So yes, the type system doesn’t prevent you from going out of your way to shoot yourself in the foot, but it guides you towards the right solution (and there is no safeguard in existence that can completely protect a programmer from making their own life miserable if they are determined to do so).&nbsp;<a href="#2020-01-19-no-dynamic-type-systems-are-not-inherently-more-open-footnote-1-return">↩</a></p></li>
+  <li id="2020-01-19-no-dynamic-type-systems-are-not-inherently-more-open-footnote-2-definition" class="footnote-definition">
+   <p>I consider this to be Haskell’s most significant flaw at the time of this writing.&nbsp;<a href="#2020-01-19-no-dynamic-type-systems-are-not-inherently-more-open-footnote-2-return">↩</a></p></li></ol></div>
+  <footer>
+    <ul class="pager">
+      <li class="previous">
+        <a href="/blog/2020/08/13/types-as-axioms-or-playing-god-with-static-types/">&larr; <em>Types as axioms, or: playing god with static types</em></a>
+      </li>
+      <li class="next">
+        <a href="/blog/2019/11/05/parse-don-t-validate/"><em>Parse, don’t validate</em> &rarr;</a>
+      </li>
+    </ul>
+  </footer>
+</article>
+        </div>
+      </section>
+      <footer>
+        <div class="content">
+          <h2 id="copyright-notice">© 2021, Alexis King</h2>
+          <h3>
+            Built with <a href="https://github.com/greghendershott/frog">Frog</a>, the
+            <strong>fr</strong>ozen bl<strong>og</strong> tool.
+          </h3>
+          <h3>
+            Feeds are available via <a href="/feeds/all.atom.xml">Atom</a>
+            or <a href="/feeds/all.rss.xml">RSS</a>.
+          </h3>
+        </div>
+      </footer>
+    </div>
+  </body>
+</html>

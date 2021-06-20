@@ -1,0 +1,118 @@
+<?xml version="1.0" encoding="utf-8"?> 
+<rss version="2.0">
+ <channel>
+  <title>Alexis King's Blog: Posts tagged 'rails'</title>
+  <description>Alexis King's Blog: Posts tagged 'rails'</description>
+  <link>http://lexi-lambda.github.io/tags/rails.html</link>
+  <lastBuildDate>Wed, 23 Sep 2015 16:30:12 UT</lastBuildDate>
+  <pubDate>Wed, 23 Sep 2015 16:30:12 UT</pubDate>
+  <ttl>1800</ttl>
+  <item>
+   <title>Canonical factories for testing with factory_girl_api</title>
+   <link>http://lexi-lambda.github.io/blog/2015/09/23/canonical-factories-for-testing-with-factory-girl-api/?utm_source=rails&amp;utm_medium=RSS</link>
+   <guid isPermaLink="false">urn:http-lexi-lambda-github-io:-blog-2015-09-23-canonical-factories-for-testing-with-factory-girl-api</guid>
+   <pubDate>Wed, 23 Sep 2015 16:30:12 UT</pubDate>
+   <author>Alexis King</author>
+   <description>
+&lt;p&gt;Modern web applications are often built as &lt;em&gt;single-page apps&lt;/em&gt;, which are great for keeping concerns separated, but problematic when tested. Logic needs to be duplicated in front- and back-end test suites, and if the two apps diverge, the tests won&amp;rsquo;t catch the failure. I haven&amp;rsquo;t found a very good solution to this problem aside from brittle, end-to-end integration tests.&lt;/p&gt;
+
+&lt;p&gt;To attempt to address a fraction of this problem, I built &lt;a href="https://github.com/lexi-lambda/factory_girl_api"&gt;factory_girl_api&lt;/a&gt;, a way to share context setup between both sides of the application.&lt;/p&gt;
+&lt;!-- more--&gt;
+
+&lt;h1 id="a-brief-overview-of-factorygirl"&gt;A brief overview of factory_girl&lt;/h1&gt;
+
+&lt;p&gt;In the land of Ruby and Rails, &lt;a href="https://github.com/thoughtbot/factory_girl"&gt;factory_girl&lt;/a&gt; is a convenient gem for managing factories for models. Out of the box, it integrates with Rails&amp;rsquo; default ORM, ActiveRecord, and provides declarative syntax for describing what attributes factories should initialize. For example, a factory declaration used to create a widget might look like this:&lt;/p&gt;
+
+&lt;div class="brush: ruby"&gt;
+ &lt;div class="source"&gt;
+  &lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;span class="no"&gt;FactoryGirl&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;define&lt;/span&gt; &lt;span class="k"&gt;do&lt;/span&gt;
+  &lt;span class="n"&gt;factory&lt;/span&gt; &lt;span class="ss"&gt;:widget&lt;/span&gt; &lt;span class="k"&gt;do&lt;/span&gt;
+    &lt;span class="n"&gt;sequence&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="ss"&gt;:name&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="p"&gt;{&lt;/span&gt; &lt;span class="o"&gt;|&lt;/span&gt;&lt;span class="nb"&gt;id&lt;/span&gt;&lt;span class="o"&gt;|&lt;/span&gt; &lt;span class="s1"&gt;&amp;#39;Widget #&amp;#39;&lt;/span&gt; &lt;span class="o"&gt;+&lt;/span&gt; &lt;span class="nb"&gt;id&lt;/span&gt; &lt;span class="p"&gt;}&lt;/span&gt;
+    &lt;span class="n"&gt;price&lt;/span&gt; &lt;span class="mi"&gt;10&lt;/span&gt;
+
+    &lt;span class="n"&gt;trait&lt;/span&gt; &lt;span class="ss"&gt;:expensive&lt;/span&gt; &lt;span class="k"&gt;do&lt;/span&gt;
+      &lt;span class="n"&gt;price&lt;/span&gt; &lt;span class="mi"&gt;1000&lt;/span&gt;
+    &lt;span class="k"&gt;end&lt;/span&gt;
+  &lt;span class="k"&gt;end&lt;/span&gt;
+&lt;span class="k"&gt;end&lt;/span&gt;
+&lt;/pre&gt;&lt;/div&gt;
+
+&lt;/div&gt;
+
+&lt;p&gt;This makes it easy to create new instances of &lt;code&gt;Widget&lt;/code&gt; and use them for unit tests. For example, this would create and persist a widget with a unique name and a price of 10 units:&lt;/p&gt;
+
+&lt;div class="brush: ruby"&gt;
+ &lt;div class="source"&gt;
+  &lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;span class="n"&gt;widget&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="no"&gt;FactoryGirl&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;create&lt;/span&gt; &lt;span class="ss"&gt;:widget&lt;/span&gt;
+&lt;/pre&gt;&lt;/div&gt;
+
+&lt;/div&gt;
+
+&lt;p&gt;We can also create more expensive widgets by using the &lt;code&gt;:expensive&lt;/code&gt; trait.&lt;/p&gt;
+
+&lt;div class="brush: ruby"&gt;
+ &lt;div class="source"&gt;
+  &lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;span class="n"&gt;expensive_widget&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="no"&gt;FactoryGirl&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;create&lt;/span&gt; &lt;span class="ss"&gt;:widget&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="ss"&gt;:expensive&lt;/span&gt;
+&lt;/pre&gt;&lt;/div&gt;
+
+&lt;/div&gt;
+
+&lt;p&gt;Any number of traits can be specified at once. Additionally, it is possible to override individual attributes manually.&lt;/p&gt;
+
+&lt;div class="brush: ruby"&gt;
+ &lt;div class="source"&gt;
+  &lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;span class="n"&gt;fancy_widget&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="no"&gt;FactoryGirl&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;create&lt;/span&gt; &lt;span class="ss"&gt;:widget&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="ss"&gt;:expensive&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="nb"&gt;name&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt; &lt;span class="s1"&gt;&amp;#39;Fancy Widget&amp;#39;&lt;/span&gt;
+&lt;/pre&gt;&lt;/div&gt;
+
+&lt;/div&gt;
+
+&lt;p&gt;It works well, and it keeps initialization boilerplate out of individual tests.&lt;/p&gt;
+
+&lt;h1 id="testing-on-the-front-end"&gt;Testing on the front-end&lt;/h1&gt;
+
+&lt;p&gt;Trouble arises when we need to write tests for the JavaScript application that use the same models. Suddenly, we need to duplicate the same kind of logic in our front-end tests. We might start out by setting up object state manually:&lt;/p&gt;
+
+&lt;div class="brush: js"&gt;
+ &lt;div class="source"&gt;
+  &lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;span class="kd"&gt;var&lt;/span&gt; &lt;span class="nx"&gt;fancyWidget&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="k"&gt;new&lt;/span&gt; &lt;span class="nx"&gt;Widget&lt;/span&gt;&lt;span class="p"&gt;({&lt;/span&gt;
+  &lt;span class="nx"&gt;name&lt;/span&gt;&lt;span class="o"&gt;:&lt;/span&gt; &lt;span class="s1"&gt;&amp;#39;Fancy Widget&amp;#39;&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;
+  &lt;span class="nx"&gt;price&lt;/span&gt;&lt;span class="o"&gt;:&lt;/span&gt; &lt;span class="mi"&gt;1000&lt;/span&gt;
+&lt;span class="p"&gt;});&lt;/span&gt;
+&lt;/pre&gt;&lt;/div&gt;
+
+&lt;/div&gt;
+
+&lt;p&gt;Things can quickly get out of hand when models grow complex. Even if we use a factory library in JavaScript, it&amp;rsquo;s possible for our front-end factories to diverge from their back-end counterparts. This means our integration tests will fail, but our unit tests will still blindly pass. Having to duplicate all that logic in two places is dangerous. It would be nice to have a &lt;em&gt;single, canonical source&lt;/em&gt; for all of our factories.&lt;/p&gt;
+
+&lt;h2 id="reusing-server-side-factories-with-factorygirlapi"&gt;Reusing server-side factories with factory_girl_api&lt;/h2&gt;
+
+&lt;p&gt;To help alleviate this problem, I created the &lt;a href="https://github.com/lexi-lambda/factory_girl_api"&gt;factory_girl_api&lt;/a&gt; gem for Rails and the &lt;a href="https://github.com/lexi-lambda/angular-factory-girl-api"&gt;angular-factory-girl-api&lt;/a&gt; Bower package for Angular. These packages cooperate with each other to allow server-side factories to be used in JavaScript tests.&lt;/p&gt;
+
+&lt;p&gt;The Angular module provides a service with syntax comparable to factory_girl itself. Both traits and custom attributes are supported:&lt;/p&gt;
+
+&lt;div class="brush: js"&gt;
+ &lt;div class="source"&gt;
+  &lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;span class="nx"&gt;FactoryGirl&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="nx"&gt;create&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="s1"&gt;&amp;#39;widget&amp;#39;&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="s1"&gt;&amp;#39;expensive&amp;#39;&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="p"&gt;{&lt;/span&gt; &lt;span class="nx"&gt;name&lt;/span&gt;&lt;span class="o"&gt;:&lt;/span&gt; &lt;span class="s1"&gt;&amp;#39;Fancy Widget&amp;#39;&lt;/span&gt; &lt;span class="p"&gt;});&lt;/span&gt;
+&lt;/pre&gt;&lt;/div&gt;
+
+&lt;/div&gt;
+
+&lt;p&gt;In this case, however, a round-trip API call must be made to the server in order to call the factory and return the result. Because of this, the Angular version of FactoryGirl returns a promise that is resolved with the serialized version of the model, which can then be used as sample data in unit tests.&lt;/p&gt;
+
+&lt;h2 id="the-problems-with-relying-on-the-server-for-data"&gt;The problems with relying on the server for data&lt;/h2&gt;
+
+&lt;p&gt;In my preliminary use of this tool, it works. In many ways, it&amp;rsquo;s much nicer than duplicating logic in both places. However, I&amp;rsquo;m not &lt;em&gt;completely&lt;/em&gt; convinced it&amp;rsquo;s the right solution yet.&lt;/p&gt;
+
+&lt;p&gt;First of all, it couples the front-end to the back-end, even during unit testing, which is disappointing. It means that a server needs to be running (in test mode) in order for the tests to run at all. For the kinds of projects I work on, this isn&amp;rsquo;t really a bad thing, and the benefits of the reduced duplication far outweigh the downsides.&lt;/p&gt;
+
+&lt;p&gt;My real concern is that this solves a very small facet of the general problem with fragile front-end test suites. Single-page applications usually depend wholly on their integration with back-end APIs. If those APIs change, the tests will continue to happily pass as long as the API is simply mocked, which seems to be the usual solution in the front-end universe. This is, frankly, unacceptable in real application development.&lt;/p&gt;
+
+&lt;h2 id="potential-improvements-and-other-paths-to-success"&gt;Potential improvements and other paths to success&lt;/h2&gt;
+
+&lt;p&gt;I am ultimately unsatisfied with this approach, but writing brittle end-to-end integration tests is not the solution. This &lt;em&gt;kind&lt;/em&gt; of thing may be a step in the right direction: writing tests that aren&amp;rsquo;t really pure unit tests, but also aren&amp;rsquo;t fragile full-stack integration tests. This is a middle-ground that seems infrequently traveled, perhaps due to a lack of tooling (or perhaps because it just doesn&amp;rsquo;t work). I don&amp;rsquo;t know.&lt;/p&gt;
+
+&lt;p&gt;Either way, I&amp;rsquo;m interested in where this is headed, and I&amp;rsquo;ll be curious to see if I run into any roadblocks using the workflow I&amp;rsquo;ve created. If anyone else is interested in playing with these two libraries, the READMEs are much more comprehensive than what I&amp;rsquo;ve covered here. Take a look, and give them a spin!&lt;/p&gt;
+
+&lt;ul&gt;
+ &lt;li&gt;&lt;a href="https://github.com/lexi-lambda/factory_girl_api"&gt;factory_girl_api&lt;/a&gt;&lt;/li&gt;
+ &lt;li&gt;&lt;a href="https://github.com/lexi-lambda/angular-factory-girl-api"&gt;angular-factory-girl-api&lt;/a&gt;&lt;/li&gt;&lt;/ul&gt;</description></item></channel></rss>

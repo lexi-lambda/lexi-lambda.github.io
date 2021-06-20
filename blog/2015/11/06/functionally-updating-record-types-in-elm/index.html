@@ -1,0 +1,378 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <title>Functionally updating record types in Elm</title>
+    <meta name="description" content="Elm is a wonderful language for building web apps, and I love so much of its approach to language design. Elm does so many things _right_ straight out of the box, and that's a real breath of fresh air in the intersection of functional programming and web ...">
+    <meta name="author"      content="Alexis King">
+    <meta name="keywords"    content="elm">
+    <meta name="viewport"    content="width=device-width, initial-scale=1.0">
+    <link rel="icon"      href="/favicon.ico">
+    <link rel="canonical" href="http://lexi-lambda.github.io/blog/2015/11/06/functionally-updating-record-types-in-elm/">
+    <link rel="next" href="/blog/2015/09/23/canonical-factories-for-testing-with-factory-girl-api/">
+    <link rel="prev" href="/blog/2015/12/21/adts-in-typed-racket-with-macros/">
+    <!-- CSS -->
+    <link rel="stylesheet" type="text/css" href="https://fonts.googleapis.com/css?family=Merriweather+Sans:400,300,300italic,400italic,700,700italic,800,800italic|Merriweather:400,300,300italic,400italic,700,700italic,900,900italic|Fira+Code:300,400,500,600,700">
+    <link rel="stylesheet" type="text/css" href="/css/application.min.css">
+    <link rel="stylesheet" type="text/css" href="/css/pygments.min.css">
+    <!-- Feeds -->
+    <link rel="alternate" type="application/atom+xml"
+          href="/feeds/all.atom.xml" title="Atom Feed">
+    <link rel="alternate" type="application/rss+xml"
+          href="/feeds/all.rss.xml" title="RSS Feed">
+    <!-- JS -->
+    <!-- <script src="/js/application.min.js"></script> -->
+    <script type="text/javascript">
+      (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+      (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+      m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+      })(window,document,'script','//www.google-analytics.com/analytics.js','ga');
+
+      ga('create', 'UA-65250372-1', 'auto');
+      ga('send', 'pageview');
+    </script>
+  </head>
+  <body>
+    <div id="page-content">
+      <!-- Navigation Bar -->
+      <header>
+        <nav role="navigation" class="navigation-bar">
+          <ul class="navigation-items left">
+            <li id="blog-title-header"><a href="/"><h1>Alexis King</h1></a></li>
+          </ul>
+          <ul class="navigation-items center"></ul>
+          <ul class="navigation-items right">
+            <li><a href="/">Home</a></li>
+            <li><a href="/resume.html">About Me</a></li>
+          </ul>
+        </nav>
+      </header>
+      <section role="main">
+        <!-- Main column -->
+        <div class="content" class="col-md-12">
+
+
+
+          <article class="main">
+  <header>
+    <h1 class="title">Functionally updating record types in Elm</h1>
+    <div class='date-and-tags'>
+      <time datetime="2015-11-06T19:58:40">
+        2015-11-06
+      </time>
+      <span style="margin: 0 3px">⦿</span>
+      <span class="tags"><a href="/tags/elm.html">elm</a></span>
+    </div>
+  </header>
+
+<p><a href="http://elm-lang.org">Elm</a> is a wonderful language for building web apps, and I love so much of its approach to language design. Elm does so many things <em>right</em> straight out of the box, and that&rsquo;s a real breath of fresh air in the intersection of functional programming and web development. Still, it gets one thing wrong, and unfortunately, that one thing is incredibly important. Elm took the &ldquo;functions&rdquo; out of &ldquo;functional record types&rdquo;.</p>
+<!-- more-->
+
+<p>Almost any software program, at its core, is all about data. Maybe it&rsquo;s about computing data, maybe it&rsquo;s about manipulating data, or maybe it&rsquo;s about displaying data, but at the end of the day, some sort of data model is going to be needed. The functional model is a breathtakingly elegant system for handling data and shuttling it around throughout a program, and <a href="https://en.wikipedia.org/wiki/Functional_reactive_programming">functional reactive programming</a>, which Elm uses to model event-like interactions, makes this model work even better. The really important thing, though, is what tools Elm actually gives you to model your data.</p>
+
+<h1 id="a-brief-primer-on-elm-records">A brief primer on Elm records</h1>
+
+<p>Elm supports all the core datatypes one would expect—numbers, strings, booleans, optionals, etc.—and it allows users to define their own types with ADTs. However, Elm also provides another datatype, which it calls &ldquo;records&rdquo;. Records are similar to objects in JavaScript: they&rsquo;re effectively key-value mappings. They&rsquo;re cool data structures, and they work well. Here&rsquo;s an example of creating a <code>Point</code> datatype in Elm:</p>
+
+<div class="brush: elm">
+ <div class="source">
+  <pre><span></span><span class="kr">type</span> <span class="kr">alias</span> <span class="kt">Point</span> <span class="nf">=</span>
+  <span class="p">{</span> <span class="nv">x</span> <span class="nf">:</span> <span class="kt">Float</span><span class="p">,</span> <span class="nv">y</span> <span class="nf">:</span> <span class="kt">Float</span> <span class="p">}</span>
+</pre></div>
+
+</div>
+
+<p>Notice that <code>Point</code> is declared as a type <em>alias</em>, not as a separate type like an ADT. This is because record types are truly encoded in the type system as values with named fields, not as disparate types. This allows for some fun tricks, but that&rsquo;s outside the scope of this blog post.</p>
+
+<h1 id="the-good">The good</h1>
+
+<p>What I&rsquo;d like to discuss is what it looks like to <em>manipulate</em> these data structures. Constructing them is completely painless, and reading from them is super simple. This is where the record system gets everything very <em>right</em>.</p>
+
+<div class="brush: elm">
+ <div class="source">
+  <pre><span></span><span class="nv">origin</span> <span class="nf">:</span> <span class="kt">Point</span>
+<span class="nv">origin</span> <span class="nf">=</span> <span class="p">{</span> <span class="nv">x</span> <span class="nf">=</span> <span class="mi">0</span><span class="p">,</span> <span class="nv">y</span> <span class="nf">=</span> <span class="mi">0</span> <span class="p">}</span>
+
+<span class="nv">distanceBetween</span> <span class="nf">:</span> <span class="kt">Point</span> <span class="nf">-&gt;</span> <span class="kt">Point</span> <span class="nf">-&gt;</span> <span class="kt">Float</span>
+<span class="nv">distanceBetween</span> <span class="nv">a</span> <span class="nv">b</span> <span class="nf">=</span>
+  <span class="kr">let</span> <span class="nv">dx</span> <span class="nf">=</span> <span class="nv">a</span><span class="nf">.</span><span class="nv">x</span> <span class="nf">-</span> <span class="nv">b</span><span class="nf">.</span><span class="nv">x</span>
+      <span class="nv">dy</span> <span class="nf">=</span> <span class="nv">a</span><span class="nf">.</span><span class="nv">y</span> <span class="nf">-</span> <span class="nv">b</span><span class="nf">.</span><span class="nv">y</span>
+  <span class="kr">in</span> <span class="nv">sqrt</span> <span class="p">(</span><span class="nv">dx</span><span class="nf">*</span><span class="nv">dx</span> <span class="nf">+</span> <span class="nv">dy</span><span class="nf">*</span><span class="nv">dy</span><span class="p">)</span>
+</pre></div>
+
+</div>
+
+<p>The syntax is clean and simple. Most importantly, however, the record system is functional (in the &ldquo;functional programming&rdquo; sense). In a functional system, it&rsquo;s useful to express concepts in terms of function composition, and this is very easy to do in Elm. Creating a function to access a field would normally be clunky if you always needed to do <code>record.field</code> to access the value. Fortunately, Elm provides some sugar:</p>
+
+<div class="brush: elm">
+ <div class="source">
+  <pre><span></span><span class="c1">-- These two expressions are equivalent:</span>
+<span class="p">(</span><span class="nf">\</span><span class="nv">record</span> <span class="nf">-&gt;</span> <span class="nv">record</span><span class="nf">.</span><span class="nv">field</span><span class="p">)</span>
+<span class="nf">.</span><span class="nv">field</span>
+</pre></div>
+
+</div>
+
+<p>Using the <code>.field</code> shorthand allows writing some other functions in terms of composition, as most functional programmers would desire:</p>
+
+<div class="brush: elm">
+ <div class="source">
+  <pre><span></span><span class="nv">doubledX</span> <span class="nf">:</span> <span class="kt">Point</span> <span class="nf">-&gt;</span> <span class="kt">Float</span>
+<span class="nv">doubledX</span> <span class="nf">=</span> <span class="p">(</span><span class="nf">(*)</span> <span class="mi">2</span><span class="p">)</span> <span class="nf">&lt;&lt;</span> <span class="nf">.</span><span class="nv">x</span>
+</pre></div>
+
+</div>
+
+<p>This satisfies me.</p>
+
+<h1 id="the-bad">The bad</h1>
+
+<p>So if everything in Elm is so great, what am I complaining about? Well, while the syntax to access fields is convenient, the syntax to <em>functionally set</em> fields is questionably clunky. Consider a function that accepts a point and returns a new point with its <code>x</code> field set to <code>0</code>:</p>
+
+<div class="brush: elm">
+ <div class="source">
+  <pre><span></span><span class="nv">zeroedX</span> <span class="nf">:</span> <span class="kt">Point</span> <span class="nf">-&gt;</span> <span class="kt">Point</span>
+<span class="nv">zeroedX</span> <span class="nv">point</span> <span class="nf">=</span> <span class="p">{</span> <span class="nv">point</span> <span class="nf">|</span> <span class="nv">x</span> <span class="nf">&lt;-</span> <span class="mi">0</span> <span class="p">}</span>
+</pre></div>
+
+</div>
+
+<p>This doesn&rsquo;t look too bad, does it? It&rsquo;s clear and concise. To me, though, there&rsquo;s something deeply wrong here&hellip; this function has a lot of redundancy! It seems to me like we should be able to write this function more clearly in a point-free style. The <code>.field</code> shorthand &ldquo;functionalizes&rdquo; the record getter syntax, so there must be a function version of the update syntax, right? Maybe it would look something like this:</p>
+
+<div class="brush: elm">
+ <div class="source">
+  <pre><span></span><span class="nv">zeroedX</span> <span class="nf">:</span> <span class="kt">Point</span> <span class="nf">-&gt;</span> <span class="kt">Point</span>
+<span class="nv">zeroedX</span> <span class="nf">=</span> <span class="err">!</span><span class="nv">x</span> <span class="mi">0</span>
+</pre></div>
+
+</div>
+
+<p>But alas, there is no such syntax.</p>
+
+<p>Now you may ask&hellip; why does it matter? This seems trivial, and in fact, the explicit updater syntax may actually be more readable by virtue of how explicit it is. You&rsquo;d be right, because so far, these examples have been horribly contrived. But let&rsquo;s consider a slightly more useful example: <em>functionally updating</em> a record.</p>
+
+<p>What&rsquo;s the difference? Well, say I wanted to take a point and increment its <code>x</code> field by one. Well, I can easily write a function for that:</p>
+
+<div class="brush: elm">
+ <div class="source">
+  <pre><span></span><span class="nv">incrementX</span> <span class="nf">:</span> <span class="kt">Point</span> <span class="nf">-&gt;</span> <span class="kt">Point</span>
+<span class="nv">incrementX</span> <span class="nv">point</span> <span class="nf">=</span> <span class="p">{</span> <span class="nv">point</span> <span class="nf">|</span> <span class="nv">x</span> <span class="nf">&lt;-</span> <span class="nv">point</span><span class="nf">.</span><span class="nv">x</span> <span class="nf">+</span> <span class="mi">1</span> <span class="p">}</span>
+</pre></div>
+
+</div>
+
+<p>Not terrible, though a <em>little</em> verbose. Still, what if we want to also add a function that <em>decrements</em> <code>x</code>?</p>
+
+<div class="brush: elm">
+ <div class="source">
+  <pre><span></span><span class="nv">decrementX</span> <span class="nf">:</span> <span class="kt">Point</span> <span class="nf">-&gt;</span> <span class="kt">Point</span>
+<span class="nv">decrementX</span> <span class="nv">point</span> <span class="nf">=</span> <span class="p">{</span> <span class="nv">point</span> <span class="nf">|</span> <span class="nv">x</span> <span class="nf">&lt;-</span> <span class="nv">point</span><span class="nf">.</span><span class="nv">x</span> <span class="nf">-</span> <span class="mi">1</span> <span class="p">}</span>
+</pre></div>
+
+</div>
+
+<p>Oh, gosh. That&rsquo;s basically the exact same definition but with the operation flipped. Plus we probably want these operations for <code>y</code>, too. Fortunately, there&rsquo;s an easy solution: just pass a function in to <em>transform</em> the value! We can define an <code>updateX</code> function that allows us to do that easily, then we can define our derived operations in terms of that:</p>
+
+<div class="brush: elm">
+ <div class="source">
+  <pre><span></span><span class="nv">updateX</span> <span class="nf">:</span> <span class="p">(</span><span class="kt">Float</span> <span class="nf">-&gt;</span> <span class="kt">Float</span><span class="p">)</span> <span class="nf">-&gt;</span> <span class="kt">Point</span> <span class="nf">-&gt;</span> <span class="kt">Point</span>
+<span class="nv">updateX</span> <span class="nv">f</span> <span class="nv">point</span> <span class="nf">=</span> <span class="p">{</span> <span class="nv">point</span> <span class="nf">|</span> <span class="nv">x</span> <span class="nf">&lt;-</span> <span class="nv">f</span> <span class="nv">point</span><span class="nf">.</span><span class="nv">x</span> <span class="p">}</span>
+
+<span class="nv">incrementX</span> <span class="nf">:</span> <span class="kt">Point</span> <span class="nf">-&gt;</span> <span class="kt">Point</span>
+<span class="nv">incrementX</span> <span class="nf">=</span> <span class="nv">updateX</span> <span class="p">(</span><span class="nf">(+)</span> <span class="mi">1</span><span class="p">)</span>
+
+<span class="nv">decrementX</span> <span class="nf">:</span> <span class="kt">Point</span> <span class="nf">-&gt;</span> <span class="kt">Point</span>
+<span class="nv">decrementX</span> <span class="nf">=</span> <span class="nv">updateX</span> <span class="p">(</span><span class="nf">\</span><span class="nv">x</span> <span class="nf">-&gt;</span> <span class="nv">x</span> <span class="nf">-</span> <span class="mi">1</span><span class="p">)</span>
+</pre></div>
+
+</div>
+
+<p>Not only is that much cleaner, but we can now use it to implement all sorts of other operations that allow us to add, subtract, multiply, or divide the <code>x</code> field. Now we just need to generalize our solution to work with the <code>x</code> <em>and</em> <code>y</code> fields!</p>
+
+<p>Oh, wait. <strong>We can&rsquo;t.</strong></p>
+
+<h1 id="the-ugly">The ugly</h1>
+
+<p>This is where everything breaks down completely. Elm does not offer enough abstraction to reduce this level of crazy duplication:</p>
+
+<div class="brush: elm">
+ <div class="source">
+  <pre><span></span><span class="nv">updateX</span> <span class="nf">:</span> <span class="p">(</span><span class="kt">Float</span> <span class="nf">-&gt;</span> <span class="kt">Float</span><span class="p">)</span> <span class="nf">-&gt;</span> <span class="kt">Point</span> <span class="nf">-&gt;</span> <span class="kt">Point</span>
+<span class="nv">updateX</span> <span class="nv">f</span> <span class="nv">point</span> <span class="nf">=</span> <span class="p">{</span> <span class="nv">point</span> <span class="nf">|</span> <span class="nv">x</span> <span class="nf">&lt;-</span> <span class="nv">f</span> <span class="nv">point</span><span class="nf">.</span><span class="nv">x</span> <span class="p">}</span>
+
+<span class="nv">incrementX</span> <span class="nf">:</span> <span class="kt">Point</span> <span class="nf">-&gt;</span> <span class="kt">Point</span>
+<span class="nv">incrementX</span> <span class="nf">=</span> <span class="nv">updateX</span> <span class="p">(</span><span class="nf">(+)</span> <span class="mi">1</span><span class="p">)</span>
+
+<span class="nv">decrementX</span> <span class="nf">:</span> <span class="kt">Point</span> <span class="nf">-&gt;</span> <span class="kt">Point</span>
+<span class="nv">decrementX</span> <span class="nf">=</span> <span class="nv">updateX</span> <span class="p">(</span><span class="nf">\</span><span class="nv">x</span> <span class="nf">-&gt;</span> <span class="nv">x</span> <span class="nf">-</span> <span class="mi">1</span><span class="p">)</span>
+
+<span class="nv">updateY</span> <span class="nf">:</span> <span class="p">(</span><span class="kt">Float</span> <span class="nf">-&gt;</span> <span class="kt">Float</span><span class="p">)</span> <span class="nf">-&gt;</span> <span class="kt">Point</span> <span class="nf">-&gt;</span> <span class="kt">Point</span>
+<span class="nv">updateY</span> <span class="nv">f</span> <span class="nv">point</span> <span class="nf">=</span> <span class="p">{</span> <span class="nv">point</span> <span class="nf">|</span> <span class="nv">y</span> <span class="nf">&lt;-</span> <span class="nv">f</span> <span class="nv">point</span><span class="nf">.</span><span class="nv">y</span> <span class="p">}</span>
+
+<span class="nv">incrementY</span> <span class="nf">:</span> <span class="kt">Point</span> <span class="nf">-&gt;</span> <span class="kt">Point</span>
+<span class="nv">incrementY</span> <span class="nf">=</span> <span class="nv">updateY</span> <span class="p">(</span><span class="nf">(+)</span> <span class="mi">1</span><span class="p">)</span>
+
+<span class="nv">decrementY</span> <span class="nf">:</span> <span class="kt">Point</span> <span class="nf">-&gt;</span> <span class="kt">Point</span>
+<span class="nv">decrementY</span> <span class="nf">=</span> <span class="nv">updateY</span> <span class="p">(</span><span class="nf">\</span><span class="nv">x</span> <span class="nf">-&gt;</span> <span class="nv">x</span> <span class="nf">-</span> <span class="mi">1</span><span class="p">)</span>
+</pre></div>
+
+</div>
+
+<p>We sure can give it a shot, though. At the very least, we <em>can</em> implement the increment and decrement functions in a more general way by passing in an updater function:</p>
+
+<div class="brush: elm">
+ <div class="source">
+  <pre><span></span><span class="nv">increment</span> <span class="nf">:</span> <span class="p">((</span><span class="kt">Float</span> <span class="nf">-&gt;</span> <span class="kt">Float</span><span class="p">)</span> <span class="nf">-&gt;</span> <span class="nv">a</span> <span class="nf">-&gt;</span> <span class="nv">a</span><span class="p">)</span> <span class="nf">-&gt;</span> <span class="nv">a</span> <span class="nf">-&gt;</span> <span class="nv">a</span>
+<span class="nv">increment</span> <span class="nv">update</span> <span class="nf">=</span> <span class="nv">update</span> <span class="p">(</span><span class="nf">(+)</span> <span class="mi">1</span><span class="p">)</span>
+</pre></div>
+
+</div>
+
+<p>Now, with <code>updateX</code> and <code>updateY</code>, we can increment either field very clearly and expressively. If we shorten the names to <code>uX</code> and <code>uY</code>, then the resulting code is actually very readable:</p>
+
+<div class="brush: elm">
+ <div class="source">
+  <pre><span></span><span class="nv">pointAbove</span> <span class="nf">=</span> <span class="nv">uY</span> <span class="p">(</span><span class="nf">\</span><span class="nv">x</span> <span class="nf">-&gt;</span> <span class="nv">x</span> <span class="nf">+</span> <span class="mi">1</span><span class="p">)</span>
+<span class="nv">pointBelow</span> <span class="nf">=</span> <span class="nv">uY</span> <span class="p">(</span><span class="nf">\</span><span class="nv">x</span> <span class="nf">-&gt;</span> <span class="nv">x</span> <span class="nf">-</span> <span class="mi">1</span><span class="p">)</span>
+</pre></div>
+
+</div>
+
+<p>It&rsquo;s almost like English now: &ldquo;update Y using this transformation&rdquo;. This is actually pretty satisfactory. The trouble arises when you have a struct with many fields:</p>
+
+<div class="brush: elm">
+ <div class="source">
+  <pre><span></span><span class="kr">type</span> <span class="kr">alias</span> <span class="kt">PlayerStats</span> <span class="nf">=</span>
+  <span class="p">{</span> <span class="nv">health</span> <span class="nf">:</span> <span class="kt">Integer</span>
+  <span class="p">,</span> <span class="nv">strength</span> <span class="nf">:</span> <span class="kt">Integer</span>
+  <span class="p">,</span> <span class="nv">charisma</span> <span class="nf">:</span> <span class="kt">Integer</span>
+  <span class="p">,</span> <span class="nv">intellect</span> <span class="nf">:</span> <span class="kt">Integer</span>
+  <span class="c1">-- etc.</span>
+  <span class="p">}</span>
+</pre></div>
+
+</div>
+
+<p>It might be very convenient to have generic functional updaters in this case. One could imagine a game that has <code>Potion</code> items:</p>
+
+<div class="brush: elm">
+ <div class="source">
+  <pre><span></span><span class="kr">type</span> <span class="kt">Potion</span> <span class="nf">=</span> <span class="kt">Potion</span> <span class="kt">String</span> <span class="p">(</span><span class="kt">PlayerStats</span> <span class="nf">-&gt;</span> <span class="kt">PlayerStats</span><span class="p">)</span>
+</pre></div>
+
+</div>
+
+<p>And then some different kinds of potions:</p>
+
+<div class="brush: elm">
+ <div class="source">
+  <pre><span></span><span class="nv">potions</span> <span class="nf">=</span>
+  <span class="p">[</span> <span class="p">(</span><span class="kt">Potion</span> <span class="s">"Health Potion"</span> <span class="p">(</span><span class="nv">uHealth</span> <span class="p">(</span><span class="nf">(+)</span> <span class="mi">1</span><span class="p">))),</span>
+  <span class="p">,</span> <span class="p">(</span><span class="kt">Potion</span> <span class="s">"Greater Intellect Potion"</span> <span class="p">(</span><span class="nv">uIntellect</span> <span class="p">(</span><span class="nf">(+)</span> <span class="mi">3</span><span class="p">)))</span>
+  <span class="p">,</span> <span class="p">(</span><span class="kt">Potion</span> <span class="s">"Potion of Weakness"</span> <span class="p">(</span><span class="nv">uStrength</span> <span class="p">(</span><span class="nf">\</span><span class="nv">x</span> <span class="nf">-&gt;</span> <span class="nv">x</span> <span class="nf">//</span> <span class="mi">5</span><span class="p">)))</span>
+  <span class="p">]</span>
+</pre></div>
+
+</div>
+
+<p>This is a really elegant way to think about items that can affect a player&rsquo;s stats! Unfortunately, it also means you have to define updater functions for <em>every single field in the record</em>. This can get tedious rather quickly:</p>
+
+<div class="brush: elm">
+ <div class="source">
+  <pre><span></span><span class="nv">uHealth</span> <span class="nf">:</span> <span class="p">(</span><span class="kt">Integer</span> <span class="nf">-&gt;</span> <span class="kt">Integer</span><span class="p">)</span> <span class="nf">-&gt;</span> <span class="kt">PlayerStats</span> <span class="nf">-&gt;</span> <span class="kt">PlayerStats</span>
+<span class="nv">uHealth</span> <span class="nv">f</span> <span class="nv">stats</span> <span class="nf">=</span> <span class="p">{</span> <span class="nv">stats</span> <span class="nf">|</span> <span class="nv">health</span> <span class="nf">&lt;-</span> <span class="nv">f</span> <span class="nv">stats</span><span class="nf">.</span><span class="nv">health</span> <span class="p">}</span>
+
+<span class="nv">uStrength</span> <span class="nf">:</span> <span class="p">(</span><span class="kt">Integer</span> <span class="nf">-&gt;</span> <span class="kt">Integer</span><span class="p">)</span> <span class="nf">-&gt;</span> <span class="kt">PlayerStats</span> <span class="nf">-&gt;</span> <span class="kt">PlayerStats</span>
+<span class="nv">uStrength</span> <span class="nv">f</span> <span class="nv">stats</span> <span class="nf">=</span> <span class="p">{</span> <span class="nv">stats</span> <span class="nf">|</span> <span class="nv">strength</span> <span class="nf">&lt;-</span> <span class="nv">f</span> <span class="nv">stats</span><span class="nf">.</span><span class="nv">strength</span> <span class="p">}</span>
+
+<span class="nv">uCharisma</span> <span class="nf">:</span> <span class="p">(</span><span class="kt">Integer</span> <span class="nf">-&gt;</span> <span class="kt">Integer</span><span class="p">)</span> <span class="nf">-&gt;</span> <span class="kt">PlayerStats</span> <span class="nf">-&gt;</span> <span class="kt">PlayerStats</span>
+<span class="nv">uCharisma</span> <span class="nv">f</span> <span class="nv">stats</span> <span class="nf">=</span> <span class="p">{</span> <span class="nv">stats</span> <span class="nf">|</span> <span class="nv">charisma</span> <span class="nf">&lt;-</span> <span class="nv">f</span> <span class="nv">stats</span><span class="nf">.</span><span class="nv">charisma</span> <span class="p">}</span>
+
+<span class="c1">-- etc.</span>
+</pre></div>
+
+</div>
+
+<p>This is pretty icky. Could there be a better way?</p>
+
+<h1 id="trying-to-create-a-more-general-abstraction">Trying to create a more general abstraction</h1>
+
+<p>Interestingly, this pattern doesn&rsquo;t <em>need</em> to be this bad. There are better ways to do this. Let&rsquo;s revisit our updater functions.</p>
+
+<p>Really, <code>update</code> can be defined in terms of two other primitive operations: a read and a (functional) write. What would it look like if we implemented it that way instead of requiring special updater functions to be defined? Well, it would look like this:</p>
+
+<div class="brush: elm">
+ <div class="source">
+  <pre><span></span><span class="nv">update</span> <span class="nf">:</span> <span class="p">(</span><span class="nv">a</span> <span class="nf">-&gt;</span> <span class="nv">b</span><span class="p">)</span> <span class="nf">-&gt;</span> <span class="p">(</span><span class="nv">b</span> <span class="nf">-&gt;</span> <span class="nv">a</span> <span class="nf">-&gt;</span> <span class="nv">a</span><span class="p">)</span> <span class="nf">-&gt;</span> <span class="p">(</span><span class="nv">b</span> <span class="nf">-&gt;</span> <span class="nv">b</span><span class="p">)</span> <span class="nf">-&gt;</span> <span class="nv">a</span> <span class="nf">-&gt;</span> <span class="nv">a</span>
+<span class="nv">update</span> <span class="nv">get</span> <span class="nv">set</span> <span class="nv">f</span> <span class="nv">x</span> <span class="nf">=</span> <span class="nv">set</span> <span class="p">(</span><span class="nv">f</span> <span class="p">(</span><span class="nv">get</span> <span class="nv">x</span><span class="p">))</span> <span class="nv">x</span>
+</pre></div>
+
+</div>
+
+<p>The type definition is a little long, but it&rsquo;s really pretty simple. We just supply a getter and a setter, then a function to do the transformation, and finally a record to actually transform. Of course, as you can see from the type, this function isn&rsquo;t actually specific to records: it can be used with any value for which a getter and setter can be provided.</p>
+
+<p>The trouble here is that writing field setters isn&rsquo;t any easier in Elm than writing field updaters. They still look pretty verbose:</p>
+
+<div class="brush: elm">
+ <div class="source">
+  <pre><span></span><span class="nv">sHealth</span> <span class="nf">:</span> <span class="kt">Integer</span> <span class="nf">-&gt;</span> <span class="kt">PlayerStats</span> <span class="nf">-&gt;</span> <span class="kt">PlayerStats</span>
+<span class="nv">sHealth</span> <span class="nv">x</span> <span class="nv">stats</span> <span class="nf">=</span> <span class="p">{</span> <span class="nv">stats</span> <span class="nf">|</span> <span class="nv">health</span> <span class="nf">&lt;-</span> <span class="nv">x</span> <span class="p">}</span>
+
+<span class="nv">uHealth</span> <span class="nf">:</span> <span class="p">(</span><span class="kt">Integer</span> <span class="nf">-&gt;</span> <span class="kt">Integer</span><span class="p">)</span> <span class="nf">-&gt;</span> <span class="kt">PlayerStats</span> <span class="nf">-&gt;</span> <span class="kt">PlayerStats</span>
+<span class="nv">uHealth</span> <span class="nf">=</span> <span class="nv">update</span> <span class="nf">.</span><span class="nv">health</span> <span class="nv">sHealth</span>
+</pre></div>
+
+</div>
+
+<p>So, at the end of it all, this isn&rsquo;t really a better abstraction. Still remember my fantasy <code>!field</code> setter shorthand half a blog post ago? Now perhaps it makes a little more sense. <em>If</em> such a syntax existed, then defining the updater would be incredibly simple:</p>
+
+<div class="brush: elm">
+ <div class="source">
+  <pre><span></span><span class="nv">uHealth</span> <span class="nf">:</span> <span class="p">(</span><span class="kt">Integer</span> <span class="nf">-&gt;</span> <span class="kt">Integer</span><span class="p">)</span> <span class="nf">-&gt;</span> <span class="kt">PlayerStats</span> <span class="nf">-&gt;</span> <span class="kt">PlayerStats</span>
+<span class="nv">uHealth</span> <span class="nf">=</span> <span class="nv">update</span> <span class="nf">.</span><span class="nv">health</span> <span class="err">!</span><span class="nv">health</span>
+</pre></div>
+
+</div>
+
+<p>Still, no syntax, no easy updaters, and by extension, no easy, declarative description of behavior without quite a bit of boilerplate.</p>
+
+<h1 id="conclusions-and-related-work">Conclusions and related work</h1>
+
+<p>Elm is a very promising language, and it seems to be in fairly rapid development. So far, its author, <a href="https://twitter.com/czaplic">Evan Czaplicki</a>, has taken a very cautious approach to implementing language features, especially potentially redundant ones. This caution is why things like operator slicing, &ldquo;where&rdquo; clauses, and special updater syntax have not yet made it into the language. Maybe at some point these will be deemed important enough to include, but for the time being, they&rsquo;ve been excluded.</p>
+
+<p>I obviously think that having this sort of thing is incredibly important to being able to write expressive code without a huge amount of overhead. However, I also do <em>not</em> want to give the impression that I think adding special setter syntax is the only way to do it.</p>
+
+<p>Seasoned functional programmers will surely have noticed that many of these concepts sound a lot like lenses, and Elm actually already has a lens-like library authored by Evan himself, called <a href="https://github.com/evancz/focus">Focus</a>. This, however, does not actually solve the problem: it requires manual description of setters just like the purely function based approach does. Really, lenses are just the logical next step in the line of abstraction I&rsquo;ve already laid out above.</p>
+
+<p>Interestingly, PureScript and Elm, the two Haskell-likes-on-the-frontend that I&rsquo;ve paid attention to (though PureScript is much closer to Haskell than Elm), both have this very same problem. Haskell itself solves it with macros via Template Haskell. My favorite language, Racket, solves it with its own macro system. Is there another way to do these things that doesn&rsquo;t involve introducing a heavyweight macro system? Definitely. But I think this is a <em>necessary feature</em>, not a &ldquo;nice to have&rdquo;, so if a macro system is out of the picture, then a simpler, less flexible solution is the obvious logical alternative.</p>
+
+<p>I really like Elm, and most of my experiences with it have been more than enough to convince me that it is a fantastic language for the job. Unfortunately, the issue of functional record updaters has been quite the frustrating obstacle in my otherwise frictionless ride. I will continue to happily use Elm over other, far less accommodating tools, but I hope that issues like these will be smoothed out as the language and its ecosystem matures.</p>
+  <footer>
+    <ul class="pager">
+      <li class="previous">
+        <a href="/blog/2015/12/21/adts-in-typed-racket-with-macros/">&larr; <em>ADTs in Typed Racket with macros</em></a>
+      </li>
+      <li class="next">
+        <a href="/blog/2015/09/23/canonical-factories-for-testing-with-factory-girl-api/"><em>Canonical factories for testing with factory_girl_api</em> &rarr;</a>
+      </li>
+    </ul>
+  </footer>
+</article>
+        </div>
+      </section>
+      <footer>
+        <div class="content">
+          <h2 id="copyright-notice">© 2021, Alexis King</h2>
+          <h3>
+            Built with <a href="https://github.com/greghendershott/frog">Frog</a>, the
+            <strong>fr</strong>ozen bl<strong>og</strong> tool.
+          </h3>
+          <h3>
+            Feeds are available via <a href="/feeds/all.atom.xml">Atom</a>
+            or <a href="/feeds/all.rss.xml">RSS</a>.
+          </h3>
+        </div>
+      </footer>
+    </div>
+  </body>
+</html>

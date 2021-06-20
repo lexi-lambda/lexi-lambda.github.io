@@ -1,0 +1,472 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <title>Hackett progress report: documentation, quality of life, and snake</title>
+    <meta name="description" content="Three months ago, I wrote a blog post describing my new, prototype implementation of my programming language, Hackett. At the time, some things looked promising—the language already included algebraic datatypes, typeclasses, laziness, and even a mini, pro...">
+    <meta name="author"      content="Alexis King">
+    <meta name="keywords"    content="hackett, racket, haskell">
+    <meta name="viewport"    content="width=device-width, initial-scale=1.0">
+    <link rel="icon"      href="/favicon.ico">
+    <link rel="canonical" href="http://lexi-lambda.github.io/blog/2017/08/28/hackett-progress-report-documentation-quality-of-life-and-snake/">
+    <link rel="next" href="/blog/2017/08/12/user-programmable-infix-operators-in-racket/">
+    <link rel="prev" href="/blog/2017/10/27/a-space-of-their-own-adding-a-type-namespace-to-hackett/">
+    <!-- CSS -->
+    <link rel="stylesheet" type="text/css" href="https://fonts.googleapis.com/css?family=Merriweather+Sans:400,300,300italic,400italic,700,700italic,800,800italic|Merriweather:400,300,300italic,400italic,700,700italic,900,900italic|Fira+Code:300,400,500,600,700">
+    <link rel="stylesheet" type="text/css" href="/css/application.min.css">
+    <link rel="stylesheet" type="text/css" href="/css/pygments.min.css">
+    <!-- Feeds -->
+    <link rel="alternate" type="application/atom+xml"
+          href="/feeds/all.atom.xml" title="Atom Feed">
+    <link rel="alternate" type="application/rss+xml"
+          href="/feeds/all.rss.xml" title="RSS Feed">
+    <!-- JS -->
+    <!-- <script src="/js/application.min.js"></script> -->
+    <script type="text/javascript">
+      (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+      (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+      m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+      })(window,document,'script','//www.google-analytics.com/analytics.js','ga');
+
+      ga('create', 'UA-65250372-1', 'auto');
+      ga('send', 'pageview');
+    </script>
+  </head>
+  <body>
+    <div id="page-content">
+      <!-- Navigation Bar -->
+      <header>
+        <nav role="navigation" class="navigation-bar">
+          <ul class="navigation-items left">
+            <li id="blog-title-header"><a href="/"><h1>Alexis King</h1></a></li>
+          </ul>
+          <ul class="navigation-items center"></ul>
+          <ul class="navigation-items right">
+            <li><a href="/">Home</a></li>
+            <li><a href="/resume.html">About Me</a></li>
+          </ul>
+        </nav>
+      </header>
+      <section role="main">
+        <!-- Main column -->
+        <div class="content" class="col-md-12">
+
+
+
+          <article class="main">
+  <header>
+    <h1 class="title">Hackett progress report: documentation, quality of life, and snake</h1>
+    <div class='date-and-tags'>
+      <time datetime="2017-08-28T08:00:00">
+        2017-08-28
+      </time>
+      <span style="margin: 0 3px">⦿</span>
+      <span class="tags"><a href="/tags/hackett.html">hackett</a>, <a href="/tags/racket.html">racket</a>, <a href="/tags/haskell.html">haskell</a></span>
+    </div>
+  </header>
+
+<p>Three months ago, <a href="/blog/2017/05/27/realizing-hackett-a-metaprogrammable-haskell/">I wrote a blog post describing my new, prototype implementation of my programming language, Hackett</a>. At the time, some things looked promising—the language already included algebraic datatypes, typeclasses, laziness, and even a mini, proof of concept web server. It was, however, clearly still rather rough around the edges—error messages were poor, features were sometimes brittle, the REPL experience was less than ideal, and there was no documentation to speak of. In the time since, while the language is still experimental, I have tackled a handful of those issues, and I am excited to announce <a href="https://pkg-build.racket-lang.org/doc/hackett@hackett-doc/"><strong>the first (albeit quite incomplete) approach to Hackett’s documentation</strong></a>.</p>
+
+<p>I’d recommend clicking that link above and at least skimming around before reading the rest of this blog post, as its remainder will describe some of the pieces that didn’t end up in the documentation: the development process, the project’s status, a small demo, and some other details from behind the scenes.</p>
+<!-- more-->
+
+<h1 id="a-philosophy-of-documentation">A philosophy of documentation</h1>
+
+<p>Racket, as a project, has always had <a href="http://docs.racket-lang.org">wonderful documentation</a>. There are many reasons for this—Racket’s educational origins almost certainly play a part, and it helps that the core packages set the bar high—but one of the biggest reasons is undoubtably <a href="http://docs.racket-lang.org/scribble/index.html">Scribble, the Racket documentation tool</a>. Scribble is, in many ways, the embodiment of the Racket philosophy: it is a user-extensible, fully-featured, domain-specific programming language designed for typesetting, with <a href="http://docs.racket-lang.org/scribble/plt-manuals.html">a powerful library for documenting Racket code</a>. Like the Racket language itself, Scribble comes with a hygienic macro system, and in fact, all Racket libraries are trivially usable from within Scribble documents, if desired. The macro system is used to great effect to provide typesetting forms tailored to the various sorts of things a Racket programmer might wish to document, such as procedures, structures, and macros.</p>
+
+<p>Scribble documents are decoupled from a rendering backend, so a single Scribble document can be rendered to plain text, a PDF, or HTML, but the HTML backend is the most useful for writing docs. Scribble documents themselves use a syntax inspired by (La)TeX’s syntax, but Scribble uses an <code>@</code> character instead of <code>\</code>. It also generalizes and regularizes TeX in many ways, creating a much more uniform language without nearly so much magic or complexity. Since Scribble’s “at-expressions” are merely an alternate syntax for Racket’s more traditional s-expressions, Scribble documents can be built out of ordinary Racket macros. For example, to document a procedure in Racket, one would use <a href="http://docs.racket-lang.org/scribble/doc-forms.html#%28form._%28%28lib._scribble%2Fmanual..rkt%29._defproc%29%29">the provided <code>defproc</code> form</a>:</p>
+
+<div class="brush: racket">
+ <div class="source">
+  <pre><span></span><span class="n">@defproc</span><span class="p">[(</span><span class="nb">add1</span> <span class="p">[</span><span class="n">z</span> <span class="nb">number?</span><span class="p">])</span> <span class="nb">number?</span><span class="p">]{</span>
+<span class="n">Returns</span> <span class="n">@racket</span><span class="p">[(</span><span class="nb">+</span> <span class="n">z</span> <span class="mi">1</span><span class="p">)]</span><span class="o">.</span><span class="p">}</span>
+</pre></div>
+
+</div>
+
+<p>This syntax may look alien to someone more familiar with traditional, Javadoc-style documentation comments, but the results are quite impressive. The above snippet renders into <a href="http://docs.racket-lang.org/reference/generic-numbers.html#%28def._%28%28quote._~23~25kernel%29._add1%29%29">something like this</a>:</p>
+
+<p><a href="http://docs.racket-lang.org/reference/generic-numbers.html#%28def._%28%28quote._~23~25kernel%29._add1%29%29"><img src="/img/scribble-docs-racket-add1.png" alt="" /></a></p>
+
+<p>The fact that Scribble documents are fully-fledged <em>programs</em> equips the programmer with a lot of power. One of the most remarkable tools Scribble provides is <a href="http://docs.racket-lang.org/scribble/eval.html">the <code>scribble/example</code> module</a>, a library that performs sandboxed evaluation as part of the rendering process. This allows Scribble documents to include REPL-style examples inline, automatically generated as part of typesetting, always kept up to date from a single source of truth: the implementation. It even provides a special <code>eval:check</code> form that enables <a href="https://docs.python.org/3/library/doctest.html">doctest</a>-like checking, which allows documentation to serve double duty as a test suite.</p>
+
+<p>Of course, Hackett is not Racket, though it shares many similarities. Fortunately, all of Racket is <em>designed</em> with the goal of supporting many different programming languages, and Scribble is no exception. Things like <a href="http://docs.racket-lang.org/scribble/eval.html"><code>scribble/example</code></a> essentially work out of the box with Hackett, and most of <a href="http://docs.racket-lang.org/scribble/plt-manuals.html"><code>scribble/manual</code></a> can be reused. However, what about documenting algebraic datatypes? What about documenting typeclasses? Well, remember: Scribble is extensible. The <code>defproc</code> and <code>defstruct</code> forms are hardly builtins; they are defined as part of the <code>scribble/manual</code> library in terms of Scribble primitives, and <a href="https://github.com/lexi-lambda/hackett/blob/f472859cfc03086d39563e5c0eb81dcb2ceb49dc/hackett-doc/scribble/manual/hackett.rkt">we can do the same</a>.</p>
+
+<p>Hackett’s documentation already defines three new forms, <code>defdata</code>, <code>defclass</code>, and <code>defmethod</code>, for documenting algebraic datatypes, typeclasses, and typeclass methods, respectively. They typeset documentation custom-tailored to Hackett’s needs, so Hackett’s documentation need not be constrained by Racket’s design decisions. For example, one could document the <code>Functor</code> typeclass using <code>defclass</code> like this:</p>
+
+<div class="brush: racket">
+ <div class="source">
+  <pre><span></span><span class="n">@defclass</span><span class="p">[(</span><span class="n">Functor</span> <span class="n">f</span><span class="p">)</span>
+          <span class="p">[</span><span class="nb">map</span> <span class="n">:</span> <span class="p">(</span><span class="n">forall</span> <span class="p">[</span><span class="n">a</span> <span class="n">b</span><span class="p">]</span> <span class="p">{(</span><span class="n">a</span> <span class="k">-&gt;</span> <span class="n">b</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="p">(</span><span class="n">f</span> <span class="n">a</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="p">(</span><span class="n">f</span> <span class="n">b</span><span class="p">)})]]{</span>
+
+<span class="n">A</span> <span class="k">class</span> <span class="n">of</span> <span class="n">types</span> <span class="n">that</span> <span class="n">are</span> <span class="n">@deftech</span><span class="p">{</span><span class="n">functors</span><span class="p">}</span><span class="o">,</span> <span class="n">essentially</span> <span class="n">types</span> <span class="n">that</span> <span class="k">provide</span> <span class="n">a</span>
+<span class="n">mapping</span> <span class="k">or</span> <span class="n">“piercing”</span> <span class="n">operation.</span> <span class="n">The</span> <span class="n">@racket</span><span class="p">[</span><span class="nb">map</span><span class="p">]</span> <span class="n">function</span> <span class="n">can</span> <span class="n">be</span> <span class="n">viewed</span> <span class="n">in</span>
+<span class="n">different</span> <span class="n">ways:</span>
+
+<span class="k">...</span><span class="p">}</span>
+</pre></div>
+
+</div>
+
+<p>With only a little more than the above code, <a href="http://docs.racket-lang.org/hackett/reference-typeclasses.html#%28def._%28%28lib._hackett%2Fmain..rkt%29._.Functor%29%29">Hackett’s documentation includes a beautifully-typeset definition of the <code>Functor</code> typeclass</a>, including examples and rich prose:</p>
+
+<p><a href="http://docs.racket-lang.org/hackett/reference-typeclasses.html#%28def._%28%28lib._hackett%2Fmain..rkt%29._.Functor%29%29"><img src="/img/scribble-docs-hackett-functor.png" alt="" /></a></p>
+
+<p>Scribble makes Hackett’s documentation shine.</p>
+
+<h2 id="a-tale-of-two-users">A tale of two users</h2>
+
+<p>For a programming language, documentation is critical. Once we have grown comfortable with a language, it’s easy to take for granted our ability to work within it, but there is always a learning period, no matter how simple or familiar the language may be. When learning a new language, we often relate the languages’ concepts and features to those which we already know, which is why having a broad vocabulary of languages makes picking up new ones so much easier.</p>
+
+<p>A new user of a language needs a gentle introduction to its features, structured in a logical way, encouraging this period of discovery and internalization. Such an introduction should come equipped with plenty of examples, and it shouldn’t worry itself with being an authoritative reference. Some innocent simplifications are often conducive to learning, and it is unlikely to be helpful to force the full power of a language onto a user all at once.</p>
+
+<p>However, for experienced users, an authoritative reference is <em>exactly</em> what they need. While learners want tutorial-style documentation that encourages experimentation and exploration, working users of a language need something closer to a dictionary or encyclopedia: a way to look up forms and functions by name and find precise definitions, complete explanations, and hopefully a couple of examples. Such a user does not want information to be scattered across multiple chapters of explanatory text; they simply need a focused, targeted, one-stop shop for the information they’re looking for.</p>
+
+<p>This dichotomy is rarely well-served by existing programming language documentation. Most programming languages suffer from either failing entirely to serve both types of users, or doing so in a way that enforces too strong a separation between the styles of documentation. For example:</p>
+
+<ul>
+ <li>
+  <p>Java ships with a quintessential example of a documentation generator: Javadoc. Java is a good case study because, although its documentation is not particularly good, it still manages to be considerably better than most languages’ docs.</p>
+  <p><a href="https://docs.oracle.com/javase/8/docs/api/">Java’s API documentation</a> documents its standard library, but it doesn’t document the language. Reference-style language documentation is largely relegated to the Java Language Specification, which is highly technical and rather low-level. It is more readable than the standards for some other languages, but it’s still mostly only useful to language lawyers. For Java, this ends up being mostly okay, largely because Java is a fairly <em>small</em> language that does not often change.</p>
+  <p>On the other hand, Java’s reference documentation is inconsistent, rarely provides any examples, and certainly does not do a good job of serving new users. Java <em>does</em> provide guide-style documentation in the form of the <a href="https://docs.oracle.com/javase/tutorial/">Java Tutorials</a>, but they are of inconsistent quality.</p>
+  <p>More importantly, while the Java tutorials link to the API docs, the reverse is <strong>not</strong> true, which is a real disservice. One of the most beautiful things about the web is how information can be extensively cross-linked, and exploring links is many times easier than turning pages of a physical book. Anyone who’s explored topics on Wikipedia for an hour (or more) at a time knows how amazing this can be.</p>
+  <p>Language documentation isn’t quite the same as an encyclopedia, but it’s a shame that Java’s documentation does not lend itself as easily to curious, open-ended learning. If the API docs frequently linked to relevant portions of the tutorials, then a user could open the Javadoc for a class or method they are using, then quickly jump to the relevant guide. As the documentation is currently organized, this is nearly impossible, and tutorials are only discovered when explicitly looking for them.</p></li>
+ <li>
+  <p>Other languages, such as JavaScript, are in even worse boats than Java when it comes to documentation. For whatever reason, structured documentation of any kind doesn’t seem to have caught on in the JavaScript world, probably largely because no documentation tool ships with the language, and no such tool ever became standard. Whatever the reason, JavaScript libraries’ documentation largely resides in markdown documents spread across version control repositories and various webpages.</p>
+  <p>The closest thing that JavaScript has to official language documentation, aside from the (largely incomprehensible) language standard, is <a href="https://developer.mozilla.org/en-US/">MDN</a>. MDN’s docs are actually quite good, and they tend to mix lots of examples together with reference-style documentation. They’re indexed and searchable, and they have a great Google search ranking. MDN is easily my go-to place to read about core JavaScript functions.</p>
+  <p>The trouble, of course, is that MDN only houses documentation for the standard library, and while new standards make it bigger than ever, huge amounts of critical functionality are often offloaded to separate packages. These libraries all have their own standards and styles of documentation, and virtually none of them even compare to MDN.</p>
+  <p>This means that documentation for JavaScript libraries, even the most popular ones, tends to be all over the map. <a href="http://ramdajs.com/docs/">Ramda’s documentation is nothing but a reference</a>, which makes it easy to look up information about a specific function, but nearly impossible to find anything if you don’t have a specific name to look for. In contrast, <a href="http://passportjs.org/docs">Passport’s docs are essentially <em>only</em> a set of tutorials</a>, which is great for learners, but enormously frustrating if I just want to look up what the heck a specific function or method <em>does</em>. Fortunately, <a href="https://facebook.github.io/react/docs/hello-world.html">there are some libraries, like React</a>, that absolutely <em>nail</em> this, and they have both styles of documentation that are <strong>actually cross-referenced</strong>. Unfortunately, those are mostly the exceptions, not the norm.</p></li>
+ <li>
+  <p><a href="https://docs.python.org/3/index.html">Python’s documentation is interesting</a>, since it includes a set of tutorials alongside the API reference, and it <em>also</em> ships a language reference written for ordinary users. In many ways, it does everything right, but disappointingly, it generally doesn’t link back to the tutorials from the API docs, even though the reverse is true. For example, the section in the tutorial on <code>if</code> links to the section in the reference about <code>if</code>, but nothing goes in the other direction, which is something of a missed opportunity.</p></li>
+ <li>
+  <p><a href="https://hackage.haskell.org/package/base">Haskell manages to be especially bad here</a> (maybe even notoriously bad) despite having an ubiquitous documentation generator, Haddock. Unfortunately, Haddock’s format makes writing prose and examples somewhat unpleasant, and very few packages provide any sort of tutorial. For those that do, the tutorial is often not included in the API docs, a common theme at this point.</p>
+  <p>It’s generally a bad sign when your documentation tool isn’t even powerful enough to document itself, and <a href="https://www.haskell.org/haddock/">Haddock’s docs are pretty impressively bad, though mostly serviceable if you’re willing to look</a>.</p></li></ul>
+
+<p>The takeaway here is that I just don’t think most languages’ documentation is particularly good, and programmers seem to have gotten so used to this state of affairs that the bar is set disappointingly low. Fortunately, this is another area where Racket delivers. Racket, like Python, ships with <em>two</em> pieces of documentation: the <a href="http://docs.racket-lang.org/guide/index.html">Racket Guide</a> and the <a href="http://docs.racket-lang.org/reference/index.html">Racket Reference</a>. The guide includes over <strong>one hundred thousand</strong> words of explanations and examples, and the reference includes roughly <strong>half a million</strong>. Racket’s documentation is impressive on its own, but what’s equally impressive is how carefully and methodically cross-linked it is. Margin notes often provide links to corresponding sections in the relevant companion manual, so it’s easy to look up a form or function by name, then quickly jump to the section of the guide explaining it.</p>
+
+<p>Hackett is obviously not going to have hundreds of thousands of words worth of documentation in its first few months of existence, but it already has nearly ten thousand, and that’s not nothing. More importantly, it is structured the same way that Racket’s docs are: it’s split into the <a href="http://docs.racket-lang.org/hackett/guide.html">Hackett Guide</a> and the <a href="http://docs.racket-lang.org/hackett/reference.html">Hackett Reference</a>, and the two are cross-referenced as much as possible. Haskell is a notoriously difficult language to learn, but my hope is that does not necessarily <em>need</em> to be the case. Documentation cannot make the language trivial, but my hope is that it can make it a <em>lot</em> more accessible without making it any less useful for power users.</p>
+
+<h1 id="rounding-hacketts-library-sanding-its-edges">Rounding Hackett’s library, sanding its edges</h1>
+
+<p>One of the best things about sitting down and writing documentation—whether it’s for a tool, a library, or a language—is how it forces you, the author, to think about how someone else might perceive the project when seeing it for the first time. This encompasses everything: error messages, ease of installation, completeness of a standard library, friendliness of tooling, etc. Writing Hackett’s documentation forced me to make a <em>lot</em> of improvements, and while very few of them are flashy features, they make Hackett feel much less like a toy and more like a tool.</p>
+
+<p>Hackett currently has no formal changelog because it is considered alpha quality, and its API is still unstable. There is no guarantee that things won’t change at any moment. Still, it’s useful to put together an ad-hoc list of changes made in the past few months. Here’s a very brief summary:</p>
+
+<ul>
+ <li>
+  <p>Hackett includes a <a href="http://docs.racket-lang.org/hackett/reference-datatypes.html#%28form._%28%28lib._hackett%2Fmain..rkt%29._.Double%29%29"><code>Double</code></a> type for working with IEEE 754 double-precision floating-point numbers.</p></li>
+ <li>
+  <p>Local definitions are supported via the <a href="http://docs.racket-lang.org/hackett/reference-syntactic-forms.html#%28form._%28%28lib._hackett%2Fmain..rkt%29._let%29%29"><code>let</code></a> and <a href="http://docs.racket-lang.org/hackett/reference-syntactic-forms.html#%28form._%28%28lib._hackett%2Fmain..rkt%29._letrec%29%29"><code>letrec</code></a> forms.</p></li>
+ <li>
+  <p>The prelude includes many more functions, especially <a href="http://docs.racket-lang.org/hackett/reference-datatypes.html#%28part._reference-lists%29">functions on lists</a>.</p></li>
+ <li>
+  <p>The Hackett reader has been adjusted to support using <code>.</code> as a bare symbol, since <a href="http://docs.racket-lang.org/hackett/reference-datatypes.html#%28def._%28%28lib._hackett%2Fmain..rkt%29._..%29%29"><code>.</code> is the function composition operator</a>.</p></li>
+ <li>
+  <p>The Hackett REPL supports many more forms, including <a href="http://docs.racket-lang.org/hackett/reference-datatypes.html#%28form._%28%28lib._hackett%2Fmain..rkt%29._data%29%29">ADT</a>, <a href="http://docs.racket-lang.org/hackett/reference-typeclasses.html#%28form._%28%28lib._hackett%2Fmain..rkt%29._class%29%29">class</a>, and <a href="http://docs.racket-lang.org/hackett/reference-typeclasses.html#%28form._%28%28lib._hackett%2Fmain..rkt%29._instance%29%29">instance</a> definitions. Additionally, the REPL now uses <a href="http://docs.racket-lang.org/hackett/reference-typeclasses.html#%28def._%28%28lib._hackett%2Fmain..rkt%29._.Show%29%29"><code>Show</code></a> instances to display the results of expressions. To compensate for the inability to print non-<a href="http://docs.racket-lang.org/hackett/reference-typeclasses.html#%28def._%28%28lib._hackett%2Fmain..rkt%29._.Show%29%29"><code>Show</code></a>able things, a new <code>(#:type expr)</code> syntax is permitted to print the type of <em>any</em> expression.</p></li>
+ <li>
+  <p>Missing instance errors are now dramatically improved, now correctly highlighting the source location of expressions that led to the error.</p></li></ul>
+
+<p>Alongside these changes are a variety of internal code improvements that make the Hackett code simpler, more readable, and hopefully more accessible to contributors. Many of the trickiest functions are now <a href="https://github.com/lexi-lambda/hackett/blob/f472859cfc03086d39563e5c0eb81dcb2ceb49dc/hackett-lib/hackett/private/base.rkt#L77-L189">heavily commented</a> with the hope that the codebase won’t be so intimidating to people unfamiliar with Racket or the techniques behind Hackett’s typechecker. I will continue to document the internals of Hackett as I change different places of the codebase, and I have even considered writing a separate Scribble document describing the Hackett internals. It certainly wouldn’t hurt.</p>
+
+<p>One of the most exciting things about documenting Hackett has been realizing just <em>how much</em> already exists. Seriously, if you have gotten to this point in the blog post but haven’t read <a href="https://pkg-build.racket-lang.org/doc/hackett@hackett-doc/">the actual documentation</a> yet, I would encourage you to do so. No longer does the idea of writing real programs in this language feel out of reach; indeed, aside from potential performance problems, the language is likely extremely close to being usable for very simple things. After all, that’s the goal, isn’t it? As I’ve mentioned before, I’m writing Hackett for other people, but I’m also very much writing it for <em>me</em>: it’s a language I’d like to use.</p>
+
+<p>Still, writing a general-purpose programming language is a lot of work, and I’ve known from the start that it isn’t something I can accomplish entirely on my own. While this iteration of work on Hackett is a sort of “documentation release”, it might be more accurate to call it an “accessibility release”. If you’re interested in contributing, I finally feel comfortable encouraging you to get involved!</p>
+
+<h1 id="a-demo-with-pictures">A demo with pictures</h1>
+
+<p>Now, if you’re like me, all of this documentation stuff is already pretty exciting. Still, even I view documentation as simply a means to an end, not an end in itself. Documentation is successful when it gets out of the way and makes it possible to write good code that does cool things. Let’s write some, shall we?</p>
+
+<p>Hackett ships with a special package of demo libraries in the aptly-named <code>hackett-demo</code> package, which are essentially simple, lightweight bindings to existing, dynamically-typed Racket libraries. In <a href="/blog/2017/05/27/realizing-hackett-a-metaprogrammable-haskell/">the previous Hackett blog post</a>, I demonstrated the capabilities of <code>hackett/demo/web-server</code>. In this blog post, we’re going to use <code>hackett/demo/pict</code> and <code>hackett/demo/pict/universe</code>, which make it possible to write interactive, graphical programs in Hackett with just a few lines of code!</p>
+
+<p>As always, we’ll start with <code>#lang hackett</code>, and we’ll import the necessary libraries:</p>
+
+<div class="brush: racket">
+ <div class="source">
+  <pre><span></span><span class="kn">#lang </span><span class="nn">hackett</span>
+
+<span class="p">(</span><span class="k">require</span> <span class="n">hackett/demo/pict</span>
+         <span class="n">hackett/demo/pict/universe</span><span class="p">)</span>
+</pre></div>
+
+</div>
+
+<p>With that, we can start immediately with a tiny example. Just to see how <code>hackett/demo/pict</code> works, let’s start by rendering a red square. We can do this by writing a <code>main</code> action that calls <code>print-pict</code>:</p>
+
+<div class="brush: racket">
+ <div class="source">
+  <pre><span></span><span class="p">(</span><span class="n">main</span> <span class="p">(</span><span class="n">print-pict</span> <span class="p">(</span><span class="n">colorize</span> <span class="n">red</span> <span class="p">(</span><span class="n">filled-square</span> <span class="mf">50.0</span><span class="p">))))</span>
+</pre></div>
+
+</div>
+
+<p>If you run the above program in DrRacket, you should see a 50 pixel red square printed into the interactions window!</p>
+
+<div class="figure"><img src="/img/hackett-pict-red-square.png" alt="" />
+ <p class="caption"></p></div>
+
+<p>Using the REPL, we can inspect the type of <code>print-pict</code>:</p>
+
+<div class="brush: racket">
+ <div class="source">
+  <pre><span></span><span class="nb">&gt;</span> <span class="p">(</span><span class="kd">#:type</span> <span class="n">print-pict</span><span class="p">)</span>
+<span class="n">:</span> <span class="p">(</span><span class="k">-&gt;</span> <span class="n">Pict</span> <span class="p">(</span><span class="n">IO</span> <span class="n">Unit</span><span class="p">))</span>
+</pre></div>
+
+</div>
+
+<p>Unsurprisingly, displaying a picture to the screen needs <code>IO</code>. However, what’s interesting is that the rest of the expression is totally pure. Take a look at the type of <code>filled-square</code>:</p>
+
+<div class="brush: racket">
+ <div class="source">
+  <pre><span></span><span class="nb">&gt;</span> <span class="p">(</span><span class="kd">#:type</span> <span class="n">filled-square</span><span class="p">)</span>
+<span class="n">:</span> <span class="p">(</span><span class="k">-&gt;</span> <span class="n">Double</span> <span class="n">Pict</span><span class="p">)</span>
+</pre></div>
+
+</div>
+
+<p>No <code>IO</code> to be seen! This is because “picts” are entirely <em>pure</em> values that represent images built out of simple shapes, and they can be put together to make more complex images. For example, we can put two squares next to one another:</p>
+
+<div class="brush: racket">
+ <div class="source">
+  <pre><span></span><span class="p">(</span><span class="n">main</span> <span class="p">(</span><span class="n">print-pict</span> <span class="p">{(</span><span class="n">colorize</span> <span class="n">red</span> <span class="p">(</span><span class="n">filled-square</span> <span class="mf">50.0</span><span class="p">))</span>
+                   <span class="n">hc-append</span>
+                   <span class="p">(</span><span class="n">colorize</span> <span class="n">blue</span> <span class="p">(</span><span class="n">filled-square</span> <span class="mf">50.0</span><span class="p">))}))</span>
+</pre></div>
+
+</div>
+
+<p>This code will print out a red square to the left of a blue one.</p>
+
+<div class="figure"><img src="/img/hackett-pict-red-blue-squares.png" alt="" />
+ <p class="caption"></p></div>
+
+<p>Again, <code>hc-append</code> is a simple, pure function, a binary composition operator that places two picts side by side to produce a new one:</p>
+
+<div class="brush: racket">
+ <div class="source">
+  <pre><span></span><span class="nb">&gt;</span> <span class="p">(</span><span class="kd">#:type</span> <span class="n">hc-append</span><span class="p">)</span>
+<span class="n">:</span> <span class="p">(</span><span class="k">-&gt;</span> <span class="n">Pict</span> <span class="p">(</span><span class="k">-&gt;</span> <span class="n">Pict</span> <span class="n">Pict</span><span class="p">))</span>
+</pre></div>
+
+</div>
+
+<p>Using the various features of this toolkit, not only can we make interesting pictures and diagrams, we can even create a foundation for a game!</p>
+
+<h2 id="implementing-a-snake-clone">Implementing a snake clone</h2>
+
+<p>This blog post is not a Hackett tutorial; it is merely a demo. For that reason, I am not going to spend much time explaining how the following program is built. This section is closer to annotated source code than a guide to the <code>pict</code> or <code>universe</code> libraries. Hopefully it’s still illustrative.</p>
+
+<p>We’ll start by writing some type definitions. We’ll need a type to represent 2D points on a grid, as well as a type to represent a cardinal direction (to keep track of which direction the player is moving, for example). We’ll also want an <code>Eq</code> instance for our points.</p>
+
+<div class="brush: racket">
+ <div class="source">
+  <pre><span></span><span class="p">(</span><span class="n">data</span> <span class="n">Point</span> <span class="p">(</span><span class="n">point</span> <span class="n">Integer</span> <span class="n">Integer</span><span class="p">))</span>
+<span class="p">(</span><span class="n">data</span> <span class="n">Direction</span> <span class="n">d:left</span> <span class="n">d:right</span> <span class="n">d:up</span> <span class="n">d:down</span><span class="p">)</span>
+
+<span class="p">(</span><span class="n">instance</span> <span class="p">(</span><span class="n">Eq</span> <span class="n">Point</span><span class="p">)</span>
+  <span class="p">[</span><span class="k">==</span> <span class="p">(</span><span class="k">λ</span> <span class="p">[(</span><span class="n">point</span> <span class="n">a</span> <span class="n">b</span><span class="p">)</span> <span class="p">(</span><span class="n">point</span> <span class="n">c</span> <span class="n">d</span><span class="p">)]</span> <span class="p">{{</span><span class="n">a</span> <span class="k">==</span> <span class="n">c</span><span class="p">}</span> <span class="n">&amp;&amp;</span> <span class="p">{</span><span class="n">b</span> <span class="k">==</span> <span class="n">d</span><span class="p">}})])</span>
+</pre></div>
+
+</div>
+
+<p>With these two datatypes, we can implement a <code>move</code> function that accepts a point and a direction and produces a new point for an adjacent tile:</p>
+
+<div class="brush: racket">
+ <div class="source">
+  <pre><span></span><span class="p">(</span><span class="n">defn</span> <span class="n">move</span> <span class="n">:</span> <span class="p">{</span><span class="n">Direction</span> <span class="k">-&gt;</span> <span class="n">Point</span> <span class="k">-&gt;</span> <span class="n">Point</span><span class="p">}</span>
+  <span class="p">[[</span><span class="n">d:left</span>  <span class="p">(</span><span class="n">point</span> <span class="n">x</span> <span class="n">y</span><span class="p">)]</span> <span class="p">(</span><span class="n">point</span> <span class="p">{</span><span class="n">x</span> <span class="nb">-</span> <span class="mi">1</span><span class="p">}</span> <span class="n">y</span><span class="p">)]</span>
+  <span class="p">[[</span><span class="n">d:right</span> <span class="p">(</span><span class="n">point</span> <span class="n">x</span> <span class="n">y</span><span class="p">)]</span> <span class="p">(</span><span class="n">point</span> <span class="p">{</span><span class="n">x</span> <span class="nb">+</span> <span class="mi">1</span><span class="p">}</span> <span class="n">y</span><span class="p">)]</span>
+  <span class="p">[[</span><span class="n">d:up</span>    <span class="p">(</span><span class="n">point</span> <span class="n">x</span> <span class="n">y</span><span class="p">)]</span> <span class="p">(</span><span class="n">point</span> <span class="n">x</span> <span class="p">{</span><span class="n">y</span> <span class="nb">-</span> <span class="mi">1</span><span class="p">})]</span>
+  <span class="p">[[</span><span class="n">d:down</span>  <span class="p">(</span><span class="n">point</span> <span class="n">x</span> <span class="n">y</span><span class="p">)]</span> <span class="p">(</span><span class="n">point</span> <span class="n">x</span> <span class="p">{</span><span class="n">y</span> <span class="nb">+</span> <span class="mi">1</span><span class="p">})])</span>
+</pre></div>
+
+</div>
+
+<p>The next step is to define a type for our world state. The <code>big-bang</code> library operates using a game loop, with a function to update the state that’s called each “tick”. Our state will need to hold all the information about our game, which in this case, is just three things:</p>
+
+<div class="brush: racket">
+ <div class="source">
+  <pre><span></span><span class="p">(</span><span class="n">data</span> <span class="n">World-State</span> <span class="p">(</span><span class="n">world-state</span>
+                   <span class="n">Direction</span>    <span class="c1">; snake direction</span>
+                   <span class="p">(</span><span class="n">List</span> <span class="n">Point</span><span class="p">)</span> <span class="c1">; snake blocks</span>
+                   <span class="p">(</span><span class="n">List</span> <span class="n">Point</span><span class="p">)</span> <span class="c1">; food blocks</span>
+                   <span class="p">))</span>
+</pre></div>
+
+</div>
+
+<p>It will also be useful to have a functional setter for the direction, which we’ll have to write ourselves, since Hackett does not (currently) have anything like Haskell’s record syntax:</p>
+
+<div class="brush: racket">
+ <div class="source">
+  <pre><span></span><span class="p">(</span><span class="n">defn</span> <span class="n">set-ws-direction</span> <span class="p">[[</span><span class="n">d</span> <span class="p">(</span><span class="n">world-state</span> <span class="n">a</span> <span class="n">b</span> <span class="n">c</span><span class="p">)]</span> <span class="p">(</span><span class="n">world-state</span> <span class="n">d</span> <span class="n">b</span> <span class="n">c</span><span class="p">)])</span>
+</pre></div>
+
+</div>
+
+<p>Next, we’ll write some top-level constants that we’ll use in our rendering function, such as the number of tiles in the game board, the size of each tile in pixels, and some simple picts that represent the tiles we’ll use to draw our game:</p>
+
+<div class="brush: racket">
+ <div class="source">
+  <pre><span></span><span class="p">(</span><span class="n">def</span> <span class="n">board-width</span> <span class="mi">50</span><span class="p">)</span>
+<span class="p">(</span><span class="n">def</span> <span class="n">board-height</span> <span class="mi">30</span><span class="p">)</span>
+<span class="p">(</span><span class="n">def</span> <span class="n">tile-&gt;absolute</span> <span class="p">{(</span><span class="n">d*</span> <span class="mf">15.0</span><span class="p">)</span> <span class="o">.</span> <span class="n">integer-&gt;double</span><span class="p">})</span>
+<span class="p">(</span><span class="n">def</span> <span class="n">empty-board</span> <span class="p">(</span><span class="n">blank-rect</span> <span class="p">(</span><span class="n">tile-&gt;absolute</span> <span class="n">board-width</span><span class="p">)</span> <span class="p">(</span><span class="n">tile-&gt;absolute</span> <span class="n">board-height</span><span class="p">)))</span>
+
+<span class="p">(</span><span class="n">def</span> <span class="n">block</span> <span class="p">(</span><span class="n">filled-square</span> <span class="mf">13.0</span><span class="p">))</span>
+<span class="p">(</span><span class="n">def</span> <span class="n">food-block</span> <span class="p">(</span><span class="n">colorize</span> <span class="n">red</span> <span class="n">block</span><span class="p">))</span>
+<span class="p">(</span><span class="n">def</span> <span class="n">snake-block</span> <span class="p">(</span><span class="n">colorize</span> <span class="n">black</span> <span class="n">block</span><span class="p">))</span>
+</pre></div>
+
+</div>
+
+<p>Now we can write our actual <code>render</code> function. To do this, we simply need to render each <code>Point</code> in our <code>World-State</code>’s two lists as a block on an <code>empty-board</code>. We’ll write a helper function, <code>render-on-board</code>, which does exactly that:</p>
+
+<div class="brush: racket">
+ <div class="source">
+  <pre><span></span><span class="p">(</span><span class="n">defn</span> <span class="n">render-on-board</span> <span class="n">:</span> <span class="p">{</span><span class="n">Pict</span> <span class="k">-&gt;</span> <span class="p">(</span><span class="n">List</span> <span class="n">Point</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="n">Pict</span><span class="p">}</span>
+  <span class="p">[[</span><span class="n">pict</span> <span class="n">points</span><span class="p">]</span>
+   <span class="p">(</span><span class="nb">foldr</span> <span class="p">(</span><span class="k">λ</span> <span class="p">[(</span><span class="n">point</span> <span class="n">x</span> <span class="n">y</span><span class="p">)</span> <span class="n">acc</span><span class="p">]</span>
+            <span class="p">(</span><span class="n">pin-over</span> <span class="n">acc</span> <span class="p">(</span><span class="n">tile-&gt;absolute</span> <span class="n">x</span><span class="p">)</span> <span class="p">(</span><span class="n">tile-&gt;absolute</span> <span class="n">y</span><span class="p">)</span> <span class="n">pict</span><span class="p">))</span>
+          <span class="n">empty-board</span> <span class="n">points</span><span class="p">)])</span>
+</pre></div>
+
+</div>
+
+<p>This function uses <code>foldr</code> to collect each point and place the provided pict at the right location using <code>pin-over</code> on an empty board. Using <code>render-on-board</code>, we can write the <code>render</code> function in just a couple of lines:</p>
+
+<div class="brush: racket">
+ <div class="source">
+  <pre><span></span><span class="p">(</span><span class="n">defn</span> <span class="n">render</span> <span class="n">:</span> <span class="p">{</span><span class="n">World-State</span> <span class="k">-&gt;</span> <span class="n">Pict</span><span class="p">}</span>
+  <span class="p">[[(</span><span class="n">world-state</span> <span class="k">_</span> <span class="n">snake-points</span> <span class="n">food-points</span><span class="p">)]</span>
+   <span class="p">(</span><span class="n">pin-over</span> <span class="p">(</span><span class="n">render-on-board</span> <span class="n">snake-block</span> <span class="n">snake-points</span><span class="p">)</span>
+             <span class="mf">0.0</span> <span class="mf">0.0</span>
+             <span class="p">(</span><span class="n">render-on-board</span> <span class="n">food-block</span> <span class="n">food-points</span><span class="p">))])</span>
+</pre></div>
+
+</div>
+
+<p>Next, we’ll need to handle the update logic. On each tick, the snake should advance by a single tile in the direction it’s currently moving. If it runs into a food tile, it should grow one tile larger, and we need to generate a new food tile elsewhere on the board. To help with that last part, the <code>big-bang</code> library provides a <code>random-integer</code> function, which we can use to write a <code>random-point</code> action:</p>
+
+<div class="brush: racket">
+ <div class="source">
+  <pre><span></span><span class="p">(</span><span class="n">def</span> <span class="n">random-point</span> <span class="n">:</span> <span class="p">(</span><span class="n">IO</span> <span class="n">Point</span><span class="p">)</span>
+  <span class="p">{</span><span class="n">point</span> <span class="n">&lt;$&gt;</span> <span class="p">(</span><span class="n">random-integer</span> <span class="mi">0</span> <span class="n">board-width</span><span class="p">)</span>
+         <span class="n">&lt;*&gt;</span> <span class="p">(</span><span class="n">random-integer</span> <span class="mi">0</span> <span class="n">board-height</span><span class="p">)})</span>
+</pre></div>
+
+</div>
+
+<p>Hackett supports applicative notation using infix operators, so <code>random-point</code> looks remarkably readable. It also runs in <code>IO</code>, since the result is, obviously, random. Fortunately, the <code>on-tick</code> function runs in <code>IO</code> as well (unlike <code>render</code>, which must be completely pure), so we can use <code>random-point</code> when necessary to generate a new food block:</p>
+
+<div class="brush: racket">
+ <div class="source">
+  <pre><span></span><span class="p">(</span><span class="n">def</span> <span class="n">init!</span> <span class="n">:</span> <span class="p">(</span><span class="n">forall</span> <span class="p">[</span><span class="n">a</span><span class="p">]</span> <span class="p">{(</span><span class="n">List</span> <span class="n">a</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="p">(</span><span class="n">List</span> <span class="n">a</span><span class="p">)})</span>
+  <span class="p">{</span><span class="nb">reverse</span> <span class="o">.</span> <span class="n">tail!</span> <span class="o">.</span> <span class="nb">reverse</span><span class="p">})</span>
+
+<span class="p">(</span><span class="n">defn</span> <span class="n">on-tick</span> <span class="n">:</span> <span class="p">{</span><span class="n">World-State</span> <span class="k">-&gt;</span> <span class="p">(</span><span class="n">IO</span> <span class="n">World-State</span><span class="p">)}</span>
+  <span class="p">[[(</span><span class="n">world-state</span> <span class="n">dir</span> <span class="n">snake-points</span> <span class="n">food-points</span><span class="p">)]</span>
+   <span class="p">(</span><span class="k">let</span> <span class="p">([</span><span class="n">new-snake-point</span> <span class="p">(</span><span class="n">move</span> <span class="n">dir</span> <span class="p">(</span><span class="n">head!</span> <span class="n">snake-points</span><span class="p">))])</span>
+     <span class="p">(</span><span class="k">if</span> <span class="p">{</span><span class="n">new-snake-point</span> <span class="n">elem?</span> <span class="n">food-points</span><span class="p">}</span>
+         <span class="p">(</span><span class="k">do</span> <span class="p">[</span><span class="n">new-food-point</span> <span class="n">&lt;-</span> <span class="n">random-point</span><span class="p">]</span>
+             <span class="p">(</span><span class="n">pure</span> <span class="p">(</span><span class="n">world-state</span> <span class="n">dir</span> <span class="p">{</span><span class="n">new-snake-point</span> <span class="n">::</span> <span class="n">snake-points</span><span class="p">}</span>
+                                <span class="p">{</span><span class="n">new-food-point</span> <span class="n">::</span> <span class="p">(</span><span class="n">delete</span> <span class="n">new-snake-point</span> <span class="n">food-points</span><span class="p">)})))</span>
+         <span class="p">(</span><span class="n">pure</span> <span class="p">(</span><span class="n">world-state</span> <span class="n">dir</span> <span class="p">{</span><span class="n">new-snake-point</span> <span class="n">::</span> <span class="p">(</span><span class="n">init!</span> <span class="n">snake-points</span><span class="p">)}</span>
+                            <span class="n">food-points</span><span class="p">))))])</span>
+</pre></div>
+
+</div>
+
+<p>This function is the most complicated one in the whole program, but it’s still not terribly complex. It figures out what the snake’s next location is and binds it to <code>new-snake-point</code>, then checks if there is a food block at that location. If there is, it generates a <code>new-food-point</code>, then puts it in the new world state. Otherwise, it removes the last snake point and continues as usual.</p>
+
+<p>The game is already almost completely written. The next step is just to handle key events, which are obviously important for allowing the player to control the snake. Fortunately, this is easy, since we can just use our <code>set-ws-direction</code> function that we wrote earlier:</p>
+
+<div class="brush: racket">
+ <div class="source">
+  <pre><span></span><span class="p">(</span><span class="n">defn</span> <span class="n">on-key</span> <span class="n">:</span> <span class="p">{</span><span class="n">KeyEvent</span> <span class="k">-&gt;</span> <span class="n">World-State</span> <span class="k">-&gt;</span> <span class="p">(</span><span class="n">IO</span> <span class="n">World-State</span><span class="p">)}</span>
+  <span class="p">[[</span><span class="n">ke:left</span> <span class="p">]</span> <span class="p">{</span><span class="n">pure</span> <span class="o">.</span> <span class="p">(</span><span class="n">set-ws-direction</span> <span class="n">d:left</span><span class="p">)}]</span>
+  <span class="p">[[</span><span class="n">ke:right</span><span class="p">]</span> <span class="p">{</span><span class="n">pure</span> <span class="o">.</span> <span class="p">(</span><span class="n">set-ws-direction</span> <span class="n">d:right</span><span class="p">)}]</span>
+  <span class="p">[[</span><span class="n">ke:up</span>   <span class="p">]</span> <span class="p">{</span><span class="n">pure</span> <span class="o">.</span> <span class="p">(</span><span class="n">set-ws-direction</span> <span class="n">d:up</span><span class="p">)}]</span>
+  <span class="p">[[</span><span class="n">ke:down</span> <span class="p">]</span> <span class="p">{</span><span class="n">pure</span> <span class="o">.</span> <span class="p">(</span><span class="n">set-ws-direction</span> <span class="n">d:down</span><span class="p">)}]</span>
+  <span class="p">[[</span><span class="k">_</span>       <span class="p">]</span> <span class="p">{</span><span class="n">pure</span> <span class="o">.</span> <span class="n">id</span><span class="p">}])</span>
+</pre></div>
+
+</div>
+
+<p>The <code>on-key</code> function runs in <code>IO</code>, but we don’t actually need that power, since all of our keypress update logic is completely pure, so we just wrap everything in <code>pure</code>.</p>
+
+<p>We’re almost done now—all we need to do is set up the <em>initial</em> state when the game begins. We’ll write a small binding that creates a world state with the snake in the middle of the board and some random food locations scattered about:</p>
+
+<div class="brush: racket">
+ <div class="source">
+  <pre><span></span><span class="p">(</span><span class="n">def</span> <span class="n">initial-state</span>
+  <span class="p">(</span><span class="k">do</span> <span class="p">[</span><span class="n">initial-food</span> <span class="n">&lt;-</span> <span class="p">(</span><span class="n">sequence</span> <span class="p">(</span><span class="nb">take</span> <span class="mi">5</span> <span class="p">(</span><span class="n">repeat</span> <span class="n">random-point</span><span class="p">)))]</span>
+      <span class="p">(</span><span class="n">pure</span> <span class="p">(</span><span class="n">world-state</span> <span class="n">d:right</span>
+                         <span class="p">{(</span><span class="n">point</span> <span class="mi">25</span> <span class="mi">15</span><span class="p">)</span> <span class="n">::</span> <span class="p">(</span><span class="n">point</span> <span class="mi">24</span> <span class="mi">15</span><span class="p">)</span> <span class="n">::</span> <span class="p">(</span><span class="n">point</span> <span class="mi">23</span> <span class="mi">15</span><span class="p">)</span> <span class="n">::</span> <span class="n">nil</span><span class="p">}</span>
+                         <span class="n">initial-food</span><span class="p">))))</span>
+</pre></div>
+
+</div>
+
+<p>Notably, we can use the <code>repeat</code> function to create an infinite list of <code>random-point</code> actions, <code>take</code> the first five of them, then call <code>sequence</code> to execute them from left to right. Now, all we have to do is put the pieces together in a <code>main</code> block:</p>
+
+<div class="brush: racket">
+ <div class="source">
+  <pre><span></span><span class="p">(</span><span class="n">main</span> <span class="p">(</span><span class="k">do</span> <span class="p">[</span><span class="n">state</span> <span class="n">&lt;-</span> <span class="n">initial-state</span><span class="p">]</span>
+          <span class="p">(</span><span class="n">big-bang</span> <span class="n">state</span>
+            <span class="kd">#:to-draw</span> <span class="n">render</span>
+            <span class="kd">#:on-tick</span> <span class="n">on-tick</span> <span class="mf">0.2</span>
+            <span class="kd">#:on-key</span> <span class="n">on-key</span><span class="p">)))</span>
+</pre></div>
+
+</div>
+
+<p>And that’s it! We haven’t implemented any win or loss conditions, but the basics are all there. In 80 lines of code, we’ve implemented a working snake game in Hackett.</p>
+
+<div class="figure"><img src="/img/hackett-snake-animation.gif" alt="" />
+ <p class="caption"></p></div>
+
+<h1 id="contributing-to-hackett">Contributing to Hackett</h1>
+
+<p>If you are excited enough about Hackett to be interested in contributing, your first question is very likely “What can I do?” or “Where do I start?” My answer to that is (perhaps a little unhelpfully): it depends! My general recommendation is to try and write something with Hackett, and if you run into anything that prevents you from accomplishing your goal, look into what would need to be changed to support your program. Having a use case is a great way to come up with useful improvements.</p>
+
+<p>On the other hand, you might not have anything in mind, or you might find Hackett’s scope a little too overwhelming to just jump right in and start contributing. Fortunately, <a href="https://github.com/lexi-lambda/hackett/issues">Hackett has an issue tracker</a>, so feel free to take a look and pick something that looks interesting and achievable. Alternatively, the standard library can always use fleshing out, and quite a lot of that can be written without ever even touching the scary Hackett internals.</p>
+
+<p>Additionally, if you have any questions, please don’t hesitate to ask them! If you have a question about the codebase, get stuck implementing something, or just don’t know where to start, feel free to <a href="https://github.com/lexi-lambda/hackett/issues">open an issue on GitHub</a>, send me a message on the <code>#racket</code> IRC channel on Freenode, or ping me on <a href="http://racket-slack.herokuapp.com">the Racket Slack team</a>.</p>
+
+<h1 id="acknowledgements">Acknowledgements</h1>
+
+<p>Speaking of contributors, I’m excited to say that this is the first time I can truly say Hackett includes code written by someone other than me! I want to call attention to <a href="https://github.com/gelisam">Samuel Gélineau, aka gelisam</a>, who is officially the second contributor to Hackett. He helped to implement the new approach the Hackett REPL uses for printing expressions, which ended up being quite useful when implementing some of the other REPL improvements.</p>
+
+<p>Additionally, I want to specially thank <a href="http://www.cs.utah.edu/~mflatt/">Matthew Flatt</a>, <a href="http://eecs.northwestern.edu/~robby/">Robby Findler</a>, and <a href="http://www.ccs.neu.edu/home/samth/">Sam Tobin-Hochstadt</a> for being especially responsive and helpful to my many questions about Scribble and the Racket top level. Racket continues to be extremely impressive, both as a project and as a community.</p>
+
+<p>Finally, many thanks to the various people who have expressed interest in the project and continue to push me and ask questions. Working on Hackett is a lot of work—both time and effort—and it’s your continued enthusiasm that inspires me to put in the hours.</p>
+  <footer>
+    <ul class="pager">
+      <li class="previous">
+        <a href="/blog/2017/10/27/a-space-of-their-own-adding-a-type-namespace-to-hackett/">&larr; <em>A space of their own: adding a type namespace to Hackett</em></a>
+      </li>
+      <li class="next">
+        <a href="/blog/2017/08/12/user-programmable-infix-operators-in-racket/"><em>User-programmable infix operators in Racket</em> &rarr;</a>
+      </li>
+    </ul>
+  </footer>
+</article>
+        </div>
+      </section>
+      <footer>
+        <div class="content">
+          <h2 id="copyright-notice">© 2021, Alexis King</h2>
+          <h3>
+            Built with <a href="https://github.com/greghendershott/frog">Frog</a>, the
+            <strong>fr</strong>ozen bl<strong>og</strong> tool.
+          </h3>
+          <h3>
+            Feeds are available via <a href="/feeds/all.atom.xml">Atom</a>
+            or <a href="/feeds/all.rss.xml">RSS</a>.
+          </h3>
+        </div>
+      </footer>
+    </div>
+  </body>
+</html>

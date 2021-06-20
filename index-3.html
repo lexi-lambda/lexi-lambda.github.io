@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <title>Alexis King's Blog (page 3)</title>
+    <meta name="description" content="Alexis King's Blog (page 3)">
+    <meta name="author"      content="Alexis King">
+    <meta name="keywords"    content="heroku, typescript, elm, philosophy, frog, javascript, angular, meta, testing, types, racket, 12factor, macros, functional programming, rails, ruby, hackett, haskell, typed racket, all, envy, programming languages">
+    <meta name="viewport"    content="width=device-width, initial-scale=1.0">
+    <link rel="icon"      href="/favicon.ico">
+    <link rel="canonical" href="http://lexi-lambda.github.io/index-3.html">
+
+
+    <!-- CSS -->
+    <link rel="stylesheet" type="text/css" href="https://fonts.googleapis.com/css?family=Merriweather+Sans:400,300,300italic,400italic,700,700italic,800,800italic|Merriweather:400,300,300italic,400italic,700,700italic,900,900italic|Fira+Code:300,400,500,600,700">
+    <link rel="stylesheet" type="text/css" href="/css/application.min.css">
+    <link rel="stylesheet" type="text/css" href="/css/pygments.min.css">
+    <!-- Feeds -->
+    <link rel="alternate" type="application/atom+xml"
+          href="/feeds/all.atom.xml" title="Atom Feed">
+    <link rel="alternate" type="application/rss+xml"
+          href="/feeds/all.rss.xml" title="RSS Feed">
+    <!-- JS -->
+    <!-- <script src="/js/application.min.js"></script> -->
+    <script type="text/javascript">
+      (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+      (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+      m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+      })(window,document,'script','//www.google-analytics.com/analytics.js','ga');
+
+      ga('create', 'UA-65250372-1', 'auto');
+      ga('send', 'pageview');
+    </script>
+  </head>
+  <body>
+    <div id="page-content">
+      <!-- Navigation Bar -->
+      <header>
+        <nav role="navigation" class="navigation-bar">
+          <ul class="navigation-items left">
+            <li id="blog-title-header"><a href="/"><h1>Alexis King</h1></a></li>
+          </ul>
+          <ul class="navigation-items center"></ul>
+          <ul class="navigation-items right">
+            <li><a href="/">Home</a></li>
+            <li><a href="/resume.html">About Me</a></li>
+          </ul>
+        </nav>
+      </header>
+      <section role="main">
+        <!-- Main column -->
+        <div class="content" class="col-md-12">
+
+
+
+          <article class="inline">
+  <header>
+    <h2 class="title"><a href='/blog/2016/10/03/using-types-to-unit-test-in-haskell/'>Using types to unit-test in Haskell</a></h2>
+    <div class='date-and-tags'>
+      <time datetime="2016-10-03T01:20:43">
+        2016-10-03
+      </time>
+      <span style="margin: 0 3px">⦿</span>
+      <span class="tags"><a href="/tags/haskell.html">haskell</a>, <a href="/tags/testing.html">testing</a></span>
+    </div>
+  </header>
+
+<p>Object-oriented programming languages make unit testing easy by providing obvious boundaries between units of code in the form of classes and interfaces. These boundaries make it easy to stub out parts of a system to test functionality in isolation, which makes it possible to write fast, deterministic test suites that are robust in the face of change. When writing Haskell, it can be unclear how to accomplish the same goals: even inside pure code, it can become difficult to test a particular code path without also testing all its collaborators.</p>
+
+<p>Fortunately, by taking advantage of Haskell’s expressive type system, it’s possible to not only achieve parity with object-oriented testing techniques, but also to provide stronger static guarantees as well. Furthermore, it’s all possible without resorting to extra-linguistic hacks that static object-oriented languages sometimes use for mocking, such as dynamic bytecode generation.</p>
+  <footer class="read-more">
+    <a href="/blog/2016/10/03/using-types-to-unit-test-in-haskell/"><span class="read-more-text">Read more</span> →</a>
+  </footer>
+</article>
+<article class="inline">
+  <header>
+    <h2 class="title"><a href='/blog/2016/08/24/understanding-the-npm-dependency-model/'>Understanding the npm dependency model</a></h2>
+    <div class='date-and-tags'>
+      <time datetime="2016-08-24T22:50:28">
+        2016-08-24
+      </time>
+      <span style="margin: 0 3px">⦿</span>
+      <span class="tags"><a href="/tags/javascript.html">javascript</a></span>
+    </div>
+  </header>
+
+<p>Currently, <a href="https://www.npmjs.com">npm</a> is <em>the</em> package manager for the frontend world. Sure, there are alternatives, but for the time being, npm seems to have won. Even tools like <a href="https://bower.io">Bower</a> are being pushed to the wayside in favor of the One True Package Manager, but what’s most interesting to me is npm’s relatively novel approach to dependency management. Unfortunately, in my experience, it is actually not particularly well understood, so consider this an attempt to clarify how exactly it works and how it affects <strong>you</strong> as a user or package developer.</p>
+  <footer class="read-more">
+    <a href="/blog/2016/08/24/understanding-the-npm-dependency-model/"><span class="read-more-text">Read more</span> →</a>
+  </footer>
+</article>
+<article class="inline">
+  <header>
+    <h2 class="title"><a href='/blog/2016/08/11/climbing-the-infinite-ladder-of-abstraction/'>Climbing the infinite ladder of abstraction</a></h2>
+    <div class='date-and-tags'>
+      <time datetime="2016-08-11T18:03:48">
+        2016-08-11
+      </time>
+      <span style="margin: 0 3px">⦿</span>
+      <span class="tags"><a href="/tags/programming-languages.html">programming languages</a>, <a href="/tags/racket.html">racket</a>, <a href="/tags/haskell.html">haskell</a></span>
+    </div>
+  </header>
+
+<p>I started programming in elementary school.</p>
+
+<p>When I was young, I was fascinated by the idea of automation. I loathed doing the same repetitive task over and over again, and I always yearned for a way to <a href="https://xkcd.com/974/">solve the general problem</a>. When I learned about programming, I was immediately hooked: it was <em>so easy</em> to turn repetitive tasks into automated pipelines that would free me from ever having to do the same dull, frustrating exercise ever again.</p>
+
+<p>Of course, one of the first things I found out once I’d started was that nothing is ever quite so simple. Before long, my solutions to eliminate repetition grew repetitive, and it became clear I spent a lot of time typing out the same things, over and over again, creating the very problem I had initially set out to destroy. It was through this that I grew interested in functions, classes, and other repetition-reducing aids, and soon enough, I discovered the wonderful world of <strong>abstraction</strong>.</p>
+  <footer class="read-more">
+    <a href="/blog/2016/08/11/climbing-the-infinite-ladder-of-abstraction/"><span class="read-more-text">Read more</span> →</a>
+  </footer>
+</article>
+<article class="inline">
+  <header>
+    <h2 class="title"><a href='/blog/2016/06/12/four-months-with-haskell/'>Four months with Haskell</a></h2>
+    <div class='date-and-tags'>
+      <time datetime="2016-06-12T16:02:27">
+        2016-06-12
+      </time>
+      <span style="margin: 0 3px">⦿</span>
+      <span class="tags"><a href="/tags/haskell.html">haskell</a>, <a href="/tags/functional-programming.html">functional programming</a></span>
+    </div>
+  </header>
+
+<p>At the end of January of this year, I switched to a new job, almost exclusively because I was enticed by the idea of being able to write Haskell. The concept of using such an interesting programming language every day instead of what I’d been doing before (mostly Rails and JavaScript) was very exciting, and I’m pleased to say that the switch seems to have been well worth it.</p>
+
+<p>Haskell was a language I had played with in the past but never really used for anything terribly practical, but lately I think I can confidently say that it really is an <em>incredible</em> programming language. At the same time, it has some significant drawbacks, too, though probably not the ones people expect. I certainly wasn’t prepared for some of the areas where Haskell would blow me away, nor was I capable of realizing which parts would leave me hopelessly frustrated until I actually sat down and started writing lots and lots of code.</p>
+  <footer class="read-more">
+    <a href="/blog/2016/06/12/four-months-with-haskell/"><span class="read-more-text">Read more</span> →</a>
+  </footer>
+</article>
+<article class="inline">
+  <header>
+    <h2 class="title"><a href='/blog/2016/02/18/simple-safe-multimethods-in-racket/'>Simple, safe multimethods in Racket</a></h2>
+    <div class='date-and-tags'>
+      <time datetime="2016-02-18T18:48:32">
+        2016-02-18
+      </time>
+      <span style="margin: 0 3px">⦿</span>
+      <span class="tags"><a href="/tags/racket.html">racket</a>, <a href="/tags/macros.html">macros</a></span>
+    </div>
+  </header>
+
+<p>Racket ships with <code>racket/generic</code>, a system for defining <em>generic methods</em>, functions that work differently depending on what sort of value they are supplied. I have made heavy use of this feature in my collections library, and it has worked well for my needs, but that system does have a bit of a limitation: it only supports <em>single dispatch</em>. Method implementations may only be chosen based on a single argument, so multiple dispatch is impossible.</p>
+  <footer class="read-more">
+    <a href="/blog/2016/02/18/simple-safe-multimethods-in-racket/"><span class="read-more-text">Read more</span> →</a>
+  </footer>
+</article>
+<article class="inline">
+  <header>
+    <h2 class="title"><a href='/blog/2015/12/21/adts-in-typed-racket-with-macros/'>ADTs in Typed Racket with macros</a></h2>
+    <div class='date-and-tags'>
+      <time datetime="2015-12-21T17:57:07">
+        2015-12-21
+      </time>
+      <span style="margin: 0 3px">⦿</span>
+      <span class="tags"><a href="/tags/racket.html">racket</a>, <a href="/tags/typed-racket.html">typed racket</a>, <a href="/tags/macros.html">macros</a></span>
+    </div>
+  </header>
+
+<p>Macros are one of Racket&rsquo;s flagship features, and its macro system really is state of the art. Of course, it can sometimes be difficult to demonstrate <em>why</em> macros are so highly esteemed, in part because it can be hard to find self-contained examples of using macros in practice. Of course, one thing that macros are perfect for is filling a &ldquo;hole&rdquo; in the language by introducing a feature a language lacks, and one of those features in Typed Racket is <strong>ADTs</strong>.</p>
+  <footer class="read-more">
+    <a href="/blog/2015/12/21/adts-in-typed-racket-with-macros/"><span class="read-more-text">Read more</span> →</a>
+  </footer>
+</article>
+<article class="inline">
+  <header>
+    <h2 class="title"><a href='/blog/2015/11/06/functionally-updating-record-types-in-elm/'>Functionally updating record types in Elm</a></h2>
+    <div class='date-and-tags'>
+      <time datetime="2015-11-06T19:58:40">
+        2015-11-06
+      </time>
+      <span style="margin: 0 3px">⦿</span>
+      <span class="tags"><a href="/tags/elm.html">elm</a></span>
+    </div>
+  </header>
+
+<p><a href="http://elm-lang.org">Elm</a> is a wonderful language for building web apps, and I love so much of its approach to language design. Elm does so many things <em>right</em> straight out of the box, and that&rsquo;s a real breath of fresh air in the intersection of functional programming and web development. Still, it gets one thing wrong, and unfortunately, that one thing is incredibly important. Elm took the &ldquo;functions&rdquo; out of &ldquo;functional record types&rdquo;.</p>
+  <footer class="read-more">
+    <a href="/blog/2015/11/06/functionally-updating-record-types-in-elm/"><span class="read-more-text">Read more</span> →</a>
+  </footer>
+</article>
+<article class="inline">
+  <header>
+    <h2 class="title"><a href='/blog/2015/09/23/canonical-factories-for-testing-with-factory-girl-api/'>Canonical factories for testing with factory_girl_api</a></h2>
+    <div class='date-and-tags'>
+      <time datetime="2015-09-23T16:30:12">
+        2015-09-23
+      </time>
+      <span style="margin: 0 3px">⦿</span>
+      <span class="tags"><a href="/tags/ruby.html">ruby</a>, <a href="/tags/rails.html">rails</a>, <a href="/tags/javascript.html">javascript</a>, <a href="/tags/angular.html">angular</a></span>
+    </div>
+  </header>
+
+<p>Modern web applications are often built as <em>single-page apps</em>, which are great for keeping concerns separated, but problematic when tested. Logic needs to be duplicated in front- and back-end test suites, and if the two apps diverge, the tests won&rsquo;t catch the failure. I haven&rsquo;t found a very good solution to this problem aside from brittle, end-to-end integration tests.</p>
+
+<p>To attempt to address a fraction of this problem, I built <a href="https://github.com/lexi-lambda/factory_girl_api">factory_girl_api</a>, a way to share context setup between both sides of the application.</p>
+  <footer class="read-more">
+    <a href="/blog/2015/09/23/canonical-factories-for-testing-with-factory-girl-api/"><span class="read-more-text">Read more</span> →</a>
+  </footer>
+</article>
+<article class="inline">
+  <header>
+    <h2 class="title"><a href='/blog/2015/08/30/managing-application-configuration-with-envy/'>Managing application configuration with Envy</a></h2>
+    <div class='date-and-tags'>
+      <time datetime="2015-08-30T16:05:37">
+        2015-08-30
+      </time>
+      <span style="margin: 0 3px">⦿</span>
+      <span class="tags"><a href="/tags/envy.html">envy</a>, <a href="/tags/racket.html">racket</a>, <a href="/tags/12factor.html">12factor</a></span>
+    </div>
+  </header>
+
+<p>Application configuration can be a pain. Modern web apps don&rsquo;t live on dedicated boxes, they run on VPSes somewhere in the amorphous &ldquo;cloud&rdquo;, and keeping configuration out of your application&rsquo;s repository can seem like more trouble than it&rsquo;s worth. Fortunately, <a href="http://12factor.net">The Twelve-Factor App</a> provides a set of standards for keeping web apps sane, and <a href="http://12factor.net/config">one of those guidelines advises keeping configuration in the environment</a>.</p>
+
+<p><a href="https://github.com/lexi-lambda/envy">Envy</a> is the declarative bridge between Racket code and the outside world of the environment.</p>
+  <footer class="read-more">
+    <a href="/blog/2015/08/30/managing-application-configuration-with-envy/"><span class="read-more-text">Read more</span> →</a>
+  </footer>
+</article>
+<article class="inline">
+  <header>
+    <h2 class="title"><a href='/blog/2015/08/22/deploying-racket-applications-on-heroku/'>Deploying Racket applications on Heroku</a></h2>
+    <div class='date-and-tags'>
+      <time datetime="2015-08-22T14:47:49">
+        2015-08-22
+      </time>
+      <span style="margin: 0 3px">⦿</span>
+      <span class="tags"><a href="/tags/racket.html">racket</a>, <a href="/tags/heroku.html">heroku</a>, <a href="/tags/12factor.html">12factor</a></span>
+    </div>
+  </header>
+
+<p><a href="https://www.heroku.com">Heroku</a> is a &ldquo;platform as a service&rdquo; that provides an incredibly simple way to deploy simple internet applications, and I take liberal advantage of its free tier for testing out simple applications. It has support for a variety of languages built-in, but Racket is not currently among them. Fortunately, Heroku provides an interface for adding custom build processes for arbitrary types of applications, called “buildpacks”. I&rsquo;ve built one for Racket apps, and with just a little bit of configuration, it’s possible to get a Racket webserver running on Heroku.</p>
+  <footer class="read-more">
+    <a href="/blog/2015/08/22/deploying-racket-applications-on-heroku/"><span class="read-more-text">Read more</span> →</a>
+  </footer>
+</article>
+<footer>
+ <ul class="pagination">
+  <li class="page-item"><a class="page-link" href="/index-2.html">
+    <quote>&larr;</quote></a></li>
+  <li class="page-item"><a class="page-link" href="/index.html">1</a></li>
+  <li class="page-item"><a class="page-link" href="/index-2.html">2</a></li>
+  <li class="page-item active"><a class="page-link" href="/index-3.html">3</a></li>
+  <li class="page-item"><a class="page-link" href="/index-4.html">4</a></li>
+  <li class="page-item"><a class="page-link" href="/index-4.html">
+    <quote>&rarr;</quote></a></li></ul></footer>
+        </div>
+      </section>
+      <footer>
+        <div class="content">
+          <h2 id="copyright-notice">© 2021, Alexis King</h2>
+          <h3>
+            Built with <a href="https://github.com/greghendershott/frog">Frog</a>, the
+            <strong>fr</strong>ozen bl<strong>og</strong> tool.
+          </h3>
+          <h3>
+            Feeds are available via <a href="/feeds/all.atom.xml">Atom</a>
+            or <a href="/feeds/all.rss.xml">RSS</a>.
+          </h3>
+        </div>
+      </footer>
+    </div>
+  </body>
+</html>

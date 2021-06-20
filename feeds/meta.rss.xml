@@ -1,0 +1,166 @@
+<?xml version="1.0" encoding="utf-8"?> 
+<rss version="2.0">
+ <channel>
+  <title>Alexis King's Blog: Posts tagged 'meta'</title>
+  <description>Alexis King's Blog: Posts tagged 'meta'</description>
+  <link>http://lexi-lambda.github.io/tags/meta.html</link>
+  <lastBuildDate>Sat, 18 Jul 2015 19:09:01 UT</lastBuildDate>
+  <pubDate>Sat, 18 Jul 2015 19:09:01 UT</pubDate>
+  <ttl>1800</ttl>
+  <item>
+   <title>Automatically deploying a Frog-powered blog to GitHub pages</title>
+   <link>http://lexi-lambda.github.io/blog/2015/07/18/automatically-deploying-a-frog-powered-blog-to-github-pages/?utm_source=meta&amp;utm_medium=RSS</link>
+   <guid isPermaLink="false">urn:http-lexi-lambda-github-io:-blog-2015-07-18-automatically-deploying-a-frog-powered-blog-to-github-pages</guid>
+   <pubDate>Sat, 18 Jul 2015 19:09:01 UT</pubDate>
+   <author>Alexis King</author>
+   <description>
+&lt;p&gt;So, I have a blog now. It&amp;rsquo;s a simple static blog, but what&amp;rsquo;s unique about it is that it&amp;rsquo;s powered by Racket; specifically, it uses &lt;a href="http://www.greghendershott.com"&gt;Greg Hendershott&lt;/a&gt;&amp;rsquo;s fantastic &lt;a href="https://github.com/greghendershott/frog"&gt;Frog&lt;/a&gt; tool. I&amp;rsquo;ve taken this and moulded it to my tastes to build my blog, including configuring automatic deployment via &lt;a href="https://travis-ci.org"&gt;Travis CI&lt;/a&gt;, so my blog is always up-to-date.&lt;/p&gt;
+&lt;!-- more--&gt;
+
+&lt;h1 id="setting-up-frog"&gt;Setting up Frog&lt;/h1&gt;
+
+&lt;p&gt;I should note that Frog itself was wonderfully easy to drop in and get running. Just following the readme, a simple &lt;code&gt;raco pkg install frog&lt;/code&gt; followed by &lt;code&gt;raco frog --init&lt;/code&gt; and &lt;code&gt;raco frog -bp&lt;/code&gt; created a running blog and opened it in my web browser. There was nothing more to it. Once that&amp;rsquo;s done, all it takes to write a blog post is &lt;code&gt;raco frog -n "Post Title"&lt;/code&gt;, and you&amp;rsquo;re good to go.&lt;/p&gt;
+
+&lt;p&gt;By default, Frog uses Bootstrap, which provides a lot of the necessary scaffolding for you, but I opted to roll my own layout using flexbox. I also decided to use &lt;a href="http://sass-lang.com"&gt;Sass&lt;/a&gt; for my stylesheets, potentially with support for &lt;a href="http://coffeescript.org"&gt;CoffeeScript&lt;/a&gt; later, so I wanted to have a good flow for compiling all the resources for deployment. To do that, I used &lt;a href="http://gulpjs.com"&gt;Gulp&lt;/a&gt; in conjunction with &lt;a href="https://www.npmjs.com"&gt;NPM&lt;/a&gt; for build and dependency management.&lt;/p&gt;
+
+&lt;p&gt;Going this route has a few advantages, primarily the fact that updating dependencies becomes much easier, and I can build and deploy my blog with just a couple of commands without needing to commit compiled or minified versions of my sources to version control.&lt;/p&gt;
+
+&lt;h1 id="configuring-automatic-deployment-with-travis"&gt;Configuring automatic deployment with Travis&lt;/h1&gt;
+
+&lt;p&gt;Once Frog itself was configured and my styling was finished, I started looking into how to deploy my blog to a GitHub page without needing to check in any of the generated files to source control. I found a couple of resources, the most useful one being &lt;a href="https://gist.github.com/domenic/ec8b0fc8ab45f39403dd"&gt;this Gist&lt;/a&gt;, which describes how to set up deployment for any project. The basic idea is to create a deployment script which will automatically generate your project, initialize a git repository with the generated files, and push to GitHub&amp;rsquo;s special &lt;code&gt;gh-pages&lt;/code&gt; branch.&lt;/p&gt;
+
+&lt;p&gt;To make this easy, Frog can be configured to output to a separate directory via the &lt;code&gt;.frogrc&lt;/code&gt; configuration file. I chose to output to the &lt;code&gt;out&lt;/code&gt; directory:&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;output-dir = out&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;I also configured my Gulp build to output my CSS into the same output directory. Now, all that&amp;rsquo;s necessary in order to deploy the blog to GitHub is to initialize a Git repository in the output directory, and push the files to the remote branch.&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ cd out
+$ git init
+$ git add .
+$ git commit -m "Deploy to GitHub Pages"
+$ git push --force "$REMOTE_URL" master:gh-pages&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;The next step is to configure Travis so that it can securely push to the GitHub repository with the required credentials. This can be done with Travis&amp;rsquo;s &lt;a href="http://docs.travis-ci.com/user/encryption-keys/"&gt;encryption keys&lt;/a&gt; along with a GitHub &lt;a href="https://github.com/settings/tokens"&gt;personal access token&lt;/a&gt;. Just install the Travis CLI client, copy the access token, and run a command:&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;$ gem install travis
+$ travis encrypt GH_TOKEN=&amp;lt;access token...&amp;gt;&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;The output of that command is an encrypted value to be placed in an environment variable in the project&amp;rsquo;s &lt;code&gt;.travis.yml&lt;/code&gt; configuration file. The URL for the repository on GitHub will also need to be specified as well:&lt;/p&gt;
+
+&lt;div class="brush: yaml"&gt;
+ &lt;div class="source"&gt;
+  &lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;span class="nt"&gt;env&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt;
+  &lt;span class="nt"&gt;global&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt;
+  &lt;span class="p p-Indicator"&gt;-&lt;/span&gt; &lt;span class="nt"&gt;GH_REF&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt; &lt;span class="s"&gt;&amp;#39;github.com/&amp;lt;gh-username&amp;gt;/&amp;lt;gh-repo&amp;gt;.git&amp;#39;&lt;/span&gt;
+  &lt;span class="p p-Indicator"&gt;-&lt;/span&gt; &lt;span class="nt"&gt;secure&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt; &lt;span class="l l-Scalar l-Scalar-Plain"&gt;&amp;lt;encrypted data...&amp;gt;&lt;/span&gt;
+&lt;/pre&gt;&lt;/div&gt;
+
+&lt;/div&gt;
+
+&lt;p&gt;Now all that&amp;rsquo;s left is configuring the &lt;code&gt;.travis.yml&lt;/code&gt; to run Frog. Since Travis doesn&amp;rsquo;t natively support Racket at the time of this writing, the choice of &amp;ldquo;language&amp;rdquo; is somewhat arbitrary, but since I want Pygments installed for syntax highlighting, I set my project type to &lt;code&gt;python&lt;/code&gt;, then installed Racket and Frog as pre-installation steps.&lt;/p&gt;
+
+&lt;div class="brush: yaml"&gt;
+ &lt;div class="source"&gt;
+  &lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;span class="nt"&gt;env&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt;
+  &lt;span class="nt"&gt;global&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt;
+  &lt;span class="p p-Indicator"&gt;-&lt;/span&gt; &lt;span class="nt"&gt;GH_REF&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt; &lt;span class="s"&gt;&amp;#39;github.com/&amp;lt;gh-username&amp;gt;/&amp;lt;gh-repo&amp;gt;.git&amp;#39;&lt;/span&gt;
+  &lt;span class="p p-Indicator"&gt;-&lt;/span&gt; &lt;span class="nt"&gt;secure&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt; &lt;span class="l l-Scalar l-Scalar-Plain"&gt;&amp;lt;encrypted data...&amp;gt;&lt;/span&gt;
+  &lt;span class="p p-Indicator"&gt;-&lt;/span&gt; &lt;span class="nt"&gt;RACKET_DIR&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt; &lt;span class="s"&gt;&amp;#39;~/racket&amp;#39;&lt;/span&gt;
+  &lt;span class="p p-Indicator"&gt;-&lt;/span&gt; &lt;span class="nt"&gt;RACKET_VERSION&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt; &lt;span class="s"&gt;&amp;#39;6.2&amp;#39;&lt;/span&gt;
+
+&lt;span class="nt"&gt;before_install&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt;
+&lt;span class="p p-Indicator"&gt;-&lt;/span&gt; &lt;span class="l l-Scalar l-Scalar-Plain"&gt;git clone https://github.com/greghendershott/travis-racket.git&lt;/span&gt;
+&lt;span class="p p-Indicator"&gt;-&lt;/span&gt; &lt;span class="l l-Scalar l-Scalar-Plain"&gt;cat travis-racket/install-racket.sh | bash&lt;/span&gt;
+&lt;span class="p p-Indicator"&gt;-&lt;/span&gt; &lt;span class="l l-Scalar l-Scalar-Plain"&gt;export PATH="${RACKET_DIR}/bin:${PATH}"&lt;/span&gt;
+
+&lt;span class="nt"&gt;install&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt;
+&lt;span class="p p-Indicator"&gt;-&lt;/span&gt; &lt;span class="l l-Scalar l-Scalar-Plain"&gt;raco pkg install --deps search-auto frog&lt;/span&gt;
+&lt;/pre&gt;&lt;/div&gt;
+
+&lt;/div&gt;
+
+&lt;p&gt;(It might be worth noting that Greg Hendershott &lt;em&gt;also&lt;/em&gt; maintains the repository that contains the above Travis build script!)&lt;/p&gt;
+
+&lt;p&gt;Finally, in my case, I wasn&amp;rsquo;t deploying to a project-specific GitHub page. Instead, I wanted to deploy to my user page, which uses &lt;code&gt;master&lt;/code&gt;, not &lt;code&gt;gh-pages&lt;/code&gt;. Obviously, I didn&amp;rsquo;t want Travis running on my &lt;code&gt;master&lt;/code&gt; branch, since it would be deploying to that, so I added a branch whitelist:&lt;/p&gt;
+
+&lt;div class="brush: yaml"&gt;
+ &lt;div class="source"&gt;
+  &lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;span class="nt"&gt;branches&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt;
+  &lt;span class="nt"&gt;only&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt;
+  &lt;span class="p p-Indicator"&gt;-&lt;/span&gt; &lt;span class="l l-Scalar l-Scalar-Plain"&gt;source&lt;/span&gt;
+&lt;/pre&gt;&lt;/div&gt;
+
+&lt;/div&gt;
+
+&lt;p&gt;All that was left to do was to write up the actual deployment script to be used by Travis. Based on the one provided in the above Gist, mine looked like this:&lt;/p&gt;
+
+&lt;div class="brush: bash"&gt;
+ &lt;div class="source"&gt;
+  &lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;span class="ch"&gt;#!/bin/bash&lt;/span&gt;
+&lt;span class="nb"&gt;set&lt;/span&gt; -ev &lt;span class="c1"&gt;# exit with nonzero exit code if anything fails&lt;/span&gt;
+
+&lt;span class="c1"&gt;# clear the output directory&lt;/span&gt;
+rm -rf out &lt;span class="o"&gt;||&lt;/span&gt; &lt;span class="nb"&gt;exit&lt;/span&gt; &lt;span class="m"&gt;0&lt;/span&gt;&lt;span class="p"&gt;;&lt;/span&gt;
+
+&lt;span class="c1"&gt;# build the blog files + install pygments for highlighting support&lt;/span&gt;
+npm install
+npm run build
+pip install pygments
+raco frog --build
+
+&lt;span class="c1"&gt;# go to the out directory and create a *new* Git repo&lt;/span&gt;
+&lt;span class="nb"&gt;cd&lt;/span&gt; out
+git init
+
+&lt;span class="c1"&gt;# inside this git repo we&amp;#39;ll pretend to be a new user&lt;/span&gt;
+git config user.name &lt;span class="s2"&gt;"Travis CI"&lt;/span&gt;
+git config user.email &lt;span class="s2"&gt;"&amp;lt;your@email.here&amp;gt;"&lt;/span&gt;
+
+&lt;span class="c1"&gt;# The first and only commit to this new Git repo contains all the&lt;/span&gt;
+&lt;span class="c1"&gt;# files present with the commit message "Deploy to GitHub Pages".&lt;/span&gt;
+git add .
+git commit -m &lt;span class="s2"&gt;"Deploy to GitHub Pages"&lt;/span&gt;
+
+&lt;span class="c1"&gt;# Force push from the current repo&amp;#39;s master branch to the remote&lt;/span&gt;
+&lt;span class="c1"&gt;# repo. (All previous history on the branch will be lost, since we are&lt;/span&gt;
+&lt;span class="c1"&gt;# overwriting it.) We redirect any output to /dev/null to hide any sensitive&lt;/span&gt;
+&lt;span class="c1"&gt;# credential data that might otherwise be exposed.&lt;/span&gt;
+git push --force --quiet &lt;span class="s2"&gt;"https://&lt;/span&gt;&lt;span class="si"&gt;${&lt;/span&gt;&lt;span class="nv"&gt;GH_TOKEN&lt;/span&gt;&lt;span class="si"&gt;}&lt;/span&gt;&lt;span class="s2"&gt;@&lt;/span&gt;&lt;span class="si"&gt;${&lt;/span&gt;&lt;span class="nv"&gt;GH_REF&lt;/span&gt;&lt;span class="si"&gt;}&lt;/span&gt;&lt;span class="s2"&gt;"&lt;/span&gt; master &amp;gt; /dev/null &lt;span class="m"&gt;2&lt;/span&gt;&amp;gt;&lt;span class="p"&gt;&amp;amp;&lt;/span&gt;&lt;span class="m"&gt;1&lt;/span&gt;
+&lt;/pre&gt;&lt;/div&gt;
+
+&lt;/div&gt;
+
+&lt;p&gt;For reference, my final &lt;code&gt;.travis.yml&lt;/code&gt; looked like this:&lt;/p&gt;
+
+&lt;div class="brush: yaml"&gt;
+ &lt;div class="source"&gt;
+  &lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;span class="nt"&gt;language&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt; &lt;span class="l l-Scalar l-Scalar-Plain"&gt;python&lt;/span&gt;
+&lt;span class="nt"&gt;python&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt;
+&lt;span class="p p-Indicator"&gt;-&lt;/span&gt; &lt;span class="s"&gt;&amp;#39;3.4&amp;#39;&lt;/span&gt;
+
+&lt;span class="nt"&gt;branches&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt;
+  &lt;span class="nt"&gt;only&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt;
+  &lt;span class="p p-Indicator"&gt;-&lt;/span&gt; &lt;span class="l l-Scalar l-Scalar-Plain"&gt;source&lt;/span&gt;
+
+&lt;span class="nt"&gt;env&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt;
+  &lt;span class="nt"&gt;global&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt;
+  &lt;span class="p p-Indicator"&gt;-&lt;/span&gt; &lt;span class="nt"&gt;GH_REF&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt; &lt;span class="s"&gt;&amp;#39;github.com/lexi-lambda/lexi-lambda.github.io.git&amp;#39;&lt;/span&gt;
+  &lt;span class="p p-Indicator"&gt;-&lt;/span&gt; &lt;span class="nt"&gt;secure&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt; &lt;span class="l l-Scalar l-Scalar-Plain"&gt;&amp;lt;long secure token...&amp;gt;&lt;/span&gt;
+  &lt;span class="p p-Indicator"&gt;-&lt;/span&gt; &lt;span class="nt"&gt;RACKET_DIR&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt; &lt;span class="s"&gt;&amp;#39;~/racket&amp;#39;&lt;/span&gt;
+  &lt;span class="p p-Indicator"&gt;-&lt;/span&gt; &lt;span class="nt"&gt;RACKET_VERSION&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt; &lt;span class="s"&gt;&amp;#39;6.2&amp;#39;&lt;/span&gt;
+
+&lt;span class="nt"&gt;before_install&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt;
+&lt;span class="p p-Indicator"&gt;-&lt;/span&gt; &lt;span class="l l-Scalar l-Scalar-Plain"&gt;git clone https://github.com/greghendershott/travis-racket.git&lt;/span&gt;
+&lt;span class="p p-Indicator"&gt;-&lt;/span&gt; &lt;span class="l l-Scalar l-Scalar-Plain"&gt;cat travis-racket/install-racket.sh | bash&lt;/span&gt;
+&lt;span class="p p-Indicator"&gt;-&lt;/span&gt; &lt;span class="l l-Scalar l-Scalar-Plain"&gt;export PATH="${RACKET_DIR}/bin:${PATH}"&lt;/span&gt;
+
+&lt;span class="nt"&gt;install&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt;
+&lt;span class="p p-Indicator"&gt;-&lt;/span&gt; &lt;span class="l l-Scalar l-Scalar-Plain"&gt;raco pkg install --deps search-auto frog&lt;/span&gt;
+
+&lt;span class="nt"&gt;script&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt; &lt;span class="l l-Scalar l-Scalar-Plain"&gt;bash ./deploy.sh&lt;/span&gt;
+&lt;/pre&gt;&lt;/div&gt;
+
+&lt;/div&gt;
+
+&lt;p&gt;That&amp;rsquo;s it! Now I have a working blog that I can publish just by pushing to the &lt;code&gt;source&lt;/code&gt; branch on GitHub.&lt;/p&gt;</description></item></channel></rss>
