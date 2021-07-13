@@ -94,7 +94,7 @@
           (flush-output (pygments-server-stdin server)))
         (pygments-server-cust server)))
 
-     (with-handlers* ([exn:fail:read?
+     (with-handlers* ([exn:fail?
                        (λ (exn)
                          ((pygments-server-interact server) 'kill)
                          ((pygments-server-interact server) 'wait)

@@ -25,6 +25,8 @@
                        [haskell-block (-> string? ... block?)]
                        (struct footnote-reference ([note-id symbol?]))
                        (struct footnote-definition ([note-id symbol?]))
+                       [footnote-reference-element (-> symbol? element?)]
+                       [footnote-flow (-> symbol? (listof block?) block?)]
                        [wikipedia (-> pre-content? ... element?)]
                        [hackage-package (-> string? element?)]
                        [hackage-package* (-> string? pre-content? ... element?)]

@@ -28,7 +28,7 @@
           (struct ordered-list ([blockss (listof (listof block?))]))
           (struct blockquote ([blocks (listof block?)]))
 
-          [markdown/p (parser/c char? document?)]))
+          [document/p (parser/c char? document?)]))
 
 ;; -----------------------------------------------------------------------------
 
@@ -187,7 +187,7 @@ As it parses the indentation for each block, it transfers it from the
 ;; -----------------------------------------------------------------------------
 ;; the parser
 
-(define markdown/p
+(define document/p
   (lazy/p (scan-line-start (list (document '() (hash) '())))))
 
 (define (scan-line-start out-blocks)
@@ -293,7 +293,8 @@ As it parses the indentation for each block, it transfers it from the
 
            ; code blocks
            (do (try/p (string/p "```"))
-               [language <- rest-of-line/p]
+               [language <- (or/p (do newline/p (pure #f))
+                                  rest-of-line/p)]
                (scan-line-start (reverse (list* (code-block "" language) inner-block in-blocks))))
 
            ; lists
