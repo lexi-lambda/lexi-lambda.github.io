@@ -23,6 +23,7 @@
          threading
 
          "../util.rkt"
+         "../highlight/pygments.rkt"
          "post-language.rkt")
 
 (provide render-mixin)
@@ -191,22 +192,30 @@
       (set! footnote-ids (reverse footnote-ids))
       (set! footnote-elements '())
       (parameterize ([current-output-file output-file])
-        (display "<!doctype html>")
-        (xml:write-xexpr
-         `(html
-           (head
-            (meta ([charset "utf-8"]
-                   [viewport "width=device-width, initial-scale=1.0"])
-                  ,(cond
-                     [(part-title-content part)
-                      => (λ (title-content)
-                           `(title ,(content->string (strip-aux title-content) this part ri)))]
-                     [else '(title)]))
-            (body ,@(render-part part ri)
-                  (div ([class "footnotes"])
-                       (ol ,@(for/list ([footnote-element (in-list (reverse footnote-elements))]
-                                        [footnote-index (in-naturals 1)])
-                               `(li ([id ,(~a "footnote-" footnote-index)]) ,@footnote-element))))))))))
+        (call-with-current-pygments-server
+         (λ ()
+           (display "<!doctype html>")
+           (xml:write-xexpr
+            `(html
+              (head
+               (meta ([charset "utf-8"]))
+               ,(cond
+                  [(part-title-content part)
+                   => (λ (title-content)
+                        `(title ,(content->string (strip-aux title-content) this part ri)))]
+                  [else '(title)])
+               (link ([rel "stylesheet"] [type "text/css"] [href "https://fonts.googleapis.com/css?family=Merriweather+Sans:400,300,300italic,400italic,700,700italic,800,800italic|Merriweather:400,300,300italic,400italic,700,700italic,900,900italic|Fira+Code:300,400,500,600,700"]))
+               (link ([rel "stylesheet"] [type "text/css"] [href "file:///home/alexis/code/blog/out/css/application.min.css"]))
+               (link ([rel "stylesheet"] [type "text/css"] [href "file:///home/alexis/code/blog/out/css/pygments.min.css"]))
+               (body (div ([id "page-content"])
+                          (section ([role "main"])
+                                   (div ([class "content"])
+                                        (article ([class "main"])
+                                                 ,@(render-part part ri)
+                                                 (div ([class "footnotes"])
+                                                      (ol ,@(for/list ([footnote-element (in-list (reverse footnote-elements))]
+                                                                       [footnote-index (in-naturals 1)])
+                                                              `(li ([id ,(~a "footnote-" footnote-index)]) ,@footnote-element))))))))))))))))
 
     (define/override (render-part-content part ri)
       (define number (collected-info-number (part-collected-info part ri)))
@@ -231,10 +240,14 @@
          `[(div ,@rendered)]]))
 
     (define/override (render-paragraph e part ri)
-      (define-values [tag-name attrs] (style->tag-name+attributes (paragraph-style e)))
-      `[(,(or tag-name 'p)
-         ,(attributes->list attrs)
-         ,@(super render-paragraph e part ri))])
+      (match e
+        [(paragraph (style #f (list (pygments-content source language))) '())
+         `[(pre ,(pygmentize source #:language language))]]
+        [_
+         (define-values [tag-name attrs] (style->tag-name+attributes (paragraph-style e)))
+         `[(,(or tag-name 'p)
+            ,(attributes->list attrs)
+            ,@(super render-paragraph e part ri))]]))
 
     (define/override (render-itemization e part ri)
       (define style (normalize-style (itemization-style e)))
@@ -256,6 +269,8 @@
     (define/override (render-content elem part ri)
       (match elem
         [(? string? s) (list s)]
+        [(element (style #f (list (pygments-content source language))) '())
+         (list (pygmentize source #:language language))]
         [(element (style #f (list (footnote-reference note-id))) '())
          (define note-index (and~> (index-of footnote-ids note-id) add1))
          `[(sup (a ([href ,(if note-index

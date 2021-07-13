@@ -18,6 +18,11 @@
          define-footnote
          (contract-out [code (-> content? ... element?)]
                        [code-block (-> content? ... block?)]
+                       (struct pygments-content ([source string?] [language string?]))
+                       [pygments (-> #:language string? string? ... element?)]
+                       [pygments-block (-> #:language string? string? ... block?)]
+                       [haskell (-> string? ... element?)]
+                       [haskell-block (-> string? ... block?)]
                        (struct footnote-reference ([note-id symbol?]))
                        (struct footnote-definition ([note-id symbol?]))
                        [wikipedia (-> pre-content? ... element?)]
@@ -29,10 +34,22 @@
 ;; -----------------------------------------------------------------------------
 
 (define (code . content)
-  (element 'tt content))
+  (element (style #f (list (alt-tag "code"))) content))
 
 (define (code-block . content)
-  (paragraph (style #f (list (alt-tag "pre"))) content))
+  (paragraph (style #f (list (alt-tag "pre"))) (apply code content)))
+
+(struct pygments-content (source language) #:transparent)
+
+(define (pygments #:language language . strs)
+  (element (style #f (list (pygments-content (string-append* strs) language))) '()))
+(define (pygments-block #:language language . strs)
+  (paragraph (style #f (list (pygments-content (string-append* strs) language))) '()))
+
+(define (haskell . strs)
+  (apply pygments #:language "haskell" strs))
+(define (haskell-block . strs)
+  (apply pygments-block #:language "haskell" strs))
 
 ;; -----------------------------------------------------------------------------
 
@@ -50,7 +67,7 @@
 (define (date+tags-element date-lst tag-strs)
   (match-define (list year month day) date-lst)
   (define date-str (string-append year "-" month "-" day))
-  (paragraph (style "date-and-time" '(div))
+  (paragraph (style "date-and-tags" '(div))
              (list* (element (style #f (list (alt-tag "time")
                                              (attributes (list (cons 'datetime date-str)))))
                              date-str)
