@@ -14,7 +14,7 @@
          scribble/html-properties
          syntax/parse/define)
 
-(provide date+tags
+(provide infer-date
          define-footnote
          (contract-out [code (-> content? ... element?)]
                        [code-block (-> content? ... block?)]
@@ -23,10 +23,15 @@
                        [pygments-block (-> #:language string? string? ... block?)]
                        [haskell (-> string? ... element?)]
                        [haskell-block (-> string? ... block?)]
+
+                       (struct post-tags ([tags (listof string?)]))
+                       [blog-tag (-> string? element?)]
+
                        (struct footnote-reference ([note-id symbol?]))
                        (struct footnote-definition ([note-id symbol?]))
                        [footnote-reference-element (-> symbol? element?)]
                        [footnote-flow (-> symbol? (listof block?) block?)]
+
                        [wikipedia (-> pre-content? ... element?)]
                        [hackage-package (-> string? element?)]
                        [hackage-package* (-> string? pre-content? ... element?)]
@@ -55,29 +60,15 @@
 
 ;; -----------------------------------------------------------------------------
 
-(define-simple-macro (date+tags tag-str:string ...)
-  #:with date-lst (match (path->string (syntax-source-file-name this-syntax))
-                    [(regexp #px"^(\\d{4})-(\\d{2})-(\\d{2})-" (list _ year month day))
-                     (list year month day)]
-                    [_ (raise-syntax-error #f "file name does not start with date" this-syntax)])
-  (begin
-    (provide date tags)
-    (define date 'date-lst)
-    (define tags '(tag-str ...))
-    (date+tags-element date tags)))
-
-(define (date+tags-element date-lst tag-strs)
-  (match-define (list year month day) date-lst)
-  (define date-str (string-append year "-" month "-" day))
-  (paragraph (style "date-and-tags" '(div))
-             (list* (element (style #f (list (alt-tag "time")
-                                             (attributes (list (cons 'datetime date-str)))))
-                             date-str)
-                    " ⦿ "
-                    (add-between (map blog-tag tag-strs) ", "))))
+(struct post-tags (tags) #:transparent)
 
 (define (blog-tag tag-str)
   (hyperlink (string-append "/tags/" (string-replace tag-str " " "-") ".html") tag-str))
+
+(define-syntax-parser infer-date
+  [(_) (match (path->string (syntax-source-file-name this-syntax))
+         [(regexp #px"^(\\d{4}-\\d{2}-\\d{2})-" (list _ date-str)) #`'#,date-str]
+         [_ (raise-syntax-error #f "file name does not start with date" this-syntax)])])
 
 ;; -----------------------------------------------------------------------------
 

@@ -1,6 +1,7 @@
 #lang racket/base
 
 (require racket/contract
+         racket/list
          racket/match
          scribble/base
          scribble/core
@@ -10,15 +11,20 @@
          (prefix-in md: "parse.rkt"))
 
 (provide (contract-out
-          [document->part (-> md:document? content? part?)]))
+          [document->part (-> md:document? title-decl? part?)]))
 
 (define current-link-targets (make-parameter #f))
 (define current-footnotes (make-parameter #f))
 
-(define (document->part doc title-content)
+(define (document->part doc title-decl)
   (parameterize ([current-link-targets (md:document-link-targets doc)]
                  [current-footnotes (footnotes->elements (md:document-footnotes doc))])
-    (match-define-values [main-part '()] (blocks->part (md:document-blocks doc) title-content 0))
+    (define part-info (part-start 0
+                                  (title-decl-tag-prefix title-decl)
+                                  (title-decl-tags title-decl)
+                                  (title-decl-style title-decl)
+                                  (title-decl-content title-decl)))
+    (match-define-values [main-part '()] (blocks->part (md:document-blocks doc) part-info))
     (define all-blocks (append (part-blocks main-part) (footnotes->blocks (md:document-footnotes doc))))
     (struct-copy part main-part [blocks all-blocks])))
 
@@ -32,12 +38,12 @@
     (match-define (cons name md-blocks) note)
     (footnote-flow (string->symbol name) (blocks->blocks md-blocks))))
 
-(define (blocks->part md-blocks title-content part-depth)
+(define (blocks->part md-blocks part-info)
   (define (collect-blocks blocks md-blocks)
     (match md-blocks
       ['() (finish-part (reverse blocks) '() '())]
       [(cons (md:heading depth _) _)
-       (if (> depth part-depth)
+       (if (> depth (part-start-depth part-info))
            (collect-parts (reverse blocks) '() md-blocks)
            (finish-part (reverse blocks) '() md-blocks))]
       [(cons md-block md-blocks)
@@ -46,20 +52,24 @@
   (define (collect-parts blocks parts md-blocks)
     (match md-blocks
       [(cons (md:heading depth md-content) md-blocks)
-       #:when (> depth part-depth)
-       (define-values [part md-blocks*] (blocks->part md-blocks
-                                                      (content->content md-content)
-                                                      (add1 part-depth)))
+       #:when (> depth (part-start-depth part-info))
+       (define-values [part md-blocks*]
+         (blocks->part md-blocks
+                       (make-part-info #:title (content->content md-content)
+                                       #:depth (add1 (part-start-depth part-info)))))
        (collect-parts blocks (cons part parts) md-blocks*)]
       [_ (finish-part blocks (reverse parts) md-blocks)]))
 
   (define (finish-part blocks parts md-blocks)
-    (define part-tag `(part ,(gen-tag title-content)))
-    (values (part #f
-                  (list part-tag)
+    (define part-tags (if (empty? (part-start-tags part-info))
+                          (list `(part ,(make-generated-tag)))
+                          (part-start-tags part-info)))
+    (define title-content (part-start-title part-info))
+    (values (part (part-start-tag-prefix part-info)
+                  part-tags
                   title-content
-                  plain
-                  (make-part-to-collect part-tag title-content)
+                  (part-start-style part-info)
+                  (make-part-to-collect (first part-tags) title-content)
                   blocks
                   parts)
             md-blocks))
@@ -100,10 +110,8 @@
     [(? string?) dest]
     [(md:reference name) (hash-ref (current-link-targets) name)]))
 
-; Taken from scribble/private/tag.
-(define (gen-tag content)
-  (regexp-replace* #px"[^-a-zA-Z0-9_=\u4e00-\u9fff\u3040-\u309F\u30A0-\u30FF]"
-                   (content->string content) "_"))
+(define (make-part-info #:title title-content #:depth depth)
+  (struct-copy part-start (section title-content) [depth depth]))
 
 ; Taken from scribble/decode.
 (define (make-part-to-collect tag title-content)

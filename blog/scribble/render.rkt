@@ -208,14 +208,27 @@
                (link ([rel "stylesheet"] [type "text/css"] [href "file:///home/alexis/code/blog/out/css/application.min.css"]))
                (link ([rel "stylesheet"] [type "text/css"] [href "file:///home/alexis/code/blog/out/css/pygments.min.css"]))
                (body (div ([id "page-content"])
-                          (section ([role "main"])
-                                   (div ([class "content"])
-                                        (article ([class "main"])
-                                                 ,@(render-part part ri)
-                                                 (div ([class "footnotes"])
-                                                      (ol ,@(for/list ([footnote-element (in-list (reverse footnote-elements))]
-                                                                       [footnote-index (in-naturals 1)])
-                                                              `(li ([id ,(~a "footnote-" footnote-index)]) ,@footnote-element))))))))))))))))
+                       (section ([role "main"])
+                         (div ([class "content"])
+                           (article ([class "main"])
+                             ,(render-header part ri)
+                             ,@(render-flow (part-blocks part) part ri #f)
+                             ,@(append-map (λ~> (render-part ri)) (part-parts part))
+                             (div ([class "footnotes"])
+                               (ol ,@(for/list ([footnote-element (in-list (reverse footnote-elements))]
+                                                [footnote-index (in-naturals 1)])
+                                       `(li ([id ,(~a "footnote-" footnote-index)]) ,@footnote-element))))))))))))))))
+
+    (define/private (render-header part ri)
+      (define props (style-properties (part-style part)))
+      (define date-str (or (and~> (findf document-date? props) document-date-text) "????-??-??"))
+      (define tag-strs (or (and~> (findf post-tags? props) post-tags-tags) '()))
+      `(header
+         (h1 ([class "title"]) ,@(render-content (part-title-content part) part ri))
+         (div ([class "date-and-tags"])
+           (time ([datetime ,date-str]) ,date-str)
+           " ⦿ "
+           ,@(render-content (add-between (map blog-tag tag-strs) ", ") part ri))))
 
     (define/override (render-part-content part ri)
       (define number (collected-info-number (part-collected-info part ri)))
