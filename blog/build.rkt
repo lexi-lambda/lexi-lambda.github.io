@@ -22,8 +22,11 @@
          (only-in "markdown/parse.rkt" document/p)
          "markdown/post.rkt"
          "markdown/to-scribble.rkt"
+         "paths.rkt"
          (only-in "scribble/post-language.rkt" post-tags)
          "scribble/render.rkt")
+
+(define num-posts-per-page 10)
 
 (define-runtime-path posts-dir "posts")
 
@@ -139,15 +142,27 @@
                           (λ~>> (render-post-page info))))
 
 (define (build-post-index total-pages number deps+infos)
-  (define out-path (build-path (current-output-directory)
-                               (~a "index" (if (= number 1) "" (~a "-" number)) ".html")))
-  (eprintf "~a rendering <output>/~a\n" (timestamp-string) (find-relative-path (current-output-directory) out-path))
+  (define base-path (index-path number #:file? #t))
+  (define out-path (reroot-path base-path (current-output-directory)))
+  (eprintf "~a rendering <output>~a\n" (timestamp-string) base-path)
   (define paths+infos (for/list ([dep+info (in-list deps+infos)])
                         (match-define (list dep info) dep+info)
                         (list (output-path->absolute-url (post-dep-page-path dep)) info)))
   (call-with-output-file* #:exists 'truncate/replace
                           out-path
                           (λ~>> (render-post-index total-pages number paths+infos))))
+
+(define (build-tag-index total-pages page-number tag deps+infos)
+  (define base-path (tag-index-path tag page-number))
+  (define out-path (reroot-path base-path (current-output-directory)))
+  (eprintf "~a rendering <output>~a\n" (timestamp-string) base-path)
+  (define paths+infos (for/list ([dep+info (in-list deps+infos)])
+                        (match-define (list dep info) dep+info)
+                        (list (output-path->absolute-url (post-dep-page-path dep)) info)))
+  (make-parent-directory* out-path)
+  (call-with-output-file* #:exists 'truncate/replace
+                          out-path
+                          (λ~>> (render-tag-index total-pages page-number tag paths+infos))))
 
 (define (build-all)
   (make-directory* (current-build-directory))
@@ -158,10 +173,24 @@
       (build-post-page dep info)
       info))
 
-  (define total-pages (ceiling (/ (length all-post-deps) 10)))
-  (for ([deps+infos (in-slice 10 (reverse (map list all-post-deps post-infos)))]
+  (define total-pages (ceiling (/ (length all-post-deps) num-posts-per-page)))
+  (for ([deps+infos (in-slice num-posts-per-page (reverse (map list all-post-deps post-infos)))]
         [number (in-naturals 1)])
-    (build-post-index total-pages number deps+infos)))
+    (build-post-index total-pages number deps+infos))
+
+  (define tagged-deps+infos
+    (for/fold ([tagged-deps+infos (hash)])
+              ([dep (in-list all-post-deps)]
+               [info (in-list post-infos)]
+               #:when #t
+               [tag (in-list (rendered-post-tags info))])
+      (hash-update tagged-deps+infos tag (λ~>> (cons (list dep info))) '())))
+
+  (for ([(tag deps+infos) (in-immutable-hash tagged-deps+infos)])
+    (define total-pages (ceiling (/ (length deps+infos) num-posts-per-page)))
+    (for ([deps+infos (in-slice num-posts-per-page deps+infos)]
+          [page-number (in-naturals 1)])
+      (build-tag-index total-pages page-number tag deps+infos))))
 
 (parameterize ([current-directory "/home/alexis/code/blog2"])
   (build-all))

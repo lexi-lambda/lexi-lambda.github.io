@@ -4,6 +4,7 @@
          (prefix-in xml: xml)
 
          racket/class
+         racket/contract
          racket/format
          racket/hash
          racket/list
@@ -29,11 +30,26 @@
          "post-language.rkt"
          "render/template.rkt")
 
-(provide rendered-post?
-         render-mixin
-         render-post-page
-         render-post-index
-         tag->anchor-name)
+(provide render-mixin
+         tag->anchor-name
+         (contract-out
+          (struct rendered-post ([title-str string?]
+                                 [title xml:xexpr?]
+                                 [date string?]
+                                 [tags (listof string?)]
+                                 [body (listof xml:xexpr?)]))
+          [render-post-page (-> rendered-post? output-port? void?)]
+          [render-post-index (->i ([total-pages (and/c exact-integer? (>=/c 1))]
+                                   [page-number (total-pages) (and/c exact-integer? (>=/c 1) (<=/c total-pages))]
+                                   [paths+infos (listof (list/c string? rendered-post?))]
+                                   [out output-port?])
+                                  [result void?])]
+          [render-tag-index (->i ([total-pages (and/c exact-integer? (>=/c 1))]
+                                  [page-number (total-pages) (and/c exact-integer? (>=/c 1) (<=/c total-pages))]
+                                  [tag string?]
+                                  [paths+infos (listof (list/c string? rendered-post?))]
+                                  [out output-port?])
+                                 [result void?])]))
 
 ;; -----------------------------------------------------------------------------
 
@@ -390,6 +406,25 @@
                      ,@body)))
    out))
 
+(define (render-post-index total-pages page-number paths+infos out)
+  (display "<!doctype html>" out)
+  (xml:write-xexpr
+   (page #:title "Alexis King’s Blog"
+         #:body `(div ([class "content"])
+                   ,@(build-post-index index-path total-pages page-number paths+infos)))
+   out))
+
+(define (render-tag-index total-pages page-number tag paths+infos out)
+  (display "<!doctype html>" out)
+  (xml:write-xexpr
+   (page #:title (~a "Posts tagged ‘" tag "’")
+         #:body `(div ([class "content"])
+                   (h1 ([class "tag-page-header"])
+                     "Posts tagged " (em ,tag))
+                   ,@(build-post-index (λ~>> (tag-index-path tag))
+                                       total-pages page-number paths+infos)))
+   out))
+
 (define (build-post-header title date tags)
   `(header
      (h1 ([class "title"]) ,@title)
@@ -400,27 +435,22 @@
                `(a ([href ,(tag-index-path tag)]) ,tag))
              (add-between ", ")))))
 
-(define (render-post-index total-pages page-number paths+infos out)
-  (display "<!doctype html>" out)
-  (xml:write-xexpr
-   (page #:title "Alexis King’s Blog"
-         #:body `(div ([class "content"])
-                   ,@(for/list ([path+info (in-list paths+infos)])
-                       (match-define (list path info) path+info)
-                       (build-post-index-entry path info))
-                   (ul ([class "pagination"])
-                     ,(if (= page-number 1)
-                          '(li ([class "disabled"]) "←")
-                          `(li (a ([href ,(index-path (sub1 page-number))]) "←")))
-                     ,@(for/list ([i (in-range 1 (add1 total-pages))])
-                         `(li ,(if (= i page-number)
-                                   '([class "pagination-number active"])
-                                   '([class "pagination-number"]))
-                              (a ([href ,(index-path i)]) ,(~a i))))
-                     ,(if (= page-number total-pages)
-                          '(li ([class "disabled"]) "→")
-                          `(li (a ([href ,(index-path (add1 page-number))]) "→"))))))
-   out))
+(define (build-post-index page-path total-pages page-number paths+infos)
+  `[,@(for/list ([path+info (in-list paths+infos)])
+        (match-define (list path info) path+info)
+        (build-post-index-entry path info))
+    (ul ([class "pagination"])
+      ,(if (= page-number 1)
+           '(li ([class "disabled"]) "←")
+           `(li (a ([href ,(page-path (sub1 page-number))]) "←")))
+      ,@(for/list ([i (in-range 1 (add1 total-pages))])
+          `(li ,(if (= i page-number)
+                    '([class "pagination-number active"])
+                    '([class "pagination-number"]))
+               (a ([href ,(page-path i)]) ,(~a i))))
+      ,(if (= page-number total-pages)
+           '(li ([class "disabled"]) "→")
+           `(li (a ([href ,(page-path (add1 page-number))]) "→"))))])
 
 (define (build-post-index-entry path info)
   (match-define (rendered-post _ title date tags body) info)
