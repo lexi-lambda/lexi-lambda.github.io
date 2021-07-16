@@ -138,7 +138,7 @@
                           out-path
                           (λ~>> (render-post-page info))))
 
-(define (build-post-index number deps+infos)
+(define (build-post-index total-pages number deps+infos)
   (define out-path (build-path (current-output-directory)
                                (~a "index" (if (= number 1) "" (~a "-" number)) ".html")))
   (eprintf "~a rendering <output>/~a\n" (timestamp-string) (find-relative-path (current-output-directory) out-path))
@@ -147,7 +147,7 @@
                         (list (output-path->absolute-url (post-dep-page-path dep)) info)))
   (call-with-output-file* #:exists 'truncate/replace
                           out-path
-                          (λ~>> (render-post-index paths+infos))))
+                          (λ~>> (render-post-index total-pages number paths+infos))))
 
 (define (build-all)
   (make-directory* (current-build-directory))
@@ -157,9 +157,11 @@
       (define info (build-post-body dep))
       (build-post-page dep info)
       info))
+
+  (define total-pages (ceiling (/ (length all-post-deps) 10)))
   (for ([deps+infos (in-slice 10 (reverse (map list all-post-deps post-infos)))]
         [number (in-naturals 1)])
-    (build-post-index number deps+infos)))
+    (build-post-index total-pages number deps+infos)))
 
 (parameterize ([current-directory "/home/alexis/code/blog2"])
   (build-all))

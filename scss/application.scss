@@ -111,7 +111,7 @@ body > section[role=main] {
     }
   }
 
-  p, li, blockquote {
+  p, article li, blockquote {
     margin-bottom: 1.2em;
 
     @media (min-width: 800px) {
@@ -344,30 +344,43 @@ article.main > footer {
   }
 }
 
-.pagination, .pager {
+.pagination {
+  align-items: center;
   display: flex;
+  justify-content: center;
   margin-top: 4em;
   padding: 0;
+  width: 100%;
 
   li {
     flex: 1;
     list-style: none;
+    margin: 0 15px;
+    max-width: 3em;
+    min-width: 3em;
     text-align: center;
-  }
-}
 
-.pagination li {
+    &.disabled {
+      color: $color-disabled;
+    }
+
+    &.pagination-number {
+      border: 1px solid $color-primary;
+      max-width: 5em;
+    }
+  }
+
   a {
     display: block;
     transition: background-color 0.25s ease-in-out;
-    width: 90%;
+    width: 100%;
   }
 
-  &.active a {
+  li.active a, li.disabled {
     cursor: default;
   }
 
-  a:hover, &.active a {
+  a:hover, li.active a {
     background-color: $color-primary;
     color: white !important;
   }

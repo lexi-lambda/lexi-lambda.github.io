@@ -400,14 +400,26 @@
                `(a ([href ,(tag-index-path tag)]) ,tag))
              (add-between ", ")))))
 
-(define (render-post-index paths+infos out)
+(define (render-post-index total-pages page-number paths+infos out)
   (display "<!doctype html>" out)
   (xml:write-xexpr
    (page #:title "Alexis King’s Blog"
          #:body `(div ([class "content"])
                    ,@(for/list ([path+info (in-list paths+infos)])
                        (match-define (list path info) path+info)
-                       (build-post-index-entry path info))))
+                       (build-post-index-entry path info))
+                   (ul ([class "pagination"])
+                     ,(if (= page-number 1)
+                          '(li ([class "disabled"]) "←")
+                          `(li (a ([href ,(index-path (sub1 page-number))]) "←")))
+                     ,@(for/list ([i (in-range 1 (add1 total-pages))])
+                         `(li ,(if (= i page-number)
+                                   '([class "pagination-number active"])
+                                   '([class "pagination-number"]))
+                              (a ([href ,(index-path i)]) ,(~a i))))
+                     ,(if (= page-number total-pages)
+                          '(li ([class "disabled"]) "→")
+                          `(li (a ([href ,(index-path (add1 page-number))]) "→"))))))
    out))
 
 (define (build-post-index-entry path info)
