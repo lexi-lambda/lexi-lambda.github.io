@@ -330,17 +330,17 @@ article.main > footer {
       display: none;
     }
   }
+}
 
-  .navigation-items {
-    padding: 0;
+.navigation-items {
+  padding: 0;
 
-    &.left, &.right { margin: 15px; }
-    &.center        { flex: 1;      }
+  &.left, &.right { margin: 15px; }
+  &.center        { flex: 1;      }
 
-    li {
-      display: inline-block;
-      margin: 0 20px;
-    }
+  li {
+    display: inline-block;
+    margin: 0 20px;
   }
 }
 
@@ -355,10 +355,14 @@ article.main > footer {
   li {
     flex: 1;
     list-style: none;
-    margin: 0 15px;
+    margin: 0 8px;
     max-width: 3em;
     min-width: 3em;
     text-align: center;
+
+    @media (min-width: 450px) {
+      margin: 0 15px;
+    }
 
     &.disabled {
       color: $color-disabled;
