@@ -22,17 +22,27 @@ html, body {
   width: 100%;
 }
 
-#page-content {
+body {
   display: flex;
   flex-direction: column;
   width: 100%;
   min-height: 100%;
 }
 
-#page-content > section[role=main] {
+h1, h2, h3, h4, h5, h6 {
+  font-family: $font-sans-serif;
+  font-weight: 400;
+}
+
+a {
+  text-decoration: none;
+  transition: color 0.15s ease-in-out;
+}
+
+body > section[role=main] {
   $content-padding: 30px;
 
-  color: #312323;
+  color: $text-color-primary;
   flex: 1;
   font-size: 1.1em;
   font-weight: 300;
@@ -51,51 +61,52 @@ html, body {
     @media (max-width: 550px) {
       padding: 30px 0;
     }
+  }
 
-    & > h1 {
+  article {
+    // When there is enough space, elements in the body are centered horizontally.
+    & > * {
       margin-left: auto;
       margin-right: auto;
-      margin-top: 0;
-      max-width: $content-width-max;
+      max-width: $content-width-small;
     }
 
-    & > article {
-      & > * {
+    // Headings can spill into the margins a little bit.
+    & > h1, & > h2, & > h3, & > h4, & > h5, & > h6 {
+      max-width: $content-width-medium;
+    }
+
+    // Post headers can spill into the margins a lot.
+    & > header {
+      max-width: $content-width-large;
+
+      .date-and-tags {
+        max-width: $content-width-small;
         margin-left: auto;
         margin-right: auto;
-        max-width: $content-width-small;
+      }
+    }
+
+    // TODO: Reimplement end-of-post navigation links.
+    // &.main > footer {
+    //   max-width: $content-width-large;
+    // }
+
+    // Code blocks and tables can also spill into the margins.
+    & > pre, & > .table-wrapper {
+      max-width: 100%;
+      width: 100%;
+
+      // On medium-size screens, they can spill into the margins a bit.
+      @media (min-width: $content-width-small + $content-padding * 2) {
+        min-width: $content-width-small;
+        width: fit-content;
       }
 
-      & > h1, & > h2, & > h3, & > h4, & > h5, & > h6 {
-        max-width: $content-width-medium;
-      }
-
-      & > header {
-        max-width: $content-width-large;
-
-        .date-and-tags {
-          max-width: $content-width-small;
-          margin-left: auto;
-          margin-right: auto;
-        }
-      }
-
-      &.main > footer {
-        max-width: $content-width-large;
-      }
-
-      & > pre code, & > div[class^='brush: '], & > .table-wrapper {
-        max-width: 100%;
-        width: 100%;
-
-        @media (min-width: $content-width-small + $content-padding * 2) {
-          min-width: $content-width-small;
-          width: fit-content;
-        }
-
-        @media (min-width: $content-width-max + $content-padding * 2) {
-          max-width: $content-width-max;
-        }
+      // On large screens they can spill into the margins ton, since we really
+      // don’t want them to have to scroll.
+      @media (min-width: $content-width-max + $content-padding * 2) {
+        max-width: $content-width-max;
       }
     }
   }
@@ -108,6 +119,36 @@ html, body {
     }
   }
 
+  h1 {
+    font-size: 2em;
+    font-weight: 700;
+    line-height: 1.4em;
+    margin-bottom: 0.4em;
+
+    @media (min-width: 575px) {
+      font-size: 2.3em;
+      line-height: 1.4em;
+    }
+  }
+  h2 {
+    font-size: 1.75em;
+    line-height: 1.5em;
+    margin-top: 2em;
+
+    @media (min-width: 800px) {
+      font-size: 2em;
+    }
+  }
+  h3 {
+    font-size: 1.5em;
+    line-height: 1em;
+  }
+  h4 {
+    font-size: 1.17em;
+    line-height: 1em;
+  }
+
+  // Subscripts and superscripts should not disrupt line spacing.
   sup, sub {
     line-height: 0;
   }
@@ -117,23 +158,16 @@ html, body {
 
     &:hover {
       color: $text-color-link-light;
-      text-decoration: none;
     }
   }
 
   blockquote {
-    margin-left: 0;
-    margin-right: 0;
     padding: 1em 1.5em 1em 2em;
     border-left: 5px solid #f3ecec;
     background-color: $color-section-background;
 
-    & > :first-child {
-      margin-top: 0;
-    }
-    & > :last-child {
-      margin-bottom: 0;
-    }
+    & > :first-child { margin-top: 0; }
+    & > :last-child { margin-bottom: 0; }
   }
 
   .table-wrapper {
@@ -178,15 +212,18 @@ html, body {
   hr {
     border: none;
     display: block;
-    margin: 2em 0;
+    margin-bottom: 2em;
+    margin-top: 2em;
+    overflow-x: hidden;
     width: 100%;
 
     @media (min-width: 800px) {
-      margin: 4em 0;
+      margin-bottom: 3em;
+      margin-top: 3em;
     }
 
     &::before {
-      content: '◆❖◆';
+      content: '◆◆◆';
       color: #e2caca;
       display: block;
       margin: 0 auto;
@@ -198,27 +235,21 @@ html, body {
   }
 }
 
-.no-line-wrapping {
-  white-space: nowrap;
+.date-and-tags time {
+  font-size: 1.5em;
 }
 
-// hide the blog title in the navbar on small screen sizes
-@media (max-width: 575px) {
-  #blog-title-header {
-    display: none;
-  }
-}
-
-#page-content > footer {
+body > footer {
   background-color: $color-primary;
   color: $text-color-light;
   font-family: $font-sans-serif;
+  font-size: 0.8em;
+  font-weight: 300;
+  padding: 10px 0;
   text-align: center;
 
-  & > .content {
-    margin: 0 auto;
-    padding: 10px 0;
-    max-width: 940px;
+  .copyright-notice {
+    font-size: 1.45em;
   }
 
   a {
@@ -227,57 +258,12 @@ html, body {
     text-decoration: underline;
   }
 
-  h2, h3 {
-    font-weight: 300;
+  & > * {
     margin: 0.8em;
   }
-
-  h2 {
-    font-size: 1.1em;
-  }
-
-  h3 {
-    font-size: 0.8em;
-  }
 }
 
-article > header {
-  .title {
-    font-size: 2.3em;
-    font-weight: 700;
-    line-height: 1.4em;
-    margin-bottom: 0.4em;
-
-    @media (max-width: 575px) {
-      font-size: 2em;
-      line-height: 1.4em;
-    }
-  }
-
-  .date-and-tags time {
-    color: $text-color-primary;
-    font-size: 1.5em;
-  }
-
-  .tags a {
-    color: $text-color-link;
-  }
-}
-
-article.inline {
-  margin-bottom: 4em;
-
-  .date-and-tags {
-    margin-bottom: 20px;
-  }
-
-  .read-more-text {
-    font-style: italic;
-    padding-right: 0.25em;
-  }
-}
-
-article.main > header {
+article.main {
   .title {
     margin-top: 0;
   }
@@ -287,13 +273,16 @@ article.main > header {
   }
 }
 
-.content h1 {
-  font-size: 1.75em;
-  line-height: 1.5em;
-  margin-top: 2em;
+article.inline {
+  margin-bottom: 4em;
 
-  @media (min-width: 800px) {
-    font-size: 2em;
+  .date-and-tags {
+    margin-bottom: 1em;
+  }
+
+  .read-more-text {
+    font-style: italic;
+    margin-right: 0.25em;
   }
 }
 
@@ -305,20 +294,6 @@ article.main > header {
 
 article.main > footer {
   margin-top: 40px;
-}
-
-h1, h2, h3, h4, h5, h6 {
-  font-family: $font-sans-serif;
-  font-weight: 400;
-}
-
-a {
-  text-decoration: none;
-  transition: color 0.15s ease-in-out;
-
-  &:hover {
-    text-decoration: underline;
-  }
 }
 
 .navigation-bar {
@@ -340,11 +315,20 @@ a {
     &:hover { color: white; }
   }
 
-  h1 {
-    margin: 5px 0;
-    text-decoration: none;
+  .blog-title-header {
+    margin-bottom: 5px;
+    margin-top: 5px;
     font-size: 1.5em;
     font-weight: inherit;
+
+    a {
+      letter-spacing: 0.075em;
+    }
+
+    // hide the blog title in the navbar on small screen sizes
+    @media (max-width: 575px) {
+      display: none;
+    }
   }
 
   .navigation-items {
@@ -393,4 +377,8 @@ div.figure, article.main > p > a {
   & > img {
     max-width: 100%;
   }
+}
+
+.no-line-wrapping {
+  white-space: nowrap;
 }

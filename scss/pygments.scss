@@ -4,7 +4,7 @@ $bolder: 500;
 $keyword: #6d1717;
 $literal: #BA2121;
 
-td.code .source, .source pre {
+.pygments {
   .c, .cm, .c1 { color: #9e5555 }                    /* Comment */
   .k { color: $keyword; font-weight: $bold }         /* Keyword */
   .o { color: #666666 }                              /* Operator */

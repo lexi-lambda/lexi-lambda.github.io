@@ -250,7 +250,7 @@
               (set! footnote-elements (cons rendered footnote-elements))
               '[])]
         [else
-         `[(div ,@rendered)]]))
+         `[(blockquote ,@rendered)]]))
 
     (define/override (render-paragraph e part ri)
       (match e
@@ -395,7 +395,7 @@
      (h1 ([class "title"]) ,@title)
      (div ([class "date-and-tags"])
        (time ([datetime ,date]) ,date)
-       " ⦿ "
+       " " (span ([style "margin: 0 5px"]) "⦿") " "
        ,@(~> (for/list ([tag (in-list tags)])
                `(a ([href ,(tag-index-path tag)]) ,tag))
              (add-between ", ")))))
@@ -416,4 +416,4 @@
      ,(build-post-header `[(a ([href ,path]) ,@title)] date tags)
      ; only render up to the start of the first section
      ,@(takef body (match-lambda [(cons 'h2 _) #f] [_ #t]))
-     (a ([href ,path]) (span ([class "read-more-text"]) "Read more") " →")))
+     (p (a ([href ,path]) (span ([class "read-more-text"]) "Read more") " →"))))

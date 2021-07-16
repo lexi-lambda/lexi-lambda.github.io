@@ -11,26 +11,15 @@ p code, li code, table code {
   padding: 2px 5px;
 }
 
-pre code, table.sourcetable pre, .source pre {
-  font-size: 0.9em;
-  line-height: 1.75em;
-  margin: 0;
-}
-
-.source {
-  display: inline-block;
-  margin: 1em 1.5em;
-}
-
 pre code {
-  display: block;
-}
-
-pre code, div[class^='brush: '] {
   background-color: $color-section-background;
   border-radius: 10px;
+  display: block;
+  font-size: 0.9em;
+  line-height: 1.75em;
   margin: 1em auto;
   overflow: auto;
+  padding: 20px;
 
   // enable inertial horizontal scrolling
   -webkit-overflow-scrolling: touch;
@@ -38,27 +27,4 @@ pre code, div[class^='brush: '] {
   @media (min-width: 800px) {
     margin: 2em auto;
   }
-}
-
-table.sourcetable {
-  width: 100%;
-
-  td.linenos {
-    color: desaturate(darken($color-section-background, 20%), 40%);
-    white-space: nowrap;
-    width: 1%;
-    font-weight: 300;
-  }
-
-  pre {
-    margin: 0;
-  }
-}
-
-pre code, table.sourcetable {
-  padding: 20px;
-}
-
-td.linenos {
-  padding-right: 15px;
 }

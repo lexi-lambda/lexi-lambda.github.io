@@ -21,7 +21,7 @@
          (header
            (nav ([role "navigation"] [class "navigation-bar"])
              (ul ([class "navigation-items left"])
-               (li ([id "blog-title-header"])
+               (li ([class "blog-title-header"])
                  (a ([href "/"]) "Alexis King")))
              (ul ([class "navigation-items center"]))
              (ul ([class "navigation-items right"])

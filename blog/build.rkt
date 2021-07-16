@@ -145,7 +145,7 @@
       (define info (build-post-body dep))
       (build-post-page dep info)
       info))
-  (for ([deps+infos (in-slice 10 (map list all-post-deps post-infos))]
+  (for ([deps+infos (in-slice 10 (reverse (map list all-post-deps post-infos)))]
         [number (in-naturals 1)])
     (build-post-index number deps+infos)))
 
