@@ -8,6 +8,7 @@
     "megaparsack-lib"
     "racket-index"
     "scribble-lib"
-    "threading-lib"))
+    "threading-lib"
+    "web-server-lib"))
 (define build-deps
   '("at-exp-lib"))
