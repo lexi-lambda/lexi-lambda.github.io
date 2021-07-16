@@ -10,7 +10,6 @@
          racket/promise
          racket/runtime-path
          racket/sequence
-         racket/serialize
          (only-in megaparsack parse-result!)
          (only-in megaparsack/text parse-string)
          (only-in scribble/base title)

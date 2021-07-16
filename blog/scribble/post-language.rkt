@@ -5,7 +5,6 @@
                      racket/syntax
                      syntax/location)
          racket/contract
-         racket/list
          racket/match
          racket/string
          scribble/base
