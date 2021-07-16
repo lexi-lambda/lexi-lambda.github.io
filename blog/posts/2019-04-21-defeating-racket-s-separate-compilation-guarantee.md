@@ -6,8 +6,6 @@ Being a self-described [programming-language programming language][manifesto-pl-
 
 Yet today, in this blog post, we’re going to do exactly that.
 
-<!-- more -->
-
 # What is the separate compilation guarantee?
 
 Before we get to the fun part (i.e. breaking things), let’s go over some fundamentals so we understand what we’re breaking. The authoritative source for the separate compilation guarantee is [the Racket reference][separate-compilation-guarantee], but it is dense, as authoritative sources tend to be. Although I enjoy reading technical manuals for sport, it is my understanding that not all the people who read this blog are as strange as I am, so let’s start with a quick primer, instead. (If you’re already an expert, feel free to [skip to the next section](#section:main-start).)
@@ -161,7 +159,7 @@ Furthermore, the separate compilation guarantee does not just isolate the state 
 
 If you want to learn more, the full details of the module system are described at length in the [General Phase Levels][guide-general-phase-levels] section of the Racket Guide, but the abridged summary I’ve described is enough for the purposes of this blog post. If the bulleted list above mostly made sense to you, you’re ready to move on.
 
-<h1 id="section:main-start">How we’re going to break it</h1>
+<h2 id="section:main-start">How we’re going to break it</h2>
 
 The separate compilation guarantee is a sturdy opponent, but it is not without weaknesses. Although no API in Racket, safe or unsafe, allows arbitrarily disabling phase separation, a couple features of Racket are already known to allow limited forms of cross-phase communication.
 

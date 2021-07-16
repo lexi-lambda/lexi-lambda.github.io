@@ -4,8 +4,6 @@
 
 In the past couple of weeks, I [completely rewrote the implementation of Hackett’s type language][hackett-type-language-commit] to improve the integration between the type representation and Racket’s macro system. The new type language effectively implements a way to reuse as much of the Racket macroexpanding infrastructure as possible while expanding a completely custom language, which uses a custom set of core forms. The fundamental technique used to do so is not novel, and it seems to be periodically rediscovered every so often, but it has never been published or documented anywhere, and getting it right involves understanding a great number of subtleties about the Racket macro system. While I cannot entirely eliminate the need to understand those subtleties, in this blog post, I hope to make the secret sauce considerably less secret.
 
-<!-- more -->
-
 This blog post is both a case study on how I implemented the expander for Hackett’s new type language and a discussion of how such a technique can apply more generally. Like [my previous blog post on Hackett][hackett-namespaces-blog-post], which covered the implementation of its namespace system, the implementation section of this blog post is highly technical and probably requires significant experience with Racket’s macro system to completely comprehend. However, the surrounding material is written to be more accessible, so even if you are not a Racket programmer, you should hopefully be able to understand the big ideas behind this change.
 
 # What are core forms?
@@ -168,21 +166,21 @@ In the previous section, I described two use cases for custom core forms. Hacket
 
 The second of those two use cases is simpler, and it’s what I ended up implementing first, so it’s what I will focus on in this blog post. Hackett’s type language is fundamentally quite simple, so its set of custom core forms is small as well. Everything in the type language eventually compiles into only seven core forms:
 
-  - <code>(#%type:con <i>id</i>)</code> — Type constructors, like `Integer` or `Maybe`. These are one of the fundamental building blocks of Hackett types.
+  - <code>(#%type:con *id*)</code> — Type constructors, like `Integer` or `Maybe`. These are one of the fundamental building blocks of Hackett types.
 
-  - <code>(#%type:app <i>type</i> <i>type</i>)</code> — Type application, such as `(Maybe Integer)`. Types are curried, so type constructors that accept multiple arguments are represented by nested uses of `#%type:app`.
+  - <code>(#%type:app *type* *type*)</code> — Type application, such as `(Maybe Integer)`. Types are curried, so type constructors that accept multiple arguments are represented by nested uses of `#%type:app`.
 
-  - <code>(#%type:forall <i>id</i> <i>type</i>)</code> — Universal quantification. This is essentially a binding form, which binds any uses of <code>(#%type:bound-var <i>id</i>)</code> in <code><i>type</i></code>.
+  - <code>(#%type:forall *id* *type*)</code> — Universal quantification. This is essentially a binding form, which binds any uses of <code>(#%type:bound-var *id*)</code> in <code>*type*</code>.
 
-  - <code>(#%type:qual <i>type</i> <i>type</i>)</code> — Qualified types, aka types with typeclass constraints. Constraints in Hackett, like in GHC, are represented by types, so typeclass names like `Eq` are bound as type constructors.
+  - <code>(#%type:qual *type* *type*)</code> — Qualified types, aka types with typeclass constraints. Constraints in Hackett, like in GHC, are represented by types, so typeclass names like `Eq` are bound as type constructors.
 
   - Finally, Hackett types support three different varieties of type variables:
 
-    - <code>(#%type:bound-var <i>id</i>)</code> — Bound type variables. These are only legal under a corresponding `#%type:forall`.
+    - <code>(#%type:bound-var *id*)</code> — Bound type variables. These are only legal under a corresponding `#%type:forall`.
 
-    - <code>(#%type:wobbly-var <i>id</i>)</code> — Solver variables, which may unify with any other type as part of the typechecking process.
+    - <code>(#%type:wobbly-var *id*)</code> — Solver variables, which may unify with any other type as part of the typechecking process.
 
-    - <code>(#%type:rigid-var <i>id</i>)</code> — Rigid variables, aka skolem variables, which only unify with themselves. They represent a unique, anonymous type used to ensure types are suitably polymorphic.
+    - <code>(#%type:rigid-var *id*)</code> — Rigid variables, aka skolem variables, which only unify with themselves. They represent a unique, anonymous type used to ensure types are suitably polymorphic.
 
 To implement our custom core forms in Racket, we need to somehow define them, but how? Intentionally, these should never be expanded, since we want the expander to stop expanding whenever it encounters one of these identifiers. While we can’t encode this directly, we *can* bind them to macros that do nothing but raise an exception if something attempts to expand them:
 

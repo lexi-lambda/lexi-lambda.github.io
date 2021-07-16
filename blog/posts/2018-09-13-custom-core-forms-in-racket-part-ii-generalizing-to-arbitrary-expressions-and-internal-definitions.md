@@ -4,8 +4,6 @@
 
 In my [previous blog post][custom-core-forms-1], I covered the process involved in creating a small language with a custom set of core forms. Specifically, it discussed what was necessary to create Hackett’s type language, which involved expanding to custom expressions. While somewhat involved, Hackett’s type language was actually a relatively simple example to use, since it only made use of a subset of the linguistic features Racket supports. In this blog post, I’ll demonstrate how that same technique can be generalized to support runtime bindings and internal definitions, two key concepts useful if intending to develop a more featureful language than Hackett’s intentionally-restrictive type system.
 
-<!-- more -->
-
 # What are internal definitions?
 
 This blog post is going to be largely focused on how to properly implement a form that handles the expansion of *internal definitions* in Racket. This is a tricky topic to get right, but before we can discuss internal definitions, we have to establish what definitions themselves are and how they relate to other binding forms.

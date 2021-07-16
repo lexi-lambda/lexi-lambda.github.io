@@ -37,11 +37,9 @@ However, a novice macro programmer might realize that `clj-let` really only modi
 
 The answer is *no*: the binding pairs of a `let` form are not subject to macroexpansion, so the above attempt fails with a syntax error. In this blog post, we will examine the reasons behind this limitation, then explain how to overcome it using a solution that allows macroexpansion *anywhere* in a Racket program.
 
-<!-- more -->
-
 # Why only some positions are subject to macroexpansion
 
-To understand *why* the macroexpander refuses to touch certain positions in a program, we must first understand how the macro system operates. In Racket, a macro is defined as a compile-time function associated with a particular binding, and macros are given complete control over the syntax trees they are surrounded with. If we define a macro *`mac`*, then we write the expression <code>(<i>mac</i> <i>form</i>)</code>, *`form`* is provided as-is to *`mac`* as a syntax object. Its structure can be anything at all, since *`mac`* can be an arbitrary Racket function, and that function can use *`form`* however it pleases.
+To understand *why* the macroexpander refuses to touch certain positions in a program, we must first understand how the macro system operates. In Racket, a macro is defined as a compile-time function associated with a particular binding, and macros are given complete control over the syntax trees they are surrounded with. If we define a macro *`mac`*, then we write the expression <code>(*mac* *form*)</code>, *`form`* is provided as-is to *`mac`* as a syntax object. Its structure can be anything at all, since *`mac`* can be an arbitrary Racket function, and that function can use *`form`* however it pleases.
 
 To give a concrete illustration, consider a macro that binds some identifiers to symbols in a local scope:
 
@@ -182,7 +180,7 @@ This means we also need to update our definition of `mac` to provide the full sy
   (quote-syntax result))
 ```
 
-This might seem redundant, but remember, `local-apply-transformer` is very low-level! While the convention that <code>(<i>mac</i> . \_)</code> is the syntax for a macro transformation might seem obvious, `local-apply-transformer` makes no assumptions. It just does what we tell it to do.
+This might seem redundant, but remember, `local-apply-transformer` is very low-level! While the convention that <code>(*mac* . \_)</code> is the syntax for a macro transformation might seem obvious, `local-apply-transformer` makes no assumptions. It just does what we tell it to do.
 
 ## Applying `local-apply-transformer`
 

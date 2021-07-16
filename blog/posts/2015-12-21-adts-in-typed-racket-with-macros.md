@@ -4,8 +4,6 @@
 
 Macros are one of Racket's flagship features, and its macro system really is state of the art. Of course, it can sometimes be difficult to demonstrate *why* macros are so highly esteemed, in part because it can be hard to find self-contained examples of using macros in practice. Of course, one thing that macros are perfect for is filling a "hole" in the language by introducing a feature a language lacks, and one of those features in Typed Racket is **ADTs**.
 
-<!-- more -->
-
 # Warning: this is not a macro tutorial
 
 First, a disclaimer: this post assumes at least some knowledge of Scheme/Racket macros. Ideally, you would be familiar with Racket itself. But if you aren't, fear not: if you get lost, don't worry. Hold on to the bigger picture, and you'll likely learn more than someone who knows enough to follow all the way through. If you *are* interested in learning about macros, I must recommend Greg Hendershott's [Fear of Macros][fear-of-macros]. It is good. This is not that.

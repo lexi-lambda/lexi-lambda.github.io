@@ -6,8 +6,6 @@ Lisps are not known for infix operators, quite the opposite; infix operators gen
 
 Fortunately, if we require users to syntactically specify where they wish to use infix expressions, support for infix operators is not only possible, but can support be done *without* modifying the stock `#lang racket` reader. Futhermore, the resulting technique makes it possible for fixity information to be specified locally in a way that cooperates nicely with the Racket macro system, allowing the parsing of infix expressions to be manipulated at compile-time by users’ macros.
 
-<!-- more -->
-
 # Our mission
 
 Before we embark, let’s clarify our goal. We want to support infix operators in Racket, of course, but that could mean a lot of different things! Let’s start with what we *do* want:

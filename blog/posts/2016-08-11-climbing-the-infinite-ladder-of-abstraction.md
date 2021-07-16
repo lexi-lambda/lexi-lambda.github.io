@@ -8,8 +8,6 @@ When I was young, I was fascinated by the idea of automation. I loathed doing th
 
 Of course, one of the first things I found out once I’d started was that nothing is ever quite so simple. Before long, my solutions to eliminate repetition grew repetitive, and it became clear I spent a lot of time typing out the same things, over and over again, creating the very problem I had initially set out to destroy. It was through this that I grew interested in functions, classes, and other repetition-reducing aids, and soon enough, I discovered the wonderful world of **abstraction**.
 
-<!-- more -->
-
 # The brick wall of inexpressiveness
 
 When I started programming, I was mostly playing with ActionScript and Java, just tinkering with things and seeing what I could come up with. I had quite a lot of fun, and the joy of solving problems hooked me almost immediately, but I also ran into frustrations pretty quickly. Specifically, I started writing a lot of code that looked like this:

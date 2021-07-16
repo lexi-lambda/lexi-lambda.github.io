@@ -4,8 +4,6 @@
 
 So, I have a blog now. It's a simple static blog, but what's unique about it is that it's powered by Racket; specifically, it uses [Greg Hendershott][greghendershott]'s fantastic [Frog][frog] tool. I've taken this and moulded it to my tastes to build my blog, including configuring automatic deployment via [Travis CI][travis], so my blog is always up-to-date.
 
-<!-- more -->
-
 # Setting up Frog
 
 I should note that Frog itself was wonderfully easy to drop in and get running. Just following the readme, a simple `raco pkg install frog` followed by `raco frog --init` and `raco frog -bp` created a running blog and opened it in my web browser. There was nothing more to it. Once that's done, all it takes to write a blog post is `raco frog -n "Post Title"`, and you're good to go.

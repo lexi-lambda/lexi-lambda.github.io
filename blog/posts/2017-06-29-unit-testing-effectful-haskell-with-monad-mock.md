@@ -4,8 +4,6 @@
 
 Nearly eight months ago, [I wrote a blog post about unit testing effectful Haskell code][using-types-to-unit-test] using a library called test-fixture. That library has served us well, but it wasn’t as easy to use as I would have liked, and it worked better with certain patterns than others. Since then, I’ve learned more about Haskell and more about testing, and I’m pleased to announce that I am releasing an entirely new testing library, [monad-mock][].
 
-<!-- more -->
-
 # A first glance at monad-mock
 
 The monad-mock library is, first and foremost, designed to be *easy*. It doesn’t ask much from you, and it requires almost zero boilerplate.

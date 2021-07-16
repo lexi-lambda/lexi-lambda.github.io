@@ -6,8 +6,6 @@ Three months ago, [I wrote a blog post describing my new, prototype implementati
 
 I’d recommend clicking that link above and at least skimming around before reading the rest of this blog post, as its remainder will describe some of the pieces that didn’t end up in the documentation: the development process, the project’s status, a small demo, and some other details from behind the scenes.
 
-<!-- more -->
-
 # A philosophy of documentation
 
 Racket, as a project, has always had [wonderful documentation][racket-doc]. There are many reasons for this—Racket’s educational origins almost certainly play a part, and it helps that the core packages set the bar high—but one of the biggest reasons is undoubtably [Scribble, the Racket documentation tool][scribble]. Scribble is, in many ways, the embodiment of the Racket philosophy: it is a user-extensible, fully-featured, domain-specific programming language designed for typesetting, with [a powerful library for documenting Racket code][scribble-manual]. Like the Racket language itself, Scribble comes with a hygienic macro system, and in fact, all Racket libraries are trivially usable from within Scribble documents, if desired. The macro system is used to great effect to provide typesetting forms tailored to the various sorts of things a Racket programmer might wish to document, such as procedures, structures, and macros.

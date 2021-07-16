@@ -1,3 +1,7 @@
+    Title: An introduction to typeclass metaprogramming
+    Date: 2021-03-25T00:00:00
+    Tags: haskell, types, functional programming
+
 *Typeclass metaprogramming* is a powerful technique available to Haskell programmers to automatically generate term-level code from static type information. It has been used to great effect in several popular Haskell libraries (such as the [servant][hackage:servant] ecosystem), and it is the core mechanism used to implement generic programming via [GHC generics][hackage:base:GHC.Generics]. Despite this, remarkably little material exists that explains the technique, relegating it to folk knowledge known only to advanced Haskell programmers.
 
 This blog post attempts to remedy that by providing an overview of the foundational concepts behind typeclass metaprogramming. It does *not* attempt to be a complete guide to type-level programming in Haskell—such a task could easily fill a book—but it does provide explanations and illustrations of the most essential components. This is also *not* a blog post for Haskell beginners—familiarity with the essentials of the Haskell type system and several common GHC extensions is assumed—but it does not assume any prior knowledge of type-level programming.

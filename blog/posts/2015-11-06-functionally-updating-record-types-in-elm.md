@@ -4,8 +4,6 @@
 
 [Elm][elm-lang] is a wonderful language for building web apps, and I love so much of its approach to language design. Elm does so many things *right* straight out of the box, and that's a real breath of fresh air in the intersection of functional programming and web development. Still, it gets one thing wrong, and unfortunately, that one thing is incredibly important. Elm took the "functions" out of "functional record types".
 
-<!-- more -->
-
 Almost any software program, at its core, is all about data. Maybe it's about computing data, maybe it's about manipulating data, or maybe it's about displaying data, but at the end of the day, some sort of data model is going to be needed. The functional model is a breathtakingly elegant system for handling data and shuttling it around throughout a program, and [functional reactive programming][frp], which Elm uses to model event-like interactions, makes this model work even better. The really important thing, though, is what tools Elm actually gives you to model your data.
 
 # A brief primer on Elm records

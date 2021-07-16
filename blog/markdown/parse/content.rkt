@@ -17,6 +17,7 @@
           (struct code ([content content?]))
           (struct link ([content content?] [dest destination?]))
           (struct image ([alt-text string?] [dest destination?]))
+          (struct superscript ([content content?]))
           (struct footnote-ref ([name string?]))
 
           [destination? predicate/c]
@@ -32,6 +33,7 @@
 (struct code (content) #:transparent)
 (struct link (content dest) #:transparent)
 (struct image (alt-text dest) #:transparent)
+(struct superscript (content) #:transparent)
 (struct footnote-ref (name) #:transparent)
 
 (define (content? v)
@@ -41,6 +43,7 @@
       (code? v)
       (link? v)
       (image? v)
+      (superscript? v)
       (footnote-ref? v)
       (and (list? v) (andmap content? v))))
 
@@ -52,9 +55,15 @@
 
 ;; -----------------------------------------------------------------------------
 
+(define special-chars "*`[]<!\\\r\n")
+
 (define content/p
   (label/p "content"
-    (or/p (map/p list->string (many+/p (char-not-in/p "*_`[]<!\\\r\n")))
+    (or/p (map/p list->string ((pure cons) (char-not-in/p (string-append "_" special-chars))
+                                           ; allow _ to appear inside words
+                                           (many/p (char-not-in/p special-chars))))
+          ; escaped char
+          (do (char/p #\\) (map/p string any-char/p))
           ; bold / italic
           (map/p (λ~> simplify-content bold) (around/p (try/p (string/p "**")) (lazy/p content/p)))
           (map/p (λ~> simplify-content italic) (around/p (char/p #\*) (lazy/p content/p)))
@@ -62,6 +71,9 @@
           (do [backticks <- (many+/p (char/p #\`))]
               [chars <- (many-till/p any-char/p (try/p (string/p (list->string backticks))))]
               (pure (code (string-trim (list->string chars)))))
+          ; html code --- inner bits are still parsed as content
+          (map/p (λ~> simplify-content code)
+                 (around/p (try/p (string/p "<code>")) (lazy/p content/p) (string/p "</code>")))
           ; footnote ref
           (map/p footnote-ref (around-string/p (try/p (string/p "[^")) (char/p #\])))
           ; link
@@ -74,6 +86,9 @@
               [alt-text <- (map/p list->string (many-till/p any-char/p (char/p #\])))]
               [dest <- destination/p]
               (pure (image alt-text dest)))
+          ; superscript
+          (map/p (λ~> simplify-content superscript)
+                 (around/p (try/p (string/p "<sup>")) (lazy/p content/p) (string/p "</sup>")))
           ; special char
           (map/p string (char-in/p "!]")))))
 

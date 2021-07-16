@@ -4,8 +4,6 @@
 
 Currently, [npm][npm] is *the* package manager for the frontend world. Sure, there are alternatives, but for the time being, npm seems to have won. Even tools like [Bower][bower] are being pushed to the wayside in favor of the One True Package Manager, but what’s most interesting to me is npm’s relatively novel approach to dependency management. Unfortunately, in my experience, it is actually not particularly well understood, so consider this an attempt to clarify how exactly it works and how it affects **you** as a user or package developer.
 
-<!-- more -->
-
 # First, the basics
 
 At a high level, npm is not too dissimilar from other package managers for programming languages: packages depend on other packages, and they express those dependencies with *version ranges*. npm happens to use the [semver][semver] versioning scheme to express those ranges, but the way it performs version resolution is mostly immaterial; what matters is that packages can depend on ranges rather than specific versions of packages.

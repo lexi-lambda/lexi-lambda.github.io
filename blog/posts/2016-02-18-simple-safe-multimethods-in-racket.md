@@ -4,8 +4,6 @@
 
 Racket ships with `racket/generic`, a system for defining *generic methods*, functions that work differently depending on what sort of value they are supplied. I have made heavy use of this feature in my collections library, and it has worked well for my needs, but that system does have a bit of a limitation: it only supports *single dispatch*. Method implementations may only be chosen based on a single argument, so multiple dispatch is impossible.
 
-<!-- more -->
-
 # Motivating multiple dispatch
 
 What is multiple dispatch and why is it necessary? Well, in most cases, it *isn’t* necessary at all. [It has been shown that multiple dispatch is much rarer than single dispatch in practice.][multiple-dispatch-in-practice] However, when actually needed, having multiple dispatch in the toolbox is a valuable asset.

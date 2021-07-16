@@ -1,3 +1,7 @@
+    Title: No, dynamic type systems are not inherently more open
+    Date: 2020-01-19T00:00:00
+    Tags: types, haskell, programming languages, functional programming
+
 Internet debates about typing disciplines continue to be plagued by a pervasive myth that dynamic type systems are inherently better at modeling “open world” domains. The argument usually goes like this: the goal of static typing is to pin everything down as much as possible, but in the real world, that just isn’t practical. Real systems should be loosely coupled and worry about data representation as little as possible, so dynamic types lead to a more robust system in the large.
 
 This story sounds compelling, but it isn’t true. The flaw is in the premise: static types are *not* about “classifying the world” or pinning down the structure of every value in a system. The reality is that static type systems allow specifying exactly how much a component needs to know about the structure of its inputs, and conversely, how much it doesn’t. Indeed, in practice static type systems excel at processing data with only a partially-known structure, as they can be used to ensure application logic doesn’t accidentally assume too much.

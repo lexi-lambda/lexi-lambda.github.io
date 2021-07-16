@@ -4,8 +4,6 @@
 
 [Heroku][heroku] is a "platform as a service" that provides an incredibly simple way to deploy simple internet applications, and I take liberal advantage of its free tier for testing out simple applications. It has support for a variety of languages built-in, but Racket is not currently among them. Fortunately, Heroku provides an interface for adding custom build processes for arbitrary types of applications, called “buildpacks”. I've built one for Racket apps, and with just a little bit of configuration, it’s possible to get a Racket webserver running on Heroku.
 
-<!-- more -->
-
 # Building the server
 
 Racket's [web-server][racket-web-server] package makes building and running a simple server incredibly easy. Here's all the code we'll need to get going:
@@ -70,7 +68,7 @@ Now there's just one thing left to do before we can push to Heroku: we need to t
 
 Specifically, we just want to run our `serve.rkt` module. The Racket buildpack installs the repository as a package, so we can run `racket` with the `-l` flag to specify a module path, which will be more robust than specifying a filesystem path directly. Therefore, our Procfile will look like this:
 
-```procfile
+```
 web: racket -l sample-heroku-app/server
 ```
 

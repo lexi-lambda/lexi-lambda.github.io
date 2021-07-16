@@ -6,8 +6,6 @@ Application configuration can be a pain. Modern web apps don't live on dedicated
 
 [Envy][envy] is the declarative bridge between Racket code and the outside world of the environment.
 
-<!-- more -->
-
 # Introducing Envy
 
 I built Envy to distill the common tasks needed when working with environment variables into a single, declarative interface that eliminates boilerplate and makes it easy to see which environment variables an application depends on (instead of having them littered throughout the codebase). Using it is simple. Just require `envy` and you're good to go.
@@ -32,7 +30,9 @@ When this module is required, Envy will automatically do the following:
 
   2. If either `API_TOKEN` or `PARALLEL` is not set, an error will be raised:
 
-        envy: The required environment variable "API_TOKEN" is not defined.
+     ```
+     envy: The required environment variable "API_TOKEN" is not defined.
+     ```
 
   3. The values for `LOG_LEVEL` and `PARALLEL` will be parsed to match their type annotations.
 
@@ -75,7 +75,9 @@ And finally, to give credit where credit is due, Envy is heavily inspired by [En
 Try it out!
 
 - `raco pkg install envy`
+
 - [Envy on GitHub][envy]
+
 - [Envy documentation][envy-docs]
 
 [12factor]: http://12factor.net

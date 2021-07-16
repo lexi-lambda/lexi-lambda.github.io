@@ -6,8 +6,6 @@ For me, this month marks the end of an era in my life: as of February 2018, I am
 
 In the meantime, in the interest of both sharing with others the small amount of wisdom I’ve gained and preserving it for my future self, I’ve decided to write a long, rather dry overview of a few select parts of the Haskell workflow I developed and the ecosystem I settled into. This guide is, as the title notes, *opinionated*—it is what I used in my day-to-day work, nothing more—and I don’t claim that anything here is the only way to write Haskell, nor even the best way. It is merely what I found helpful and productive. Take from it as much or as little as you’d like.
 
-<!-- more -->
-
 # Build tools and how to use them
 
 When it comes to building Haskell, you have options. And frankly, most of them are pretty good. There was a time when `cabal-install` had a (warranted) reputation for being nearly impossible to use and regularly creating dependency hell, but I don’t think that’s the case anymore (though you *do* need to be a little careful about how you use it). Sandboxed builds work alright, and `cabal new-build` and the other `cabal new-*` commands are even better. That said, the UX of `cabal-install` is still less-than-stellar, and it has sharp edges, especially for someone coming from an ecosystem without a heavyweight compilation process like JavaScript, Ruby, or Python.
@@ -327,26 +325,26 @@ Three syntactic extensions to Haskell are a little bit more advanced than the on
 
 [`ApplicativeDo`][ApplicativeDo] is, on the surface, simple. It changes `do` notation to use `Applicative` operations where possible, which allows using `do` notation with applicative functors that are not monads, and it also makes operations potentially more performant when `(<*>)` can be implemented more efficiently than `(>>=)`. In theory, it sounds like there are no downsides to enabling this everywhere. However, there are are a few drawbacks that lead me to put it so low on this list:
 
-  1. It considerably complicates the desugaring of `do` blocks, to the point where the algorithm cannot even be easily syntactically documented. In fact, an additional compiler flag, `-foptimal-applicative-do`, is a way to *opt into* optimal solutions for `do` block expansions, tweaking the desugaring algorithm to have an <i>O</i>(<i>n</i><sup>3</sup>) time complexity! This means that the default behavior is guided by a heuristic, and desugaring isn’t even especially predictable. This isn’t necessarily so bad, since it’s really only intended as an optimization when some `Monad` operations are still necessary, but it does dramatically increase the complexity of one of Haskell’s core forms.
+  1. It considerably complicates the desugaring of `do` blocks, to the point where the algorithm cannot even be easily syntactically documented. In fact, an additional compiler flag, `-foptimal-applicative-do`, is a way to *opt into* optimal solutions for `do` block expansions, tweaking the desugaring algorithm to have an *O*(*n*<sup>3</sup>) time complexity! This means that the default behavior is guided by a heuristic, and desugaring isn’t even especially predictable. This isn’t necessarily so bad, since it’s really only intended as an optimization when some `Monad` operations are still necessary, but it does dramatically increase the complexity of one of Haskell’s core forms.
 
-  2. The desugaring, despite being <i>O</i>(<i>n</i><sup>2</sup>) by default, isn’t even especially clever. It relies on a rather disgusting hack that recognizes `return e`, `return $ e`, `pure e`, or `pure $ e` expressions *syntactically*, and it completely gives up if an expression with precisely that shape is not the final statement in a `do` block. This is a bit awkward, since it effectively turns `return` and `pure` into syntax when before they were merely functions, but that isn’t all. It also means that the following `do` block is *not* desugared using `Applicative` operations:
+  2. The desugaring, despite being *O*(*n*<sup>2</sup>) by default, isn’t even especially clever. It relies on a rather disgusting hack that recognizes `return e`, `return $ e`, `pure e`, or `pure $ e` expressions *syntactically*, and it completely gives up if an expression with precisely that shape is not the final statement in a `do` block. This is a bit awkward, since it effectively turns `return` and `pure` into syntax when before they were merely functions, but that isn’t all. It also means that the following `do` block is *not* desugared using `Applicative` operations:
 
-    ```haskell
-    do foo a b
-       bar s t
-       baz y z
-    ```
+     ```haskell
+     do foo a b
+        bar s t
+        baz y z
+     ```
 
-    This will use the normal, monadic desugaring, despite the fact that it is trivially desugared into `Applicative` operations as `foo a b *> bar s t *> baz y z`. In order to get [`ApplicativeDo`][ApplicativeDo] to trigger here, the `do` block must be contorted into the following:
+     This will use the normal, monadic desugaring, despite the fact that it is trivially desugared into `Applicative` operations as `foo a b *> bar s t *> baz y z`. In order to get [`ApplicativeDo`][ApplicativeDo] to trigger here, the `do` block must be contorted into the following:
 
-    ```haskell
-    do foo a b
-       bar s t
-       r <- baz y z
-       pure r
-    ```
+     ```haskell
+     do foo a b
+        bar s t
+        r <- baz y z
+        pure r
+     ```
 
-    This seems like an odd oversight.
+     This seems like an odd oversight.
 
   3. [`TemplateHaskell`][TemplateHaskell] doesn’t seem able to cope with `do` blocks when [`ApplicativeDo`][ApplicativeDo] is enabled. I reported this as [an issue on the GHC bug tracker][ghc-trac-14471], but it hasn’t received any attention, so it’s not likely to get fixed unless someone takes the initiative to do so.
 

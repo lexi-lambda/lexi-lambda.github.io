@@ -6,8 +6,6 @@ Since I published [my blog post introducing Rascal][rascal-intro], I’ve gotten
 
 With that out of the way, I also want to answer some of the other questions I received, both to hopefully clear up some confusion and to have something I can point to if I get the same questions in the future.
 
-<!-- more -->
-
 # What’s in a name?
 
 First, a little trivia.

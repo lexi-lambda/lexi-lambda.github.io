@@ -81,7 +81,7 @@
        (define stderr (port->string (pygments-server-stderr server)))
        (close-pygments-server server)
        (raise-arguments-error 'pygmentize "pygments server is no longer running"
-                              "stderr..." stderr
+                              "stderr..." (unquoted-printing-string stderr)
                               "exit code" ((pygments-server-interact server) 'exit-code)))
 
      (with-handlers ([(λ (exn) (and (exn:fail? exn) (pygments-server-closed? server)))
@@ -102,7 +102,7 @@
                          (close-pygments-server server)
                          (raise-arguments-error 'pygmentize "error reading from pygments server"
                                                 "read error..." (exn->string exn)
-                                                "stderr..." stderr
+                                                "stderr..." (unquoted-printing-string stderr)
                                                 "exit code" ((pygments-server-interact server) 'exit-code)))]
                       [(λ (exn) (and (exn:fail? exn) (pygments-server-closed? server)))
                        (λ (_) (raise-closed-error))])

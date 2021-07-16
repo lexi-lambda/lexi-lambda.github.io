@@ -8,8 +8,6 @@ Personally, I have no idea if the trope of the nuance-challenged programmer is a
 
 I think about that question a lot.
 
-<!-- more -->
-
 # 2015 called, and they want their dress back
 
 Humans have a knack for caring intensely about the most trivial of things. Name almost anything—cats versus dogs, the appropriate way to fasten a necktie, or even which day of the week comes first—and someone somewhere has probably written an essay about it on an internet forum. It would be easy to throw up our hands and give up trying to understand our peers, as sometimes they seem like aliens from another planet.

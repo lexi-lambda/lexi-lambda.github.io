@@ -10,8 +10,6 @@
 
 Welcome to the [Rascal][rascal] programming language.
 
-<!-- more -->
-
 # Why Rascal?
 
 Why yet *another* programming language? Anyone who knows me knows that I already have two programming languages that I *really* like: Haskell and Racket. Really, I think they’re both great! Each brings some things to the table that aren’t really available in any other programming language I’ve ever used.

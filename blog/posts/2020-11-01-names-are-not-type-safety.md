@@ -1,3 +1,7 @@
+    Title: Names are not type safety
+    Date: 2020-11-01T18:00:00
+    Tags: haskell, types, functional programming
+
 Haskell programmers spend a lot of time talking about *type safety*. The Haskell school of program construction advocates “capturing invariants in the type system” and “making illegal states unrepresentable,” both of which sound like compelling goals, but are rather vague on the techniques used to achieve them. Almost exactly one year ago, I published [Parse, Don’t Validate][blog:pdv] as an initial stab towards bridging that gap.
 
 The ensuing discussions were largely productive and right-minded, but one particular source of confusion quickly became clear: Haskell’s `newtype` construct. The idea is simple enough—the `newtype` keyword declares a wrapper type, nominally distinct from but representationally equivalent to the type it wraps—and on the surface this *sounds* like a simple and straightforward path to type safety. For example, one might consider using a `newtype` declaration to define a type for an email address:

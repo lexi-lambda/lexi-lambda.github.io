@@ -6,8 +6,6 @@
 
 There’s no doubt that the machinery of `MonadBaseControl` is complex, and the role it plays in practice is often subtle. However, its essence is actually much simpler than it appears, and I promise it can be understood by mere mortals. In this blog post, I hope to provide a complete survey of `MonadBaseControl`—how it works, how it’s designed, and how it can go wrong—in a way that is accessible to anyone with a firm grasp of monads and monad transformers. To start, we’ll motivate `MonadBaseControl` by reinventing it ourselves.
 
-<!-- more -->
-
 # The higher-order action problem
 
 Say we have a function with the following type:[^0]

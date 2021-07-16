@@ -1,3 +1,7 @@
+    Title: Types as axioms, or: playing god with static types
+    Date: 2020-08-13T13:51:57
+    Tags: types, functional programming, haskell, typescript
+
 Just what exactly *is* a type?
 
 A common perspective is that types are *restrictions*. Static types restrict the set of values a variable may contain, capturing some subset of the space of “all possible values.” Under this worldview, a typechecker is sort of like an oracle, predicting which values will end up where when the program runs and making sure they satisfy the constraints the programmer wrote down in the type annotations. Of course, the typechecker can’t *really* predict the future, so when the typechecker gets it wrong—it can’t “figure out” what a value will be—static types can feel like self-inflicted shackles.

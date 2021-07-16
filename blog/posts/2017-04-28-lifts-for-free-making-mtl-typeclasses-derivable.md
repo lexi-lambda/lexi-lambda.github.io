@@ -6,8 +6,6 @@ Perhaps the most important abstraction a Haskell programmer must understand to e
 
 Less fortunately, the mtl approach does not actually eliminate `lift` entirely, it simply moves it from use sites to instances. This requires a small zoo of extraordinarily boilerplate-y instances, most of which simply implement each typeclass method using `lift`. While we cannot eliminate the instances entirely without somewhat dangerous techniques like [overlapping instances][overlapping-instances], we *can* automatically derive them using features of modern GHC, eliminating the truly unnecessary boilerplate.
 
-<!-- more -->
-
 # The problem with mtl-style typeclasses
 
 To understand what problem it is exactly that we’re trying to solve, we first need to take a look at an actual mtl-style typeclass. I am going to start with an mtl-*style* typeclass, rather than an actual typeclass in the mtl, due to slight complications with mtl’s actual typeclasses that we’ll get into later. Instead, let’s start with a somewhat boring typeclass, which we’ll call `MonadExit`:

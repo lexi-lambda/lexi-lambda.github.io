@@ -6,8 +6,6 @@ Object-oriented programming languages make unit testing easy by providing obviou
 
 Fortunately, by taking advantage of Haskell’s expressive type system, it’s possible to not only achieve parity with object-oriented testing techniques, but also to provide stronger static guarantees as well. Furthermore, it’s all possible without resorting to extra-linguistic hacks that static object-oriented languages sometimes use for mocking, such as dynamic bytecode generation.
 
-<!-- more -->
-
 # First, an aside on testing philosophy
 
 Testing methodology is a controversial topic within the larger programming community, and there are a multitude of different approaches. This blog post is about *unit testing*, an already nebulous term with a number of different definitions. For the purposes of this post, I will define a unit test as a test that stubs out collaborators of the code under test in some way. Accomplishing that in Haskell is what this is primarily about.

@@ -20,6 +20,7 @@
          threading
 
          (only-in "markdown/parse.rkt" document/p)
+         "markdown/post.rkt"
          "markdown/to-scribble.rkt"
          (only-in "scribble/post-language.rkt" post-tags)
          "scribble/render.rkt")
@@ -55,31 +56,43 @@
                     (path-only rooted-path)
                     rooted-path)))
 
-(define (markdown-post #:title title-str #:date date #:tags tags)
-  (define path (build-path posts-dir (~a date "-" (tag->anchor-name (list title-str)) ".md")))
-  (define main-part-promise
-    (delay (document->part (parse-result! (parse-string document/p (file->string path)))
-                           (title #:style (style #f (list (document-date date)
-                                                          (post-tags tags)))
-                                  title-str))))
+(define (markdown-post file-name)
+  (define path (build-path posts-dir file-name))
+  (define main-part-promise (delay (parse-markdown-post (file->string path) path)))
   (post-dep path main-part-promise))
 
 (define all-post-deps
-  (list (markdown-post #:title "Parse, don’t validate"
-                       #:date "2019-11-05"
-                       #:tags (list "functional programming" "haskell" "types"))
-        (markdown-post #:title "No, dynamic type systems are not inherently more open"
-                       #:date "2020-01-19"
-                       #:tags (list "types" "haskell" "programming languages" "functional programming"))
-        (markdown-post #:title "Types as axioms, or: playing god with static types"
-                       #:date "2020-08-13"
-                       #:tags (list "types" "functional programming" "haskell" "typescript"))
-        (markdown-post #:title "Names are not type safety"
-                       #:date "2020-11-01"
-                       #:tags (list "haskell" "types" "functional programming"))
-        (markdown-post #:title "An introduction to typeclass metaprogramming"
-                       #:date "2021-03-25"
-                       #:tags (list "haskell" "types" "functional programming"))))
+  (map markdown-post '("2015-07-18-automatically-deploying-a-frog-powered-blog-to-github-pages.md"
+                       "2015-08-22-deploying-racket-applications-on-heroku.md"
+                       "2015-08-30-managing-application-configuration-with-envy.md"
+                       "2015-09-23-canonical-factories-for-testing-with-factory-girl-api.md"
+                       "2015-11-06-functionally-updating-record-types-in-elm.md"
+                       #;"2015-12-21-adts-in-typed-racket-with-macros.md" ; <ol start="5">
+                       "2016-02-18-simple-safe-multimethods-in-racket.md"
+                       "2016-06-03-four-months-with-haskell.md"
+                       "2016-08-11-climbing-the-infinite-ladder-of-abstraction.md"
+                       "2016-08-24-understanding-the-npm-dependency-model.md"
+                       "2016-10-01-using-types-to-unit-test-in-haskell.md"
+                       "2017-01-02-rascal-a-haskell-with-more-parentheses.md"
+                       "2017-01-05-rascal-is-now-hackett-plus-some-answers-to-questions.md"
+                       "2017-04-28-lifts-for-free-making-mtl-typeclasses-derivable.md"
+                       "2017-05-27-realizing-hackett-a-metaprogrammable-haskell.md"
+                       "2017-06-29-unit-testing-effectful-haskell-with-monad-mock.md"
+                       "2017-08-12-user-programmable-infix-operators-in-racket.md"
+                       "2017-08-28-hackett-progress-report-documentation-quality-of-life-and-snake.md"
+                       "2017-10-27-a-space-of-their-own-adding-a-type-namespace-to-hackett.md"
+                       "2018-02-10-an-opinionated-guide-to-haskell-in-2018.md"
+                       "2018-04-15-reimplementing-hackett-s-type-language-expanding-to-custom-core-forms-in-racket.md"
+                       "2018-09-13-custom-core-forms-in-racket-part-ii-generalizing-to-arbitrary-expressions-and-internal-definitions.md"
+                       "2018-10-06-macroexpand-anywhere-with-local-apply-transformer.md"
+                       "2019-04-21-defeating-racket-s-separate-compilation-guarantee.md"
+                       #;"2019-09-07-demystifying-monadbasecontrol.md" ; html tables
+                       "2019-10-19-empathy-and-subjective-experience-in-programming-languages.md"
+                       "2019-11-05-parse-don-t-validate.md"
+                       "2020-01-19-no-dynamic-type-systems-are-not-inherently-more-open.md"
+                       "2020-08-13-types-as-axioms-or-playing-god-with-static-types.md"
+                       "2020-11-01-names-are-not-type-safety.md"
+                       "2021-03-25-an-introduction-to-typeclass-metaprogramming.md")))
 
 (define (timestamp-string)
   (define (pad n) (~r n #:min-width 2 #:pad-string "0"))
@@ -90,11 +103,11 @@
       "]"))
 
 (define (build-post-body dep)
+  (eprintf "~a running <posts>/~a\n" (timestamp-string) (find-relative-path posts-dir (post-dep-src-path dep)))
   (define renderer (new (render-mixin render%)
                         [dest-dir (current-build-directory)]))
   (define main-parts (list (post-dep-main-part dep)))
   (define out-paths (list (post-dep-info-path dep)))
-  (eprintf "~a running <posts>/~a\n" (timestamp-string) (find-relative-path posts-dir (post-dep-src-path dep)))
 
   (define traverse-info (send renderer traverse main-parts out-paths))
   (define collect-info (send renderer collect main-parts out-paths traverse-info))

@@ -12,7 +12,8 @@
          (prefix-in md: "parse.rkt"))
 
 (provide (contract-out
-          [document->part (-> md:document? title-decl? part?)]))
+          [document->part (-> md:document? title-decl? part?)]
+          [content->content (-> md:content? content?)]))
 
 (define current-link-targets (make-parameter #f))
 (define current-footnotes (make-parameter #f))
@@ -106,13 +107,19 @@
     [(md:bold md-content) (element 'bold (content->content md-content))]
     [(md:italic md-content) (element 'italic (content->content md-content))]
     [(md:code md-content) (code (content->content md-content))]
-    [(md:link md-content dest) (hyperlink (destination->string dest) (content->content md-content))]
-    [(md:image md-content dest) (image (destination->string dest) (content->content md-content))]
+    [(md:link md-content dest)
+     (define content (content->content md-content))
+     (hyperlink (destination->string dest content) content)]
+    [(md:image md-content dest)
+     (define content (content->content md-content))
+     (image (destination->string dest content) content)]
+    [(md:superscript md-content) (element 'superscript (content->content md-content))]
     [(md:footnote-ref name) (hash-ref (current-footnotes) name)]))
 
-(define (destination->string dest)
+(define (destination->string dest content)
   (match dest
     [(? string?) dest]
+    [(md:reference "") (hash-ref (current-link-targets) (content->string content))]
     [(md:reference name) (hash-ref (current-link-targets) name)]))
 
 (define (xexpr->block xexpr)

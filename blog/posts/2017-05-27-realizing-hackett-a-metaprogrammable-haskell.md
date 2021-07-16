@@ -6,8 +6,6 @@
 
 Then, almost two months ago, I took a second stab at the problem in earnest. I read a lot, I asked a lot of people for help, and eventually I got something sort of working. Suddenly, [Hackett is not only real, it’s working, and you can try it out yourself][hackett]!
 
-<!-- more -->
-
 # A first look at Hackett
 
 Hackett is still very new, very experimental, and an enormous work in progress. However, that doesn’t mean it’s useless! Hackett is already a remarkably capable programming language. Let’s take a quick tour.
@@ -60,7 +58,7 @@ But these programs are boring. Printing strings and laziness may have been novel
 (main (do (println "Running server on port 8080.")
           (run-server 8080)))
 ```
-<br>
+
 ```sh
 $ racket my-server.rkt
 Running server on port 8080.

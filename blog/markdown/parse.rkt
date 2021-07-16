@@ -216,8 +216,10 @@ As it parses the indentation for each block, it transfers it from the
 
       ; Case 3: New content, but after some closed blocks.
       (lazy/p (do (define-values [closed-blocks notes] (close-blocks out-blocks))
-                  (match-define (cons inner-block other-blocks) (add-footnotes-to-in-blocks in-blocks notes))
-                  (scan-block-content (add-blocks inner-block closed-blocks) other-blocks))))]
+                  (match (add-footnotes-to-in-blocks in-blocks notes)
+                    [(cons inner-block other-blocks)
+                     (scan-block-content (add-blocks inner-block closed-blocks) other-blocks)]
+                    ['() (fail/p (message (srcloc #f #f #f #f #f) "" '()))]))))]
     ['()
      ; Case 4: Still inside every block, but there might be new content.
      (do (match-define (cons inner-block other-blocks) in-blocks)
@@ -308,7 +310,8 @@ As it parses the indentation for each block, it transfers it from the
         (scan-list-start (cons inner-block in-blocks) 'ordered ordered-list-bullet/p)
 
         ; html blocks
-        (do (lookahead/p (char/p #\<))
+        (do (lookahead/p (or/p (try/p (string/p "<div"))
+                               (try/p (string/p "<h2"))))
             [html-str <- rest-of-line/p]
             (scan-line-start (reverse (cons (add-blocks inner-block (list (html-block (string->xexpr html-str)))) in-blocks))))
 

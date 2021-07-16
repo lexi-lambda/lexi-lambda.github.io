@@ -6,8 +6,6 @@ Modern web applications are often built as *single-page apps*, which are great f
 
 To attempt to address a fraction of this problem, I built [factory_girl_api][factory_girl_api], a way to share context setup between both sides of the application.
 
-<!-- more -->
-
 # A brief overview of factory_girl
 
 In the land of Ruby and Rails, [factory_girl][factory_girl] is a convenient gem for managing factories for models. Out of the box, it integrates with Rails' default ORM, ActiveRecord, and provides declarative syntax for describing what attributes factories should initialize. For example, a factory declaration used to create a widget might look like this:

@@ -6,8 +6,6 @@ As previously discussed on this blog, [my programming language, Hackett][hackett
 
 For now, at least, the answer is that Hackett will emulate Haskell: **Hackett now has two namespaces**. Of course, Hackett is embedded in Racket, so what did it take to add an entirely new namespace to a language that possesses only one? The answer was a little more than I had hoped, but it was still remarkably simple given the problem: after two weeks of hacking, I’ve managed to get something working.
 
-<!-- more -->
-
 # Why two namespaces?
 
 Before delving into the mechanics of how multi-namespace Hackett is implemented, it’s important to understand what Hackett’s namespaces actually are and why they exist in the first place. Its host language, Racket, is a descendant of Scheme, a Lisp derivative that famously chose to only use a single namespace. This means everything—from values to functions to classes—lives in a single namespace in Racket.

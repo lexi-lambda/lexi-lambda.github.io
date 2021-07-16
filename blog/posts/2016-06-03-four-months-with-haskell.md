@@ -6,8 +6,6 @@ At the end of January of this year, I switched to a new job, almost exclusively 
 
 Haskell was a language I had played with in the past but never really used for anything terribly practical, but lately I think I can confidently say that it really is an *incredible* programming language. At the same time, it has some significant drawbacks, too, though probably not the ones people expect. I certainly wasn’t prepared for some of the areas where Haskell would blow me away, nor was I capable of realizing which parts would leave me hopelessly frustrated until I actually sat down and started writing lots and lots of code.
 
-<!-- more -->
-
 # Dispelling some myths
 
 Before moving on and discussing my experiences in depth, I want to take a quick detour to dispel some frequent rumors I hear about why Haskell is at least potentially problematic. These are things I hear a *lot*, and nothing in my experience so far would lead me to believe these are actually true. Ultimately, I don’t want to spend too much time on these—I think that, for the most part, they are nitpicks that people complain about to avoid understanding the deeper and more insidious problems with the language—but I think it’s important to at least mention them.
