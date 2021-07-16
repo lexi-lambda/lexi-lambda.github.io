@@ -1,14 +1,8 @@
-    Title: Parse, don’t validate
-    Date: 2019-11-05T17:09:58
-    Tags: functional programming, haskell, types
-
 Historically, I’ve struggled to find a concise, simple way to explain what it means to practice type-driven design. Too often, when someone asks me “How did you come up with this approach?” I find I can’t give them a satisfying answer. I know it didn’t just come to me in a vision—I have an iterative design process that doesn’t require plucking the “right” approach out of thin air—yet I haven’t been very successful in communicating that process to others.
 
 However, about a month ago, [I was reflecting on Twitter][twitter:json-parsing] about the differences I experienced parsing JSON in statically- and dynamically-typed languages, and finally, I realized what I was looking for. Now I have a single, snappy slogan that encapsulates what type-driven design means to me, and better yet, it’s only three words long:
 
 <div style="text-align: center; font-size: larger"><strong>Parse, don’t validate.</strong></div>
-
-<!-- more -->
 
 # The essence of type-driven design
 

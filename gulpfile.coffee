@@ -13,18 +13,18 @@ export js = ->
     .pipe concat 'application.js'
     .pipe uglify()
     .pipe rename extname: '.min.js'
-    .pipe gulp.dest './out/js/'
+    .pipe gulp.dest './output/js/'
 
 export css = ->
   gulp.src './scss/**/*.scss', sourcemaps: true
     .pipe compileSass().on 'error', compileSass.logError
     .pipe autoprefixer()
     .pipe rename extname: '.min.css'
-    .pipe gulp.dest './out/css/'
+    .pipe gulp.dest './output/css/'
 
 export images = ->
   gulp.src './images/**/*'
-    .pipe gulp.dest './out/img/'
+    .pipe gulp.dest './output/img/'
 
 export build = gulp.parallel js, css, images
 

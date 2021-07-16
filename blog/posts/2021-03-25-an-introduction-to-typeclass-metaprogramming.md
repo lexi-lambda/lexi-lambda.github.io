@@ -1,12 +1,6 @@
-    Title: An introduction to typeclass metaprogramming
-    Date: 2021-03-25T00:00:00
-    Tags: haskell, types, functional programming
-
 *Typeclass metaprogramming* is a powerful technique available to Haskell programmers to automatically generate term-level code from static type information. It has been used to great effect in several popular Haskell libraries (such as the [servant][hackage:servant] ecosystem), and it is the core mechanism used to implement generic programming via [GHC generics][hackage:base:GHC.Generics]. Despite this, remarkably little material exists that explains the technique, relegating it to folk knowledge known only to advanced Haskell programmers.
 
 This blog post attempts to remedy that by providing an overview of the foundational concepts behind typeclass metaprogramming. It does *not* attempt to be a complete guide to type-level programming in Haskell—such a task could easily fill a book—but it does provide explanations and illustrations of the most essential components. This is also *not* a blog post for Haskell beginners—familiarity with the essentials of the Haskell type system and several common GHC extensions is assumed—but it does not assume any prior knowledge of type-level programming.
-
-<!-- more -->
 
 # Part 1: Basic building blocks
 
@@ -1285,7 +1279,7 @@ So concludes my introduction to Haskell TMP. As seems to happen all too often wi
 
   * Unlike most other metaprogramming mechanisms, TMP has a wonderful synergy with type inference, which allows it to take advantage of information the programmer may not have even written explicitly.
 
-  * Though I’ve called the technique “<em>typeclass</em> metaprogramming,” TMP really leverages the entirety of the modern GHC type system. Type families, GADTs, promoted types, and more all have their place in usefully applying type-level programming.
+  * Though I’ve called the technique “*typeclass* metaprogramming,” TMP really leverages the entirety of the modern GHC type system. Type families, GADTs, promoted types, and more all have their place in usefully applying type-level programming.
 
   * Finally, since TMP relies so heavily on type inference to do its job, it’s crucial to be thoughtful about how you design type-level code to give the typechecker as many opportunities to succeed as you possibly can.
 

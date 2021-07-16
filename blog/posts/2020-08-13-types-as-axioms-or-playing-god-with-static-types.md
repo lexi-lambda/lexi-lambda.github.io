@@ -1,7 +1,3 @@
-    Title: Types as axioms, or: playing god with static types
-    Date: 2020-08-13T13:51:57
-    Tags: types, functional programming, haskell, typescript
-
 Just what exactly *is* a type?
 
 A common perspective is that types are *restrictions*. Static types restrict the set of values a variable may contain, capturing some subset of the space of “all possible values.” Under this worldview, a typechecker is sort of like an oracle, predicting which values will end up where when the program runs and making sure they satisfy the constraints the programmer wrote down in the type annotations. Of course, the typechecker can’t *really* predict the future, so when the typechecker gets it wrong—it can’t “figure out” what a value will be—static types can feel like self-inflicted shackles.
@@ -9,8 +5,6 @@ A common perspective is that types are *restrictions*. Static types restrict the
 But that is not the *only* perspective. There is another way—a way that puts you, the programmer, back in the driver’s seat. You make the rules, you call the shots, you set the objectives. You need not be limited any longer by what the designers of your programming language decided the typechecker can and cannot prove. You do not serve the typechecker; the typechecker serves *you.*
 
 …no, I’m not trying to sell you a dubious self-help book for programmers who feel like they’ve lost control of their lives. If the above sounds too good to be true, well… I won’t pretend it’s all actually as easy as I make it sound. Nevertheless, it’s well within the reach of the working programmer, and most remarkably, all it takes is a change in perspective.
-
-<!-- more -->
 
 # Seeing the types half-empty
 
