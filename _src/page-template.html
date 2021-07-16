@@ -1,0 +1,69 @@
+@(local-require racket/date)
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <title>@|title|</title>
+    <meta name="description" content="@|description|">
+    <meta name="author"      content="@|author|">
+    <meta name="keywords"    content="@|keywords|">
+    <meta name="viewport"    content="width=device-width, initial-scale=1.0">
+    <link rel="icon"      href="/favicon.ico">
+    <link rel="canonical" href="@|full-uri|">
+    @(when rel-next @list{<link rel="next" href="@|rel-next|">})
+    @(when rel-prev @list{<link rel="prev" href="@|rel-prev|">})
+    <!-- CSS -->
+    <link rel="stylesheet" type="text/css" href="https://fonts.googleapis.com/css?family=Merriweather+Sans:400,300,300italic,400italic,700,700italic,800,800italic|Merriweather:400,300,300italic,400italic,700,700italic,900,900italic|Fira+Code:300,400,500,600,700">
+    <link rel="stylesheet" type="text/css" href="/css/application.min.css">
+    <link rel="stylesheet" type="text/css" href="/css/pygments.min.css">
+    <!-- Feeds -->
+    <link rel="alternate" type="application/atom+xml"
+          href="@|atom-feed-uri|" title="Atom Feed">
+    <link rel="alternate" type="application/rss+xml"
+          href="@|rss-feed-uri|" title="RSS Feed">
+    <!-- JS -->
+    <!-- <script src="/js/application.min.js"></script> -->
+    @google-universal-analytics["UA-65250372-1"]
+  </head>
+  <body>
+    <div id="page-content">
+      <!-- Navigation Bar -->
+      <header>
+        <nav role="navigation" class="navigation-bar">
+          <ul class="navigation-items left">
+            <li id="blog-title-header"><a href="/"><h1>Alexis King</h1></a></li>
+          </ul>
+          <ul class="navigation-items center"></ul>
+          <ul class="navigation-items right">
+            <li><a href="/">Home</a></li>
+            <li><a href="/resume.html">About Me</a></li>
+          </ul>
+        </nav>
+      </header>
+      <section role="main">
+        <!-- Main column -->
+        <div class="content" class="col-md-12">
+          @;{ Index pages for posts have @tag that's not #f }
+          @(when tag
+            @list{<h1>Posts tagged <em>@|tag|</em></h1>})
+          @;{ The main page contents are in @contents }
+          @|contents|
+        </div>
+      </section>
+      <footer>
+        <div class="content">
+          <h2 id="copyright-notice">© @date-year[(current-date)], Alexis King</h2>
+          <h3>
+            Built with <a href="https://github.com/greghendershott/frog">Frog</a>, the
+            <strong>fr</strong>ozen bl<strong>og</strong> tool.
+          </h3>
+          <h3>
+            Feeds are available via <a href="/feeds/all.atom.xml">Atom</a>
+            or <a href="/feeds/all.rss.xml">RSS</a>.
+          </h3>
+        </div>
+      </footer>
+    </div>
+  </body>
+</html>

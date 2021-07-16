@@ -1,0 +1,22 @@
+$font-serif: 'Merriweather', serif;
+$font-sans-serif: 'Merriweather Sans', sans-serif;
+$font-monospace: 'Fira Code', monospace;
+
+$color-background: #fffcfc;
+$color-primary: #e45b5b;
+$color-section-background: #fffafa;
+$color-section-background-border: #fef8f8;
+$color-table-border: #fff1f1;
+
+$text-color-light: lighten($color-primary, 30%);
+$text-color-link: desaturate(darken($color-primary, 10%), 20%);
+$text-color-link-light: lighten($text-color-link, 10%);
+$text-color-primary: #473737;
+
+$content-inset-small: 40px;
+$content-inset-large: 75px;
+
+$content-width-small: 700px;
+$content-width-medium: 770px;
+$content-width-large: 850px;
+$content-width-max: 1000px;

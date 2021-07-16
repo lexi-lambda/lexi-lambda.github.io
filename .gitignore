@@ -1,5 +1,8 @@
 compiled/
 doc/
 *~
+/node_modules
+/bower_components
+
 /build
 /output
