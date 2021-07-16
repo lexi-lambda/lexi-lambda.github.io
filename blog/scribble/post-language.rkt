@@ -12,7 +12,8 @@
          scribble/core
          scribble/decode
          scribble/html-properties
-         syntax/parse/define)
+         syntax/parse/define
+         "../paths.rkt")
 
 (provide infer-date
          define-footnote
@@ -63,7 +64,7 @@
 (struct post-tags (tags) #:transparent)
 
 (define (blog-tag tag-str)
-  (hyperlink (string-append "/tags/" (string-replace tag-str " " "-") ".html") tag-str))
+  (hyperlink (tag-index-path tag-str) tag-str))
 
 (define-syntax-parser infer-date
   [(_) (match (path->string (syntax-source-file-name this-syntax))

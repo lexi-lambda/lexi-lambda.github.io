@@ -7,6 +7,7 @@
          scribble/core
          scribble/decode
          scribble/decode-struct
+         scribble/html-properties
          "../scribble/post-language.rkt"
          (prefix-in md: "parse.rkt"))
 
@@ -89,7 +90,11 @@
     [(md:ordered-list md-blockss)
      (itemization (style 'ordered '()) (map blocks->blocks md-blockss))]
     [(md:blockquote md-blocks)
-     (nested-flow (style 'nested '()) (blocks->blocks md-blocks))]))
+     (nested-flow (style 'nested '()) (blocks->blocks md-blocks))]
+    [(? md:horizontal-rule?)
+     (paragraph (style #f (list (alt-tag "hr"))) '())]
+    [(md:html-block xexpr)
+     (xexpr->block xexpr)]))
 
 (define (blocks->blocks md-blocks)
   (map block->block md-blocks))
@@ -109,6 +114,21 @@
   (match dest
     [(? string?) dest]
     [(md:reference name) (hash-ref (current-link-targets) name)]))
+
+(define (xexpr->block xexpr)
+  (match xexpr
+    [(list (? symbol? tag) (list (list (? symbol? attr-name) (? string? attr-val)) ...) xexpr ...)
+     (paragraph (style #f (list (alt-tag (symbol->string tag))
+                                (attributes (map cons attr-name attr-val))))
+                (map xexpr->content xexpr))]))
+
+(define (xexpr->content xexpr)
+  (match xexpr
+    [(? string?) xexpr]
+    [(list (? symbol? tag) (list (list (? symbol? attr-name) (? string? attr-val)) ...) xexpr ...)
+     (element (style #f (list (alt-tag (symbol->string tag))
+                              (attributes (map cons attr-name attr-val))))
+              (map xexpr->content xexpr))]))
 
 (define (make-part-info #:title title-content #:depth depth)
   (struct-copy part-start (section title-content) [depth depth]))

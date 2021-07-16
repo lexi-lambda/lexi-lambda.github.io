@@ -9,6 +9,7 @@
          racket/list
          racket/match
          threading
+         xml
          "parse/content.rkt"
          "parse/util.rkt")
 
@@ -27,6 +28,7 @@
           (struct unordered-list ([blockss (listof (listof block?))]))
           (struct ordered-list ([blockss (listof (listof block?))]))
           (struct blockquote ([blocks (listof block?)]))
+          (struct html-block ([xexpr xexpr?]))
 
           [document/p (parser/c char? document?)]))
 
@@ -39,6 +41,7 @@
 (struct unordered-list (blockss) #:transparent)
 (struct ordered-list (blockss) #:transparent)
 (struct blockquote (blocks) #:transparent)
+(struct html-block (xexpr) #:transparent)
 (define-values [horizontal-rule horizontal-rule?]
   (let ()
     (struct horizontal-rule ())
@@ -51,6 +54,7 @@
       (unordered-list? v)
       (ordered-list? v)
       (blockquote? v)
+      (html-block? v)
       (horizontal-rule? v)))
 
 ;; -----------------------------------------------------------------------------
@@ -264,45 +268,52 @@ As it parses the indentation for each block, it transfers it from the
                              (cons inner-block in-blocks)))]
 
     ; Otherwise, we’re in a container block, so try to start a new block.
-    [_
-     (or/p (do newline/p
-               (scan-line-start (reverse (cons inner-block in-blocks))))
+    [_ (scan-new-block inner-block in-blocks)]))
 
-           ; horizontal rules
-           (do (try/p (string/p "---"))
-               (many/p (char/p #\-))
-               newline/p
-               (scan-line-start (reverse (cons (add-blocks inner-block (list horizontal-rule)) in-blocks))))
+(define (scan-new-block inner-block in-blocks)
+  (or/p (do newline/p
+            (scan-line-start (reverse (cons inner-block in-blocks))))
 
-           ; headings
-           (do [depth <- (try/p (do [depth-chars <- (many+/p (char/p #\#))]
-                                    space/p
-                                    (pure (length depth-chars))))]
-               [content <- (map/p simplify-content (many/p content/p))]
-               (scan-line-start (reverse (cons (add-blocks inner-block (list (heading depth content))) in-blocks))))
+        ; horizontal rules
+        (do (try/p (string/p "---"))
+            (many/p (char/p #\-))
+            newline/p
+            (scan-line-start (reverse (cons (add-blocks inner-block (list horizontal-rule)) in-blocks))))
 
-           ; footnote and link declarations
-           (scan-footnote-declaration (cons inner-block in-blocks))
-           (scan-link-target-declaration (cons inner-block in-blocks))
+        ; headings
+        (do [depth <- (try/p (do [depth-chars <- (many+/p (char/p #\#))]
+                                 space/p
+                                 (pure (length depth-chars))))]
+            [content <- (map/p simplify-content (many/p content/p))]
+            (scan-line-start (reverse (cons (add-blocks inner-block (list (heading depth content))) in-blocks))))
 
-           ; blockquotes
-           (do (char/p #\>)
-               (or/p (lookahead/p newline/p)
-                     (char/p #\space))
-               (scan-block-content (blockquote '()) (cons inner-block in-blocks)))
+        ; footnote and link declarations
+        (scan-footnote-declaration (cons inner-block in-blocks))
+        (scan-link-target-declaration (cons inner-block in-blocks))
 
-           ; code blocks
-           (do (try/p (string/p "```"))
-               [language <- (or/p (do newline/p (pure #f))
-                                  rest-of-line/p)]
-               (scan-line-start (reverse (list* (code-block "" language) inner-block in-blocks))))
+        ; blockquotes
+        (do (char/p #\>)
+            (or/p (lookahead/p newline/p)
+                  (char/p #\space))
+            (scan-block-content (blockquote '()) (cons inner-block in-blocks)))
 
-           ; lists
-           (scan-list-start (cons inner-block in-blocks) 'unordered unordered-list-bullet/p)
-           (scan-list-start (cons inner-block in-blocks) 'ordered ordered-list-bullet/p)
+        ; code blocks
+        (do (try/p (string/p "```"))
+            [language <- (or/p (do newline/p (pure #f))
+                               rest-of-line/p)]
+            (scan-line-start (reverse (list* (code-block "" language) inner-block in-blocks))))
 
-           ; free-form content (new paragraph)
-           (scan-block-content (paragraph '()) (cons inner-block in-blocks)))]))
+        ; lists
+        (scan-list-start (cons inner-block in-blocks) 'unordered unordered-list-bullet/p)
+        (scan-list-start (cons inner-block in-blocks) 'ordered ordered-list-bullet/p)
+
+        ; html blocks
+        (do (lookahead/p (char/p #\<))
+            [html-str <- rest-of-line/p]
+            (scan-line-start (reverse (cons (add-blocks inner-block (list (html-block (string->xexpr html-str)))) in-blocks))))
+
+        ; free-form content (new paragraph)
+        (scan-block-content (paragraph '()) (cons inner-block in-blocks))))
 
 (define (scan-link-target-declaration in-blocks)
   (do [name <- (try/p (do [name <- (around-string/p (char/p #\[) (char/p #\]))]

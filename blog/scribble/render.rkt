@@ -9,6 +9,7 @@
          racket/list
          racket/match
          racket/path
+         racket/serialize
          racket/string
 
          scribble/base-render
@@ -22,11 +23,21 @@
          setup/dirs
          threading
 
+         "../paths.rkt"
          "../util.rkt"
          "../highlight/pygments.rkt"
-         "post-language.rkt")
+         "post-language.rkt"
+         "render/template.rkt")
 
-(provide render-mixin)
+(provide rendered-post?
+         render-mixin
+         render-post-page
+         render-post-index
+         tag->anchor-name)
+
+;; -----------------------------------------------------------------------------
+
+(serializable-struct rendered-post (title-str title date tags body) #:transparent)
 
 ;; -----------------------------------------------------------------------------
 
@@ -109,7 +120,7 @@
 (define (render-mixin %)
   (class %
     (define/override (current-render-mode) '(html))
-    (define/override (get-suffix) #".html")
+    (define/override (get-suffix) #".info")
 
     (define external-tag-path (string->url (get-doc-search-url)))
     (define/override (set-external-tag-path p)
@@ -183,7 +194,6 @@
              render-flow
              render-part
 
-             format-number
              number-depth)
 
     (define footnote-elements '())
@@ -194,30 +204,20 @@
       (parameterize ([current-output-file output-file])
         (call-with-current-pygments-server
          (λ ()
-           (display "<!doctype html>")
-           (xml:write-xexpr
-            `(html
-              (head
-               (meta ([charset "utf-8"]))
-               ,(cond
-                  [(part-title-content part)
-                   => (λ (title-content)
-                        `(title ,(content->string (strip-aux title-content) this part ri)))]
-                  [else '(title)])
-               (link ([rel "stylesheet"] [type "text/css"] [href "https://fonts.googleapis.com/css?family=Merriweather+Sans:400,300,300italic,400italic,700,700italic,800,800italic|Merriweather:400,300,300italic,400italic,700,700italic,900,900italic|Fira+Code:300,400,500,600,700"]))
-               (link ([rel "stylesheet"] [type "text/css"] [href "file:///home/alexis/code/blog/out/css/application.min.css"]))
-               (link ([rel "stylesheet"] [type "text/css"] [href "file:///home/alexis/code/blog/out/css/pygments.min.css"]))
-               (body (div ([id "page-content"])
-                       (section ([role "main"])
-                         (div ([class "content"])
-                           (article ([class "main"])
-                             ,(render-header part ri)
-                             ,@(render-flow (part-blocks part) part ri #f)
-                             ,@(append-map (λ~> (render-part ri)) (part-parts part))
-                             (div ([class "footnotes"])
-                               (ol ,@(for/list ([footnote-element (in-list (reverse footnote-elements))]
-                                                [footnote-index (in-naturals 1)])
-                                       `(li ([id ,(~a "footnote-" footnote-index)]) ,@footnote-element))))))))))))))))
+           (define props (style-properties (part-style part)))
+           (define post
+             (rendered-post (content->string (strip-aux (part-title-content part)) this part ri)
+                            (render-content (part-title-content part) part ri)
+                            (or (and~> (findf document-date? props) document-date-text) "????-??-??")
+                            (or (and~> (findf post-tags? props) post-tags-tags) '())
+                            (append (render-flow (part-blocks part) part ri #f)
+                                    (append-map (λ~> (render-part ri)) (part-parts part))
+                                    (list `(div ([class "footnotes"])
+                                             (ol ,@(for/list ([footnote-element (in-list (reverse footnote-elements))]
+                                                              [footnote-index (in-naturals 1)])
+                                                     `(li ([id ,(~a "footnote-" footnote-index)]) ,@footnote-element))))))))
+           (write (serialize post))
+           post))))
 
     (define/private (render-header part ri)
       (define props (style-properties (part-style part)))
@@ -378,3 +378,42 @@
            [_ (wrap-for-style rendered)])]))
 
     (super-new)))
+
+(define (render-post-page info out)
+  (match-define (rendered-post title-str title date tags body) info)
+  (display "<!doctype html>" out)
+  (xml:write-xexpr
+   (page #:title title-str
+         #:body `(div ([class "content"])
+                   (article ([class "main"])
+                     ,(build-post-header title date tags)
+                     ,@body)))
+   out))
+
+(define (build-post-header title date tags)
+  `(header
+     (h1 ([class "title"]) ,@title)
+     (div ([class "date-and-tags"])
+       (time ([datetime ,date]) ,date)
+       " ⦿ "
+       ,@(~> (for/list ([tag (in-list tags)])
+               `(a ([href ,(tag-index-path tag)]) ,tag))
+             (add-between ", ")))))
+
+(define (render-post-index paths+infos out)
+  (display "<!doctype html>" out)
+  (xml:write-xexpr
+   (page #:title "Alexis King’s Blog"
+         #:body `(div ([class "content"])
+                   ,@(for/list ([path+info (in-list paths+infos)])
+                       (match-define (list path info) path+info)
+                       (build-post-index-entry path info))))
+   out))
+
+(define (build-post-index-entry path info)
+  (match-define (rendered-post _ title date tags body) info)
+  `(article ([class "inline"])
+     ,(build-post-header `[(a ([href ,path]) ,@title)] date tags)
+     ; only render up to the start of the first section
+     ,@(takef body (match-lambda [(cons 'h2 _) #f] [_ #t]))
+     (a ([href ,path]) (span ([class "read-more-text"]) "Read more") " →")))

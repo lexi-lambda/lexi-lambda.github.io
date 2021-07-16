@@ -1,4 +1,5 @@
 compiled/
 doc/
 *~
+/build
 /output
