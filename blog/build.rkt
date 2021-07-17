@@ -20,6 +20,7 @@
          "paths.rkt"
          "build/metadata.rkt"
          "build/render/scribble.rkt"
+         "build/render/feed.rkt"
          "build/render/page.rkt")
 
 (define num-posts-per-page 10)
@@ -89,6 +90,10 @@
   (display "<!doctype html>" out)
   (write-xexpr xexpr out))
 
+(define (write-xml xexpr out)
+  (display "<?xml version=\"1.0\" encoding=\"utf-8\"?>" out)
+  (write-xexpr xexpr out))
+
 (define (build-post-body dep)
   (define src-mod-time (file-or-directory-modify-seconds (post-dep-src-path dep) #f (λ () #f)))
   (define info-mod-time (file-or-directory-modify-seconds (post-dep-info-path dep) #f (λ () #f)))
@@ -132,39 +137,46 @@
                           out-path
                           (λ~>> (write-html (post-page info)))))
 
-(define (build-post-index total-pages number posts)
-  (define site-path (index-path number #:file? #t))
-  (eprintf "~a rendering <output>~a\n" (timestamp-string) site-path)
-  (call-with-output-file* #:exists 'truncate/replace
-                          (reroot-path site-path output-dir)
-                          (λ~>> (write-html (post-index-page total-pages number posts)))))
-
-(define (build-tag-index total-pages page-number tag posts)
-  (define site-path (tag-index-path tag page-number))
+(define (build-index-page total-pages page-number posts #:tag [tag #f])
+  (define site-path (index-path page-number #:tag tag #:file? #t))
   (define out-path (reroot-path site-path output-dir))
   (eprintf "~a rendering <output>~a\n" (timestamp-string) site-path)
   (make-parent-directory* out-path)
   (call-with-output-file* #:exists 'truncate/replace
                           out-path
-                          (λ~>> (write-html (tag-index-page total-pages page-number tag posts)))))
+                          (λ~>> (write-html (index-page total-pages page-number posts #:tag tag)))))
+
+(define (build-feeds posts #:tag [tag #f])
+  (build-feed 'atom posts #:tag tag)
+  (build-feed 'rss posts #:tag tag))
+
+(define (build-feed type posts #:tag tag)
+  (define site-path (feed-path type #:tag tag))
+  (define out-path (reroot-path site-path output-dir))
+  (eprintf "~a rendering <output>~a\n" (timestamp-string) site-path)
+  (make-parent-directory* out-path)
+  (call-with-output-file* #:exists 'truncate/replace
+                          out-path
+                          (λ~>> (write-xml (feed type posts #:tag tag)))))
 
 (define (build-all)
   (make-directory* build-dir)
   (make-directory* output-dir)
-  (define post-infos
+  (define all-posts
     (for/list ([dep (in-list all-post-deps)])
       (define info (build-post-body dep))
       (build-post-page dep info)
       info))
 
   (define total-pages (ceiling (/ (length all-post-deps) num-posts-per-page)))
-  (for ([posts (in-slice num-posts-per-page (reverse post-infos))]
+  (for ([posts (in-slice num-posts-per-page (reverse all-posts))]
         [number (in-naturals 1)])
-    (build-post-index total-pages number posts))
+    (build-index-page total-pages number posts))
+  (build-feeds (reverse all-posts))
 
   (define tagged-posts
     (for*/fold ([tagged-deps+infos (hash)])
-               ([post (in-list post-infos)]
+               ([post (in-list all-posts)]
                 [tag (in-list (rendered-post-tags post))])
       (hash-update tagged-deps+infos tag (λ~>> (cons post)) '())))
 
@@ -172,7 +184,8 @@
     (define total-pages (ceiling (/ (length posts) num-posts-per-page)))
     (for ([posts (in-slice num-posts-per-page posts)]
           [page-number (in-naturals 1)])
-      (build-tag-index total-pages page-number tag posts))))
+      (build-index-page total-pages page-number posts #:tag tag))
+    (build-feeds posts #:tag tag)))
 
 (module+ main
   (build-all))

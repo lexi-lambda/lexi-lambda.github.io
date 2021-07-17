@@ -28,7 +28,7 @@
           (struct unordered-list ([blockss (listof (listof block?))]))
           (struct ordered-list ([blockss (listof (listof block?))]))
           (struct blockquote ([blocks (listof block?)]))
-          (struct html-block ([xexpr xexpr?]))
+          (struct html-block ([xexpr xexpr/c]))
 
           [document/p (parser/c char? document?)]))
 

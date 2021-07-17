@@ -6,24 +6,22 @@
          racket/list
          racket/match
          threading
-         (only-in xml xexpr?)
+         (only-in xml xexpr/c)
 
          "../../lang/metadata.rkt"
          "../../paths.rkt"
-         "../metadata.rkt")
+         "../metadata.rkt"
+         "util.rkt")
 
 (provide (contract-out
-          [page (-> #:title string? #:body xexpr? xexpr?)]
-          [post-page (-> rendered-post? xexpr?)]
-          [post-index-page (->i ([total-pages (and/c exact-integer? (>=/c 1))]
-                                 [page-number (total-pages) (and/c exact-integer? (>=/c 1) (<=/c total-pages))]
-                                 [posts (listof rendered-post?)])
-                                [result xexpr?])]
-          [tag-index-page (->i ([total-pages (and/c exact-integer? (>=/c 1))]
-                                [page-number (total-pages) (and/c exact-integer? (>=/c 1) (<=/c total-pages))]
-                                [tag string?]
-                                [posts (listof rendered-post?)])
-                               [result xexpr?])]))
+          [page (-> #:title string? #:body xexpr/c xexpr/c)]
+          [post-page (-> rendered-post? xexpr/c)]
+          [index-page-title (->* [] [#:tag (or/c string? #f)] string?)]
+          [index-page (->i ([total-pages (and/c exact-integer? (>=/c 1))]
+                            [page-number (total-pages) (and/c exact-integer? (>=/c 1) (<=/c total-pages))]
+                            [posts (listof rendered-post?)])
+                           (#:tag [tag (or/c string? #f)])
+                           [result xexpr/c])]))
 
 (define (page #:title title #:body body)
   `(html
@@ -53,8 +51,8 @@
            (div "Built with "
                 (a ([href "https://docs.racket-lang.org/scribble/index.html"]) (strong "Scribble"))
                 ", the Racket document preparation system.")
-           (div "Feeds are available via " (a ([href "/feeds/all.atom.xml"]) "Atom")
-                " or " (a ([href "/feeds/all.rss.xml"]) "RSS") "."))))))
+           (div "Feeds are available via " (a ([href ,(feed-path 'atom)]) "Atom")
+                " or " (a ([href ,(feed-path 'rss)]) "RSS") "."))))))
 
 (define (post-page info)
   (match-define (rendered-post title-str title date tags body) info)
@@ -64,18 +62,18 @@
                     ,(build-post-header title date tags)
                     ,@body))))
 
-(define (post-index-page total-pages page-number posts)
-  (page #:title "Alexis King’s Blog"
-        #:body `(div ([class "content"])
-                  ,@(build-post-index index-path total-pages page-number posts))))
+(define (index-page-title #:tag [tag #f])
+  (~a (if tag (~a "Posts tagged ‘" tag "’ | ") "")
+      "Alexis King’s Blog"))
 
-(define (tag-index-page total-pages page-number tag posts)
-  (page #:title (~a "Posts tagged ‘" tag "’")
+(define (index-page total-pages page-number posts #:tag [tag #f])
+  (page #:title (index-page-title #:tag tag)
         #:body `(div ([class "content"])
-                     (h1 ([class "tag-page-header"])
-                         "Posts tagged " (em ,tag))
-                     ,@(build-post-index (λ~>> (tag-index-path tag))
-                                         total-pages page-number posts))))
+                  ,@(when/list tag
+                      `(h1 ([class "tag-page-header"])
+                           "Posts tagged " (em ,tag)))
+                  ,@(build-post-index (λ~>> (index-path #:tag tag))
+                                      total-pages page-number posts))))
 
 (define (build-post-header title date tags)
   (define date-str (post-date->string date))
@@ -85,7 +83,7 @@
        (time ([datetime ,date-str]) ,date-str)
        " " (span ([style "margin: 0 5px"]) "⦿") " "
        ,@(~> (for/list ([tag (in-list tags)])
-               `(a ([href ,(tag-index-path tag)]) ,tag))
+               `(a ([href ,(index-path #:tag tag)]) ,tag))
              (add-between ", ")))))
 
 (define (build-post-index page-path total-pages page-number posts)

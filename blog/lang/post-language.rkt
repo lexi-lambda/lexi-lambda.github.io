@@ -64,7 +64,7 @@
 ;; -----------------------------------------------------------------------------
 
 (define (blog-tag tag-str)
-  (hyperlink (tag-index-path tag-str) tag-str))
+  (hyperlink (index-path #:tag tag-str) tag-str))
 
 (define-syntax-parser infer-date
   [(_) (match (path->string (syntax-source-file-name this-syntax))

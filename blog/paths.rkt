@@ -14,9 +14,13 @@
           [posts-dir path?]
 
           [site-path? predicate/c]
-          [index-path (->* [(and/c exact-integer? (>=/c 1))] [#:file? any/c] site-path?)]
+          [index-path (->* [] [(and/c exact-integer? (>=/c 1))
+                               #:tag (or/c string? #f)
+                               #:file? any/c]
+                           site-path?)]
           [post-path (->* [post-date? string?] [#:file? any/c] site-path?)]
-          [tag-index-path (->* [string?] [(and/c exact-integer? (>=/c 1))] site-path?)]))
+          [feed-path (->* [(or/c 'atom 'rss)] [#:tag (or/c string? #f)] site-path?)]
+          [full-url (-> site-path? string?)]))
 
 (define-runtime-path build-dir-base "../build")
 (define-runtime-path output-dir-base "../output")
@@ -29,17 +33,24 @@
   (and (string? v)
        (absolute-path? v)))
 
-(define (index-path page-number #:file? [file? #f])
-  (if (= page-number 1)
-      (if file? "/index.html" "/")
-      (~a "/index-" page-number ".html")))
+(define (index-path [page-number 1]
+                    #:tag [tag #f]
+                    #:file? [file? #f])
+  (if tag
+      (~a "/tags/"
+          (to-slug tag)
+          (if (= page-number 1) "" (~a "-" page-number))
+          ".html")
+      (if (= page-number 1)
+          (if file? "/index.html" "/")
+          (~a "/index-" page-number ".html"))))
 
 (define (post-path date title #:file? [file? #f])
   (~a "/blog/" (string-join (post-date->strings date) "/")
       "/" (to-slug title) "/" (if file? "index.html" "")))
 
-(define (tag-index-path tag-str [page-number 1])
-  (~a "/tags/"
-      (string-replace tag-str " " "-")
-      (if (= page-number 1) "" (~a "-" page-number))
-      ".html"))
+(define (feed-path format #:tag [tag #f])
+  (~a "/feeds/" (if tag (to-slug tag) "all") "." format ".xml"))
+
+(define (full-url path)
+  (~a "https://lexi-lambda.github.io" path))

@@ -17,7 +17,7 @@
                        [close-pygments-server (-> pygments-server? void?)]
                        [call-with-pygments-server (-> (-> pygments-server? any) any)]
                        [call-with-current-pygments-server (-> (-> any) any)]
-                       [pygmentize (->* [string? #:language string?] [#:server pygments-server?] xexpr?)]))
+                       [pygmentize (->* [string? #:language string?] [#:server pygments-server?] xexpr/c)]))
 
 (define-runtime-path pygments-server.py "pygments-server.py")
 
