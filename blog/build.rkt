@@ -8,23 +8,15 @@
          racket/match
          racket/path
          racket/promise
-         racket/runtime-path
          racket/sequence
-         (only-in megaparsack parse-result!)
-         (only-in megaparsack/text parse-string)
-         (only-in scribble/base title)
          scribble/base-render
-         (only-in scribble/core document-date style)
          scribble/xref
          setup/xref
          threading
          (only-in xml write-xexpr)
 
-         (only-in "markdown/parse.rkt" document/p)
          "markdown/post.rkt"
-         "markdown/to-scribble.rkt"
          "paths.rkt"
-         "lang/metadata.rkt"
          "build/metadata.rkt"
          "build/render/scribble.rkt"
          "build/render/page.rkt")
@@ -143,28 +135,22 @@
                           out-path
                           (λ~>> (write-html (post-page info)))))
 
-(define (build-post-index total-pages number deps+infos)
+(define (build-post-index total-pages number posts)
   (define base-path (index-path number #:file? #t))
   (define out-path (reroot-path base-path output-dir))
   (eprintf "~a rendering <output>~a\n" (timestamp-string) base-path)
-  (define paths+infos (for/list ([dep+info (in-list deps+infos)])
-                        (match-define (list dep info) dep+info)
-                        (list (output-path->absolute-url (post-dep-page-path dep)) info)))
   (call-with-output-file* #:exists 'truncate/replace
                           out-path
-                          (λ~>> (write-html (post-index-page total-pages number paths+infos)))))
+                          (λ~>> (write-html (post-index-page total-pages number posts)))))
 
-(define (build-tag-index total-pages page-number tag deps+infos)
+(define (build-tag-index total-pages page-number tag posts)
   (define base-path (tag-index-path tag page-number))
   (define out-path (reroot-path base-path output-dir))
   (eprintf "~a rendering <output>~a\n" (timestamp-string) base-path)
-  (define paths+infos (for/list ([dep+info (in-list deps+infos)])
-                        (match-define (list dep info) dep+info)
-                        (list (output-path->absolute-url (post-dep-page-path dep)) info)))
   (make-parent-directory* out-path)
   (call-with-output-file* #:exists 'truncate/replace
                           out-path
-                          (λ~>> (write-html (tag-index-page total-pages page-number tag paths+infos)))))
+                          (λ~>> (write-html (tag-index-page total-pages page-number tag posts)))))
 
 (define (build-all)
   (make-directory* build-dir)
@@ -176,23 +162,21 @@
       info))
 
   (define total-pages (ceiling (/ (length all-post-deps) num-posts-per-page)))
-  (for ([deps+infos (in-slice num-posts-per-page (reverse (map list all-post-deps post-infos)))]
+  (for ([posts (in-slice num-posts-per-page (reverse post-infos))]
         [number (in-naturals 1)])
-    (build-post-index total-pages number deps+infos))
+    (build-post-index total-pages number posts))
 
-  (define tagged-deps+infos
-    (for/fold ([tagged-deps+infos (hash)])
-              ([dep (in-list all-post-deps)]
-               [info (in-list post-infos)]
-               #:when #t
-               [tag (in-list (rendered-post-tags info))])
-      (hash-update tagged-deps+infos tag (λ~>> (cons (list dep info))) '())))
+  (define tagged-posts
+    (for*/fold ([tagged-deps+infos (hash)])
+               ([post (in-list post-infos)]
+                [tag (in-list (rendered-post-tags post))])
+      (hash-update tagged-deps+infos tag (λ~>> (cons post)) '())))
 
-  (for ([(tag deps+infos) (in-immutable-hash tagged-deps+infos)])
-    (define total-pages (ceiling (/ (length deps+infos) num-posts-per-page)))
-    (for ([deps+infos (in-slice num-posts-per-page deps+infos)]
+  (for ([(tag posts) (in-immutable-hash tagged-posts)])
+    (define total-pages (ceiling (/ (length posts) num-posts-per-page)))
+    (for ([posts (in-slice num-posts-per-page posts)]
           [page-number (in-naturals 1)])
-      (build-tag-index total-pages page-number tag deps+infos))))
+      (build-tag-index total-pages page-number tag posts))))
 
 (parameterize ([current-directory "/home/alexis/code/blog2"])
   (build-all))

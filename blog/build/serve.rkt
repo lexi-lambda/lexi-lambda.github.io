@@ -1,7 +1,6 @@
 #lang racket/base
 
-(require racket/runtime-path
-         web-server/http/empty
+(require web-server/http/empty
          web-server/servlet-env
          "../paths.rkt")
 

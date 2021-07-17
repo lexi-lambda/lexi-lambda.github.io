@@ -17,12 +17,12 @@
           [post-page (-> rendered-post? xexpr?)]
           [post-index-page (->i ([total-pages (and/c exact-integer? (>=/c 1))]
                                  [page-number (total-pages) (and/c exact-integer? (>=/c 1) (<=/c total-pages))]
-                                 [paths+infos (listof (list/c string? rendered-post?))])
+                                 [posts (listof rendered-post?)])
                                 [result xexpr?])]
           [tag-index-page (->i ([total-pages (and/c exact-integer? (>=/c 1))]
                                 [page-number (total-pages) (and/c exact-integer? (>=/c 1) (<=/c total-pages))]
                                 [tag string?]
-                                [paths+infos (listof (list/c string? rendered-post?))])
+                                [posts (listof rendered-post?)])
                                [result xexpr?])]))
 
 (define (page #:title title #:body body)
@@ -64,18 +64,18 @@
                     ,(build-post-header title date tags)
                     ,@body))))
 
-(define (post-index-page total-pages page-number paths+infos)
+(define (post-index-page total-pages page-number posts)
   (page #:title "Alexis King’s Blog"
         #:body `(div ([class "content"])
-                  ,@(build-post-index index-path total-pages page-number paths+infos))))
+                  ,@(build-post-index index-path total-pages page-number posts))))
 
-(define (tag-index-page total-pages page-number tag paths+infos)
+(define (tag-index-page total-pages page-number tag posts)
   (page #:title (~a "Posts tagged ‘" tag "’")
         #:body `(div ([class "content"])
                      (h1 ([class "tag-page-header"])
                          "Posts tagged " (em ,tag))
                      ,@(build-post-index (λ~>> (tag-index-path tag))
-                                         total-pages page-number paths+infos))))
+                                         total-pages page-number posts))))
 
 (define (build-post-header title date tags)
   (define date-str (post-date->string date))
@@ -88,10 +88,9 @@
                `(a ([href ,(tag-index-path tag)]) ,tag))
              (add-between ", ")))))
 
-(define (build-post-index page-path total-pages page-number paths+infos)
-  `[,@(for/list ([path+info (in-list paths+infos)])
-        (match-define (list path info) path+info)
-        (build-post-index-entry path info))
+(define (build-post-index page-path total-pages page-number posts)
+  `[,@(for/list ([post (in-list posts)])
+        (build-post-index-entry post))
     (ul ([class "pagination"])
       ,(if (= page-number 1)
            '(li ([class "disabled"]) "←")
@@ -105,8 +104,9 @@
            '(li ([class "disabled"]) "→")
            `(li (a ([href ,(page-path (add1 page-number))]) "→"))))])
 
-(define (build-post-index-entry path info)
-  (match-define (rendered-post _ title date tags body) info)
+(define (build-post-index-entry post)
+  (match-define (rendered-post _ title date tags body) post)
+  (define path (rendered-post-path post))
   `(article ([class "inline"])
      ,(build-post-header `[(a ([href ,path]) ,@title)] date tags)
      ; only render up to the start of the first section
