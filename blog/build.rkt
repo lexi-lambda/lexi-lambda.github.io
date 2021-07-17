@@ -159,6 +159,16 @@
                           out-path
                           (λ~>> (write-xml (feed type posts #:tag tag)))))
 
+(define (build-sitemap posts)
+  (define site-path "/sitemap.txt")
+  (eprintf "~a rendering <output>~a\n" (timestamp-string) site-path)
+  (call-with-output-file*
+   #:exists 'truncate/replace
+   (reroot-path site-path output-dir)
+   (λ (out)
+     (for ([post (in-list posts)])
+       (displayln (full-url (rendered-post-path post)) out)))))
+
 (define (build-all)
   (make-directory* build-dir)
   (make-directory* output-dir)
@@ -185,7 +195,9 @@
     (for ([posts (in-slice num-posts-per-page posts)]
           [page-number (in-naturals 1)])
       (build-index-page total-pages page-number posts #:tag tag))
-    (build-feeds posts #:tag tag)))
+    (build-feeds posts #:tag tag))
+
+  (build-sitemap all-posts))
 
 (module+ main
   (build-all))
