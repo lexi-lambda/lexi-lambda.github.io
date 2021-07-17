@@ -6,8 +6,10 @@
          megaparsack/text
          racket/contract
          (only-in scribble/base title)
-         (only-in scribble/core document-date part? style)
-         (only-in "../scribble/post-language.rkt" post-tags)
+         (only-in scribble/core part? style)
+         threading
+
+         "../lang/metadata.rkt"
          (only-in "parse.rkt" document/p)
          (only-in "parse/content.rkt" content/p simplify-content)
          "parse/util.rkt"
@@ -27,11 +29,11 @@
       newline/p
 
       (string/p "    Date: ")
-      [year <- (repeat/p 4 (char-between/p #\0 #\9))]
+      [year <- (digits/p 4)]
       (char/p #\-)
-      [month <- (repeat/p 2 (char-between/p #\0 #\9))]
+      [month <- (digits/p 2)]
       (char/p #\-)
-      [day <- (repeat/p 2 (char-between/p #\0 #\9))]
+      [day <- (digits/p 2)]
       rest-of-line/p
 
       (string/p "    Tags: ")
@@ -40,8 +42,11 @@
       newline/p
 
       [doc <- document/p]
-      (define date (list->string `[,@year #\- ,@month #\- ,@day]))
-      (define title-info (title #:style (style #f (list (document-date date)
+      (define title-info (title #:style (style #f (list (post-date year month day)
                                                         (post-tags (map list->string tags))))
                                 (content->content title-content)))
       (pure (document->part doc title-info))))
+
+(define (digits/p n)
+  (map/p (λ~> list->string string->number)
+         (repeat/p n (char-between/p #\0 #\9))))

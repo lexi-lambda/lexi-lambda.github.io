@@ -18,20 +18,18 @@
          scribble/xref
          setup/xref
          threading
+         (only-in xml write-xexpr)
 
          (only-in "markdown/parse.rkt" document/p)
          "markdown/post.rkt"
          "markdown/to-scribble.rkt"
          "paths.rkt"
-         (only-in "scribble/post-language.rkt" post-tags)
-         "scribble/render.rkt")
+         "lang/metadata.rkt"
+         "build/metadata.rkt"
+         "build/render/scribble.rkt"
+         "build/render/page.rkt")
 
 (define num-posts-per-page 10)
-
-(define-runtime-path posts-dir "posts")
-
-(define current-build-directory (make-parameter (string->path "build")))
-(define current-output-directory (make-parameter (string->path "output")))
 
 (struct post-dep (src-path main-part-promise) #:transparent)
 
@@ -41,20 +39,20 @@
 (define (post-dep-info-path dep)
   (~> (file-name-from-path (post-dep-src-path dep))
       (path-replace-extension #".info")
-      (build-path (current-build-directory) _)))
+      (build-path build-dir _)))
 
 (define (post-dep-xref-path dep)
   (~> (file-name-from-path (post-dep-src-path dep))
       (path-replace-extension #".sxref")
-      (build-path (current-build-directory) _)))
+      (build-path build-dir _)))
 
 (define (post-dep-page-path dep)
   (match-define (regexp #px"^(\\d{4})-(\\d{2})-(\\d{2})-(.+)$" (list _ year month day slug))
     (path->string (path-replace-extension (file-name-from-path (post-dep-src-path dep)) #"")))
-  (build-path (current-output-directory) "blog" year month day slug "index.html"))
+  (build-path output-dir "blog" year month day slug "index.html"))
 
 (define (output-path->absolute-url path)
-  (define rooted-path (build-path "/" (find-relative-path (current-output-directory) path)))
+  (define rooted-path (build-path "/" (find-relative-path output-dir path)))
   (path->string (if (equal? (path->string (file-name-from-path rooted-path)) "index.html")
                     (path-only rooted-path)
                     rooted-path)))
@@ -105,10 +103,14 @@
       ":" (pad (date-second now))
       "]"))
 
+(define (write-html xexpr out)
+  (display "<!doctype html>" out)
+  (write-xexpr xexpr out))
+
 (define (build-post-body dep)
   (eprintf "~a running <posts>/~a\n" (timestamp-string) (find-relative-path posts-dir (post-dep-src-path dep)))
   (define renderer (new (render-mixin render%)
-                        [dest-dir (current-build-directory)]))
+                        [dest-dir build-dir]))
   (define main-parts (list (post-dep-main-part dep)))
   (define out-paths (list (post-dep-info-path dep)))
 
@@ -135,26 +137,26 @@
 
 (define (build-post-page dep info)
   (define out-path (post-dep-page-path dep))
-  (eprintf "~a rendering <output>/~a\n" (timestamp-string) (find-relative-path (current-output-directory) out-path))
+  (eprintf "~a rendering <output>/~a\n" (timestamp-string) (find-relative-path output-dir out-path))
   (make-parent-directory* out-path)
   (call-with-output-file* #:exists 'truncate/replace
                           out-path
-                          (λ~>> (render-post-page info))))
+                          (λ~>> (write-html (post-page info)))))
 
 (define (build-post-index total-pages number deps+infos)
   (define base-path (index-path number #:file? #t))
-  (define out-path (reroot-path base-path (current-output-directory)))
+  (define out-path (reroot-path base-path output-dir))
   (eprintf "~a rendering <output>~a\n" (timestamp-string) base-path)
   (define paths+infos (for/list ([dep+info (in-list deps+infos)])
                         (match-define (list dep info) dep+info)
                         (list (output-path->absolute-url (post-dep-page-path dep)) info)))
   (call-with-output-file* #:exists 'truncate/replace
                           out-path
-                          (λ~>> (render-post-index total-pages number paths+infos))))
+                          (λ~>> (write-html (post-index-page total-pages number paths+infos)))))
 
 (define (build-tag-index total-pages page-number tag deps+infos)
   (define base-path (tag-index-path tag page-number))
-  (define out-path (reroot-path base-path (current-output-directory)))
+  (define out-path (reroot-path base-path output-dir))
   (eprintf "~a rendering <output>~a\n" (timestamp-string) base-path)
   (define paths+infos (for/list ([dep+info (in-list deps+infos)])
                         (match-define (list dep info) dep+info)
@@ -162,11 +164,11 @@
   (make-parent-directory* out-path)
   (call-with-output-file* #:exists 'truncate/replace
                           out-path
-                          (λ~>> (render-tag-index total-pages page-number tag paths+infos))))
+                          (λ~>> (write-html (tag-index-page total-pages page-number tag paths+infos)))))
 
 (define (build-all)
-  (make-directory* (current-build-directory))
-  (make-directory* (current-output-directory))
+  (make-directory* build-dir)
+  (make-directory* output-dir)
   (define post-infos
     (for/list ([dep (in-list all-post-deps)])
       (define info (build-post-body dep))

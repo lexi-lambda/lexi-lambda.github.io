@@ -1,9 +1,6 @@
 #lang racket/base
 
-(require (prefix-in scribble: scribble/html-render)
-         (prefix-in xml: xml)
-
-         racket/class
+(require racket/class
          racket/contract
          racket/format
          racket/hash
@@ -11,12 +8,11 @@
          racket/match
          racket/path
          racket/serialize
-         racket/string
 
          scribble/base-render
          scribble/core
          scribble/html-properties
-         scribble/private/literal-anchor
+         (prefix-in scribble: scribble/html-render)
          (only-in scribble/private/render-utils part-style?)
 
          net/uri-codec
@@ -24,41 +20,14 @@
          setup/dirs
          threading
 
-         "../paths.rkt"
-         "../util.rkt"
-         "../highlight/pygments.rkt"
-         "post-language.rkt"
-         "render/template.rkt")
+         "../../lang/post-language.rkt"
+         "../metadata.rkt"
+         "highlight/pygments.rkt"
+         "util.rkt")
 
-(provide render-mixin
-         tag->anchor-name
-         (contract-out
-          (struct rendered-post ([title-str string?]
-                                 [title xml:xexpr?]
-                                 [date string?]
-                                 [tags (listof string?)]
-                                 [body (listof xml:xexpr?)]))
-          [render-post-page (-> rendered-post? output-port? void?)]
-          [render-post-index (->i ([total-pages (and/c exact-integer? (>=/c 1))]
-                                   [page-number (total-pages) (and/c exact-integer? (>=/c 1) (<=/c total-pages))]
-                                   [paths+infos (listof (list/c string? rendered-post?))]
-                                   [out output-port?])
-                                  [result void?])]
-          [render-tag-index (->i ([total-pages (and/c exact-integer? (>=/c 1))]
-                                  [page-number (total-pages) (and/c exact-integer? (>=/c 1) (<=/c total-pages))]
-                                  [tag string?]
-                                  [paths+infos (listof (list/c string? rendered-post?))]
-                                  [out output-port?])
-                                 [result void?])]))
+(provide render-mixin)
 
 ;; -----------------------------------------------------------------------------
-
-(serializable-struct rendered-post (title-str title date tags body) #:transparent)
-
-;; -----------------------------------------------------------------------------
-
-(define (normalize-style v)
-  (if (style? v) v (style v '())))
 
 (define (attributes-union attrs1 attrs2)
   (hash-union attrs1 attrs2 #:combine/key
@@ -95,18 +64,6 @@
 
 (define (resolve-tag base-tag ri)
   (add-current-tag-prefix (tag-key base-tag ri)))
-
-(define tag->anchor-name
-  (match-lambda
-    [(literal-anchor anchor-name) anchor-name]
-    [(? list? elements)
-     ; This anchor naming scheme does not in any way create unique anchors, but that should be okay
-     ; for internal references in this use case, and having pretty URLs is a nice feature.
-     (~> elements
-         (map ~a _)
-         (string-join "-")
-         string-downcase
-         (regexp-replace* #px"(?:[^a-z0-9])+" _ "-"))]))
 
 (define tag->local-redirect-query-string
   (let ()
@@ -224,8 +181,8 @@
            (define post
              (rendered-post (content->string (strip-aux (part-title-content part)) this part ri)
                             (render-content (part-title-content part) part ri)
-                            (or (and~> (findf document-date? props) document-date-text) "????-??-??")
-                            (or (and~> (findf post-tags? props) post-tags-tags) '())
+                            (get-required-style-prop post-date? props)
+                            (post-tags-tags (get-required-style-prop post-tags? props))
                             (append (render-flow (part-blocks part) part ri #f)
                                     (append-map (λ~> (render-part ri)) (part-parts part))
                                     (list `(div ([class "footnotes"])
@@ -235,16 +192,12 @@
            (write (serialize post))
            post))))
 
-    (define/private (render-header part ri)
-      (define props (style-properties (part-style part)))
-      (define date-str (or (and~> (findf document-date? props) document-date-text) "????-??-??"))
-      (define tag-strs (or (and~> (findf post-tags? props) post-tags-tags) '()))
-      `(header
-         (h1 ([class "title"]) ,@(render-content (part-title-content part) part ri))
-         (div ([class "date-and-tags"])
-           (time ([datetime ,date-str]) ,date-str)
-           " ⦿ "
-           ,@(render-content (add-between (map blog-tag tag-strs) ", ") part ri))))
+    (define/private (get-required-style-prop pred? props)
+      (or (findf pred? props)
+          (raise-arguments-error 'render "missing required style property on main part"
+                                 "output file" (current-output-file)
+                                 "expected" (unquoted-printing-string (~a (contract-name pred?)))
+                                 "properties" props)))
 
     (define/override (render-part-content part ri)
       (define number (collected-info-number (part-collected-info part ri)))
@@ -279,7 +232,7 @@
             ,@(super render-paragraph e part ri))]]))
 
     (define/override (render-itemization e part ri)
-      (define style (normalize-style (itemization-style e)))
+      (define style (itemization-style e))
       (define-values [tag-name attrs] (style->tag-name+attributes style))
       `[(,(or tag-name
               (if (eq? (style-name style) 'ordered) 'ol 'ul))
@@ -307,7 +260,7 @@
                                "#")])
                    ,(or (~a note-index) "???")))]]
         [_
-         (define style (normalize-style (if (element? elem) (element-style elem) #f)))
+         (define style (normalize-element-style (if (element? elem) (element-style elem) #f)))
          (define-values [tag-name attrs] (style->tag-name+attributes style))
 
          (define (wrap-for-style rendered #:attrs [attrs attrs])
@@ -394,68 +347,3 @@
            [_ (wrap-for-style rendered)])]))
 
     (super-new)))
-
-(define (render-post-page info out)
-  (match-define (rendered-post title-str title date tags body) info)
-  (display "<!doctype html>" out)
-  (xml:write-xexpr
-   (page #:title title-str
-         #:body `(div ([class "content"])
-                   (article ([class "main"])
-                     ,(build-post-header title date tags)
-                     ,@body)))
-   out))
-
-(define (render-post-index total-pages page-number paths+infos out)
-  (display "<!doctype html>" out)
-  (xml:write-xexpr
-   (page #:title "Alexis King’s Blog"
-         #:body `(div ([class "content"])
-                   ,@(build-post-index index-path total-pages page-number paths+infos)))
-   out))
-
-(define (render-tag-index total-pages page-number tag paths+infos out)
-  (display "<!doctype html>" out)
-  (xml:write-xexpr
-   (page #:title (~a "Posts tagged ‘" tag "’")
-         #:body `(div ([class "content"])
-                   (h1 ([class "tag-page-header"])
-                     "Posts tagged " (em ,tag))
-                   ,@(build-post-index (λ~>> (tag-index-path tag))
-                                       total-pages page-number paths+infos)))
-   out))
-
-(define (build-post-header title date tags)
-  `(header
-     (h1 ([class "title"]) ,@title)
-     (div ([class "date-and-tags"])
-       (time ([datetime ,date]) ,date)
-       " " (span ([style "margin: 0 5px"]) "⦿") " "
-       ,@(~> (for/list ([tag (in-list tags)])
-               `(a ([href ,(tag-index-path tag)]) ,tag))
-             (add-between ", ")))))
-
-(define (build-post-index page-path total-pages page-number paths+infos)
-  `[,@(for/list ([path+info (in-list paths+infos)])
-        (match-define (list path info) path+info)
-        (build-post-index-entry path info))
-    (ul ([class "pagination"])
-      ,(if (= page-number 1)
-           '(li ([class "disabled"]) "←")
-           `(li (a ([href ,(page-path (sub1 page-number))]) "←")))
-      ,@(for/list ([i (in-range 1 (add1 total-pages))])
-          `(li ,(if (= i page-number)
-                    '([class "pagination-number active"])
-                    '([class "pagination-number"]))
-               (a ([href ,(page-path i)]) ,(~a i))))
-      ,(if (= page-number total-pages)
-           '(li ([class "disabled"]) "→")
-           `(li (a ([href ,(page-path (add1 page-number))]) "→"))))])
-
-(define (build-post-index-entry path info)
-  (match-define (rendered-post _ title date tags body) info)
-  `(article ([class "inline"])
-     ,(build-post-header `[(a ([href ,path]) ,@title)] date tags)
-     ; only render up to the start of the first section
-     ,@(takef body (match-lambda [(cons 'h2 _) #f] [_ #t]))
-     (p (a ([href ,path]) (span ([class "read-more-text"]) "Read more") " →"))))

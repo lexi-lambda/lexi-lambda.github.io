@@ -8,7 +8,8 @@
          scribble/decode
          scribble/decode-struct
          scribble/html-properties
-         "../scribble/post-language.rkt"
+
+         "../lang/post-language.rkt"
          (prefix-in md: "parse.rkt"))
 
 (provide (contract-out
