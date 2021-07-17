@@ -26,7 +26,8 @@
           (struct paragraph ([content content?]))
           (struct code-block ([content content?] [language (or/c #f string?)]))
           (struct unordered-list ([blockss (listof (listof block?))]))
-          (struct ordered-list ([blockss (listof (listof block?))]))
+          (struct ordered-list ([start exact-positive-integer?]
+                                [blockss (listof (listof block?))]))
           (struct blockquote ([blocks (listof block?)]))
           (struct html-block ([xexpr xexpr/c]))
 
@@ -39,7 +40,7 @@
 (struct paragraph (content) #:transparent)
 (struct code-block (content language) #:transparent)
 (struct unordered-list (blockss) #:transparent)
-(struct ordered-list (blockss) #:transparent)
+(struct ordered-list (start blockss) #:transparent)
 (struct blockquote (blocks) #:transparent)
 (struct html-block (xexpr) #:transparent)
 (define-values [horizontal-rule horizontal-rule?]
@@ -62,8 +63,8 @@
 (define (spaces/p n) (repeat/p n (char/p #\space)))
 (define maybe-indent/p (map/p length (many/p (char/p #\space))))
 
-(define unordered-list-bullet/p (or/p (string/p "* ") (string/p "- ")))
-(define ordered-list-bullet/p (do integer/p (string/p ". ")))
+(define unordered-list-bullet/p (do (or/p (string/p "* ") (string/p "- ")) (pure #f)))
+(define ordered-list-bullet/p (do [n <- integer/p] (string/p ". ") (pure n)))
 
 ;; -----------------------------------------------------------------------------
 
@@ -125,7 +126,7 @@ As it parses the indentation for each block, it transfers it from the
 `out-blocks` stack to the `in-blocks` stack, morally “entering” the block. |#
 
 ; see Note [Open blocks]
-(struct open-list (type indent blockss) #:transparent)
+(struct open-list (start indent blockss) #:transparent)
 (struct list-element (indent blocks) #:transparent)
 (struct footnote (name blocks) #:transparent)
 
@@ -137,10 +138,10 @@ As it parses the indentation for each block, it transfers it from the
 
 (define (close-block block)
   (match block
-    [(open-list 'unordered _ blockss) (unordered-list blockss)]
-    [(open-list 'ordered _ blockss)   (ordered-list blockss)]
-    [(paragraph content)              (paragraph (simplify-content content))]
-    [_                                block]))
+    [(open-list #f _ blockss)    (unordered-list blockss)]
+    [(open-list start _ blockss) (ordered-list start blockss)]
+    [(paragraph content)         (paragraph (simplify-content content))]
+    [_                           block]))
 
 ; Closes a sequence of open blocks. Returns two values:
 ;   1. a list of (closed) blocks
@@ -158,11 +159,11 @@ As it parses the indentation for each block, it transfers it from the
 
 (define (add-blocks open-block new-blocks)
   (match open-block
-    [(document blocks targets notes) (document (append blocks new-blocks) targets notes)]
-    [(open-list type indent blockss) (open-list type indent (append blockss (map list-element-blocks new-blocks)))]
-    [(list-element indent blocks)    (list-element indent (append blocks new-blocks))]
-    [(blockquote blocks)             (blockquote (append blocks new-blocks))]
-    [(footnote name blocks)          (footnote name (append blocks new-blocks))]))
+    [(document blocks targets notes)  (document (append blocks new-blocks) targets notes)]
+    [(open-list start indent blockss) (open-list start indent (append blockss (map list-element-blocks new-blocks)))]
+    [(list-element indent blocks)     (list-element indent (append blocks new-blocks))]
+    [(blockquote blocks)              (blockquote (append blocks new-blocks))]
+    [(footnote name blocks)           (footnote name (append blocks new-blocks))]))
 
 (define (add-footnotes doc new-notes)
   (define notes (append (document-footnotes doc) new-notes))
@@ -261,10 +262,10 @@ As it parses the indentation for each block, it transfers it from the
 
     ; If we’re in a list (but not a list element), parse a new list element.
     ; See Note [Unconditionally parse list elements] for why we don’t have to handle anything else.
-    [(open-list 'unordered _ _)
+    [(open-list #f _ _)
      (do unordered-list-bullet/p
          (scan-block-content (list-element 2 '()) (cons inner-block in-blocks)))]
-    [(open-list 'ordered _ _)
+    [(open-list _ _ _)
      (do [bullet <- (syntax-box/p ordered-list-bullet/p)]
          (scan-block-content (list-element (srcloc-span (syntax-box-srcloc bullet)) '())
                              (cons inner-block in-blocks)))]
@@ -306,8 +307,8 @@ As it parses the indentation for each block, it transfers it from the
             (scan-line-start (reverse (list* (code-block "" language) inner-block in-blocks))))
 
         ; lists
-        (scan-list-start (cons inner-block in-blocks) 'unordered unordered-list-bullet/p)
-        (scan-list-start (cons inner-block in-blocks) 'ordered ordered-list-bullet/p)
+        (scan-list-start (cons inner-block in-blocks) unordered-list-bullet/p)
+        (scan-list-start (cons inner-block in-blocks) ordered-list-bullet/p)
 
         ; html blocks
         (do (lookahead/p (or/p (try/p (string/p "<div"))
@@ -334,11 +335,12 @@ As it parses the indentation for each block, it transfers it from the
       (many/p (char/p #\space))
       (scan-block-content (footnote name '()) in-blocks)))
 
-(define (scan-list-start in-blocks type start-p)
-  (do [indent <- (try/p (do [indent <- maybe-indent/p]
-                            (lookahead/p start-p)
-                            (pure indent)))]
-      (scan-block-content (open-list type indent '()) in-blocks)))
+(define (scan-list-start in-blocks start-p)
+  (do [(list indent start)
+       <- (try/p (do [indent <- maybe-indent/p]
+                     [start <- (lookahead/p start-p)]
+                     (pure (list indent start))))]
+      (scan-block-content (open-list start indent '()) in-blocks)))
 
 #| Note [Unconditionally parse list elements]
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

@@ -41,7 +41,7 @@ data Tree a = Empty
 
 With this in mind, we can add a fifth and final point to our list:
 
-  <ol start="5"><li>ADTs must be able to be parametrically polymorphic.</li></ol>
+  5. ADTs must be able to be parametrically polymorphic.
 
 That covers all of our requirements for basic ADTs. Now we're ready to port this idea to Racket.
 

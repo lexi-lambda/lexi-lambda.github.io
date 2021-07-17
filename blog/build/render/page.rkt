@@ -17,8 +17,8 @@
           [page (->* [#:title string? #:body xexpr/c] [#:tag (or/c string? #f)] xexpr/c)]
           [post-page (-> rendered-post? xexpr/c)]
           [index-page-title (->* [] [#:tag (or/c string? #f)] string?)]
-          [index-page (->i ([total-pages (and/c exact-integer? (>=/c 1))]
-                            [page-number (total-pages) (and/c exact-integer? (>=/c 1) (<=/c total-pages))]
+          [index-page (->i ([total-pages exact-positive-integer?]
+                            [page-number (total-pages) (and/c exact-positive-integer? (<=/c total-pages))]
                             [posts (listof rendered-post?)])
                            (#:tag [tag (or/c string? #f)])
                            [result xexpr/c])]))

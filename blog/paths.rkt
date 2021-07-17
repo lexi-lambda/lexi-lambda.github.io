@@ -14,7 +14,7 @@
           [posts-dir path?]
 
           [site-path? predicate/c]
-          [index-path (->* [] [(and/c exact-integer? (>=/c 1))
+          [index-path (->* [] [exact-positive-integer?
                                #:tag (or/c string? #f)
                                #:file? any/c]
                            site-path?)]

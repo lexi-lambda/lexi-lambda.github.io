@@ -1,6 +1,7 @@
 #lang racket/base
 
 (require racket/contract
+         racket/format
          racket/list
          racket/match
          scribble/base
@@ -89,8 +90,10 @@
          (code-block content))]
     [(md:unordered-list md-blockss)
      (itemization plain (map blocks->blocks md-blockss))]
-    [(md:ordered-list md-blockss)
-     (itemization (style 'ordered '()) (map blocks->blocks md-blockss))]
+    [(md:ordered-list start md-blockss)
+     (define props (if (= start 1) '()
+                       (list (attributes (list (cons 'start (~a start)))))))
+     (itemization (style 'ordered props) (map blocks->blocks md-blockss))]
     [(md:blockquote md-blocks)
      (nested-flow (style 'nested '()) (blocks->blocks md-blocks))]
     [(? md:horizontal-rule?)

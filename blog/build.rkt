@@ -51,7 +51,7 @@
                        "2015-08-30-managing-application-configuration-with-envy.md"
                        "2015-09-23-canonical-factories-for-testing-with-factory-girl-api.md"
                        "2015-11-06-functionally-updating-record-types-in-elm.md"
-                       #;"2015-12-21-adts-in-typed-racket-with-macros.md" ; <ol start="5">
+                       "2015-12-21-adts-in-typed-racket-with-macros.md"
                        "2016-02-18-simple-safe-multimethods-in-racket.md"
                        "2016-06-03-four-months-with-haskell.md"
                        "2016-08-11-climbing-the-infinite-ladder-of-abstraction.md"
