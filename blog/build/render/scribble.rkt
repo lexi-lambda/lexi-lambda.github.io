@@ -1,6 +1,7 @@
 #lang racket/base
 
-(require racket/class
+(require (for-syntax racket/base)
+         racket/class
          racket/contract
          racket/format
          racket/hash
@@ -18,14 +19,21 @@
          net/uri-codec
          net/url
          setup/dirs
+         syntax/parse/define
          threading
+         (only-in xml write-xexpr)
 
          "../../lang/post-language.rkt"
          "../metadata.rkt"
          "highlight/pygments.rkt"
          "util.rkt")
 
-(provide render-mixin)
+(provide base-render%
+         blog-post-render%
+
+         blog-render-mixin
+         footnotes-render-mixin
+         pygments-render-mixin)
 
 ;; -----------------------------------------------------------------------------
 
@@ -90,10 +98,74 @@
 
 ;; -----------------------------------------------------------------------------
 
-(define (render-mixin %)
+;; Assists with the “overment + augride” trick used to hijack method dispatch
+;; without otherwise disrupting downstream subclasses, as discussed here:
+;; https://groups.google.com/g/racket-users/c/gM6DB7hY8nU/m/KaRpol06AQAJ
+(define-syntax-parser class/hijack
+  [(_ supercls:expr
+      #:hijack-methods [hijack-id:id ...]
+      body-form ...)
+   #:with [super-hijack-id ...] (generate-temporaries (attribute hijack-id))
+   #`(let ()
+       (define-local-member-name super-hijack-id ...)
+       (class #,(syntax/loc this-syntax
+                  (class supercls
+                    (define/public-final (super-hijack-id . args)
+                      (super hijack-id . args))
+                    ...
+                    body-form ...))
+         (inherit super-hijack-id ...)
+         (define/augride (hijack-id . args)
+           (super-hijack-id . args))
+         ...
+         (super-new)))])
+
+(define-simple-macro (inner/hijack method:id . args)
+  (inner (error 'inner/hijack "the impossible happened (maybe ~a wasn’t hijacked?)" 'method)
+         method . args))
+
+;; Like `render%` from scribble/base-render, but with some methods cleaned up or
+;; replaced for greater consistency. In particular:
+;;
+;;   * The `current-output-file` and `current-top-part` parameters are set
+;;     during the collect and render passes.
+;;
+;;   * `render-nested-flow` calls `render-flow` instead of calling `render-block`
+;;     directly. As a side-effect of this change, `render-nested-flow` returns a
+;;     flat list (of rendered blocks) rather than a list of lists.
+(define base-render%
+  (class/hijack render%
+    #:hijack-methods [render-one]
+    (inherit collect-part render-flow)
+
+    (define/override (start-collect ds fns ci)
+      (for-each (lambda (d fn)
+                  (parameterize ([current-output-file fn]
+                                 [current-top-part d])
+                    (collect-part d #f ci null 1 #hash())))
+                ds
+                fns))
+
+    (define/overment (render-one part ri output-file)
+      (parameterize ([current-output-file output-file])
+        (inner/hijack render-one part ri output-file)))
+
+    (define/override (render-nested-flow i part ri starting-item?)
+      (render-flow (nested-flow-blocks i) part ri #t))
+
+    (super-new)))
+
+;; The foundational renderer mixin used by this blog. It is an HTML renderer,
+;; but it is drastically stripped down and streamlined relative to the built-in
+;; renderer provided by scribble/html-render.
+;;
+;; This mixin does not, by itself, support all the functionality used by blog
+;; posts themselves---for example, it does not support footnotes---but it is a
+;; useful foundation that can be used for rendering non-post pages.
+(define (blog-render-mixin %)
   (class %
     (define/override (current-render-mode) '(html))
-    (define/override (get-suffix) #".info")
+    (define/override (get-suffix) #".html")
 
     (define external-tag-path (string->url (get-doc-search-url)))
     (define/override (set-external-tag-path p)
@@ -101,19 +173,6 @@
 
     ;; -------------------------------------------------------------------------
     ;; collect
-
-    (inherit collect-part)
-
-    (define footnote-ids '())
-
-    (define/override (start-collect ds fns ci)
-      (set! footnote-ids '())
-      (for-each (lambda (d fn)
-                  (parameterize ([current-output-file fn]
-                                 [current-top-part d])
-                    (collect-part d #f ci null 1 #hash())))
-                ds
-                fns))
 
     (define/public (part-whole-page? p ri)
       (match (resolve-get p ri (car (part-tags p)))
@@ -144,12 +203,6 @@
                                             (current-output-file)
                                             (tag->anchor-name (add-current-tag-prefix key)))))))
 
-    (define/override (collect-nested-flow b ci)
-      (cond
-        [(findf footnote-definition? (style-properties (nested-flow-style b)))
-         => (λ (defn) (set! footnote-ids (cons (footnote-definition-note-id defn) footnote-ids)))])
-      (super collect-nested-flow b ci))
-
     (define/override (collect-target-element i ci)
       (define key (generate-tag (target-element-tag i) ci))
       (when (redirect-target-element? i)
@@ -169,35 +222,13 @@
 
              number-depth)
 
-    (define footnote-elements '())
-
     (define/override (render-one part ri output-file)
-      (set! footnote-ids (reverse footnote-ids))
-      (set! footnote-elements '())
-      (parameterize ([current-output-file output-file])
-        (call-with-current-pygments-server
-         (λ ()
-           (define props (style-properties (part-style part)))
-           (define post
-             (rendered-post (content->string (strip-aux (part-title-content part)) this part ri)
-                            (render-content (part-title-content part) part ri)
-                            (get-required-style-prop post-date? props)
-                            (post-tags-tags (get-required-style-prop post-tags? props))
-                            (append (render-flow (part-blocks part) part ri #f)
-                                    (append-map (λ~> (render-part ri)) (part-parts part))
-                                    (list `(div ([class "footnotes"])
-                                             (ol ,@(for/list ([footnote-element (in-list (reverse footnote-elements))]
-                                                              [footnote-index (in-naturals 1)])
-                                                     `(li ([id ,(~a "footnote-" footnote-index)]) ,@footnote-element))))))))
-           (write (serialize post))
-           post))))
-
-    (define/private (get-required-style-prop pred? props)
-      (or (findf pred? props)
-          (raise-arguments-error 'render "missing required style property on main part"
-                                 "output file" (current-output-file)
-                                 "expected" (unquoted-printing-string (~a (contract-name pred?)))
-                                 "properties" props)))
+      (define xexpr
+        `(html
+           (head (title ,(content->string (strip-aux (part-title-content part)) this part ri)))
+           (body ,@(render-part part ri))))
+      (write-xexpr xexpr)
+      xexpr)
 
     (define/override (render-part-content part ri)
       (define number (collected-info-number (part-collected-info part ri)))
@@ -212,24 +243,13 @@
         ,@(append-map (λ~> (render-part ri)) (part-parts part))])
 
     (define/override (render-nested-flow i part ri starting-item?)
-      (define rendered (append* (super render-nested-flow i part ri starting-item?)))
-      (cond
-        [(findf footnote-definition? (style-properties (nested-flow-style i)))
-         => (λ (defn)
-              (set! footnote-elements (cons rendered footnote-elements))
-              '[])]
-        [else
-         `[(blockquote ,@rendered)]]))
+      `[(blockquote ,@(super render-nested-flow i part ri starting-item?))])
 
     (define/override (render-paragraph e part ri)
-      (match e
-        [(paragraph (style #f (list (pygments-content source language))) '())
-         `[(pre ,(pygmentize source #:language language))]]
-        [_
-         (define-values [tag-name attrs] (style->tag-name+attributes (paragraph-style e)))
-         `[(,(or tag-name 'p)
-            ,(attributes->list attrs)
-            ,@(super render-paragraph e part ri))]]))
+      (define-values [tag-name attrs] (style->tag-name+attributes (paragraph-style e)))
+      `[(,(or tag-name 'p)
+         ,(attributes->list attrs)
+         ,@(super render-paragraph e part ri))])
 
     (define/override (render-itemization e part ri)
       (define style (itemization-style e))
@@ -249,17 +269,9 @@
       (render-content title-content part ri))
 
     (define/override (render-content elem part ri)
-      (match elem
-        [(? string? s) (list s)]
-        [(element (style #f (list (pygments-content source language))) '())
-         (list (pygmentize source #:language language))]
-        [(element (style #f (list (footnote-reference note-id))) '())
-         (define note-index (and~> (index-of footnote-ids note-id) add1))
-         `[(sup (a ([href ,(if note-index
-                               (~a "#footnote-" note-index)
-                               "#")])
-                   ,(or (~a note-index) "???")))]]
-        [_
+      (cond
+        [(string? elem) (list elem)]
+        [else
          (define style (normalize-element-style (if (element? elem) (element-style elem) #f)))
          (define-values [tag-name attrs] (style->tag-name+attributes style))
 
@@ -345,5 +357,144 @@
             (wrap-for-style #:attrs (hasheq) `[(a ,(attributes->list attrs*) ,@rendered)])]
 
            [_ (wrap-for-style rendered)])]))
+
+    (super-new)))
+
+;; Adds support for footnote definitions and references to a renderer.
+;; Specifically, the renderer is adjusted as follows:
+;;
+;;   * An `element` with a `footnote-reference` style property is treated as a
+;;     /footnote references/. The content of footnote references is ignored, and
+;;     the element is replaced with a link to the corresponding footnote
+;;     definition.
+;;
+;;  * A `nested-flow` with a `footnote-definition` style property is treated as
+;;    a /footnote definition/. During the render pass, footnote definitions are
+;;    removed from the document flow in `render-flow` and rendered separately.
+;;    The collected footnote definitions can be retrieved using the
+;;    `get-rendered-footnote-definitions` method in a subclassing renderer.
+;;
+;;  * The `render-footnote-definition` method can be overridden to customize the
+;;    way footnote definitions are rendered.
+(define (footnotes-render-mixin %)
+  (class/hijack %
+    #:hijack-methods [render-one]
+
+    (define footnote-ids '())
+    (define footnote-definitions '())
+
+    (define/override (start-collect ds fns ci)
+      (set! footnote-ids '())
+      (super start-collect ds fns ci))
+
+    (define/override (collect-nested-flow b ci)
+      (cond
+        [(findf footnote-definition? (style-properties (nested-flow-style b)))
+         => (λ (defn) (set! footnote-ids (cons (footnote-definition-note-id defn) footnote-ids)))])
+      (super collect-nested-flow b ci))
+
+    (define/public (get-rendered-footnote-definitions)
+      (reverse footnote-definitions))
+
+    (define/public-final (super-render-one part ri output-file)
+      (super render-one part ri output-file))
+    (define/overment (render-one part ri output-file)
+      (set! footnote-ids (reverse footnote-ids))
+      (set! footnote-definitions '())
+      (inner/hijack render-one part ri output-file))
+
+    (define/override (render-content elem part ri)
+      (match elem
+        [(element (style #f (list (footnote-reference note-id))) '())
+         (define note-index (and~> (index-of footnote-ids note-id) add1))
+         `[(sup (a ([href ,(if note-index
+                               (~a "#footnote-" note-index)
+                               "#")])
+                   ,(or (~a note-index) "???")))]]
+        [_ (super render-content elem part ri)]))
+
+    (define/override (render-flow blocks part ri starting-item?)
+      (define-values [footnote-blocks other-blocks]
+        (partition (λ (block) (and (nested-flow? block)
+                                   (~>> (nested-flow-style block)
+                                        style-properties
+                                        (memf footnote-definition?))))
+                   blocks))
+      (for ([footnote-block (in-list footnote-blocks)])
+        (define rendered (render-footnote-definition footnote-block part ri))
+        (set! footnote-definitions (cons rendered footnote-definitions)))
+      (super render-flow other-blocks part ri starting-item?))
+
+    (define/public (render-footnote-definition block part ri)
+      (render-flow (nested-flow-blocks block) part ri #t))
+
+    (super-new)))
+
+;; Recognizes `paragraph`s and `element`s with a `pygments-content` style
+;; property and replaces them with the result of running Pygments on the content
+;; in the property. Body content and other style properties are ignored.
+(define (pygments-render-mixin %)
+  (class/hijack %
+    #:hijack-methods [render-one]
+
+    (define/overment (render-one part ri output-file)
+      (call-with-current-pygments-server
+       (λ () (inner/hijack render-one part ri output-file))))
+
+    (define/override (render-paragraph e part ri)
+      (match (findf pygments-content? (style-properties (paragraph-style e)))
+        [(pygments-content source language)
+         `[(pre ,(pygmentize source #:language language))]]
+        [_ (super render-paragraph e part ri)]))
+
+    (define/override (render-content e part ri)
+      (match e
+        [(element (style _ (app (λ~>> (findf pygments-content?))
+                                (pygments-content source language)))
+                  _)
+         (list (pygmentize source #:language language))]
+        [_ (super render-content e part ri)]))
+
+    (super-new)))
+
+;; The renderer used for actual blog posts, with all the bells and whistles.
+(define blog-post-render%
+  (class (pygments-render-mixin (footnotes-render-mixin (blog-render-mixin base-render%)))
+    (inherit render-content
+             render-flow
+             render-part
+             get-rendered-footnote-definitions)
+
+    ; We don’t render blog posts directly to HTML because we need to be able to
+    ; render them in different ways on different pages, so we generate `.info`
+    ; files containing serialized `rendered-post` structures, instead.
+    (define/override (get-suffix) #".info")
+
+    (define/override (render-one part ri output-file)
+      (define props (style-properties (part-style part)))
+      (define title-str (content->string (strip-aux (part-title-content part)) this part ri))
+      (define title-content (render-content (part-title-content part) part ri))
+      (define body-main-content (append (render-flow (part-blocks part) part ri #t)
+                                        (append-map (λ~> (render-part ri)) (part-parts part))))
+      (define footnotes-block
+        `(div ([class "footnotes"])
+           (ol ,@(for/list ([footnote-element (in-list (get-rendered-footnote-definitions))]
+                            [footnote-index (in-naturals 1)])
+                   `(li ([id ,(~a "footnote-" footnote-index)]) ,@footnote-element)))))
+      (define post
+        (rendered-post title-str
+                       title-content
+                       (get-required-style-prop post-date? props)
+                       (post-tags-tags (get-required-style-prop post-tags? props))
+                       (append body-main-content (list footnotes-block))))
+      (write (serialize post))
+      post)
+
+    (define/private (get-required-style-prop pred? props)
+      (or (findf pred? props)
+          (raise-arguments-error 'render "missing required style property on main part"
+                                 "output file" (current-output-file)
+                                 "expected" (unquoted-printing-string (~a (contract-name pred?)))
+                                 "properties" props)))
 
     (super-new)))

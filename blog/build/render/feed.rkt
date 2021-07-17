@@ -4,7 +4,6 @@
          racket/format
          racket/list
          racket/match
-         racket/string
          (only-in xml xexpr/c xexpr->string)
 
          "../../lang/metadata.rkt"

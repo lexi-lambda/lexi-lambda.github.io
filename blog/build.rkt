@@ -10,7 +10,6 @@
          racket/promise
          racket/sequence
          racket/serialize
-         scribble/base-render
          scribble/xref
          setup/xref
          threading
@@ -102,8 +101,7 @@
      (deserialize (call-with-input-file* (post-dep-info-path dep) read))]
     [else
      (eprintf "~a running <posts>/~a\n" (timestamp-string) (find-relative-path posts-dir (post-dep-src-path dep)))
-     (define renderer (new (render-mixin render%)
-                           [dest-dir build-dir]))
+     (define renderer (new blog-post-render% [dest-dir build-dir]))
      (define main-parts (list (post-dep-main-part dep)))
      (define out-paths (list (post-dep-info-path dep)))
 
