@@ -21,7 +21,7 @@
          setup/dirs
          syntax/parse/define
          threading
-         (only-in xml write-xexpr)
+         (only-in xml write-xexpr xexpr/c)
 
          "../../lang/post-language.rkt"
          "../metadata.rkt"
@@ -30,6 +30,10 @@
 
 (provide base-render%
          blog-post-render%
+         (contract-out
+          [blog-standalone-page-render%
+           (-> (-> #:title string? #:body (listof xexpr/c) xexpr/c)
+               (implementation?/c render<%>))])
 
          blog-render-mixin
          footnotes-render-mixin
@@ -212,6 +216,18 @@
                                              (current-output-file)
                                              (tag->anchor-name (add-current-tag-prefix key)))))
 
+    (define/override (resolve-content i d ri)
+      (cond
+        [(and external-tag-path
+              (link-element? i)
+              (style? (element-style i))
+              (memq 'indirect-link (style-properties (element-style i))))
+         ; Don’t resolve indirect links, or else we’ll get spurious warnings
+         ; about undefined tags.
+         (resolve-content (element-content i) d ri)]
+        [else
+         (super resolve-content i d ri)]))
+
     ;; -------------------------------------------------------------------------
     ;; render
 
@@ -306,7 +322,7 @@
                ['()
                 (if (hash-empty? attrs)
                     '()
-                    (cons 'span attrs))]
+                    (list (cons 'span attrs)))]
                ; Otherwise, add the attributes to the outermost wrapper.
                [(cons (cons outer-tag outer-attrs) wraps)
                 (cons (cons outer-tag (attributes-union outer-attrs attrs)) wraps)]))
@@ -327,14 +343,15 @@
             (wrap-for-style #:attrs (hasheq) `[(a ,(attributes->list attrs*) ,@rendered)])]
 
            [(link-element _ _ tag)
-            (define dest (resolve-get part ri tag))
-            (unless dest
+            (define indirect? (memq 'indirect-link (style-properties style)))
+            (define dest (and (not indirect?) (resolve-get part ri tag)))
+            (unless (or dest indirect?)
               (error 'render "unknown link destination\n  tag: ~e" tag))
 
             (define href
               (match dest
                 ; racket doc reference
-                [(? vector?)
+                [(or #f (? vector?))
                  (define redirect-query
                    (cons (cons 'tag (tag->local-redirect-query-string tag))
                          (url-query external-tag-path)))
@@ -455,6 +472,20 @@
          (list (pygmentize source #:language language))]
         [_ (super render-content e part ri)]))
 
+    (super-new)))
+
+(define (blog-standalone-page-render% page-template)
+  (class (pygments-render-mixin (blog-render-mixin base-render%))
+    (inherit render-part)
+
+    (define/override (render-one part ri output-file)
+      (define xexpr
+        (page-template
+         #:title (content->string (strip-aux (part-title-content part)) this part ri)
+         #:body (render-part part ri)))
+      (write-xexpr xexpr)
+      xexpr)
+    
     (super-new)))
 
 ;; The renderer used for actual blog posts, with all the bells and whistles.

@@ -93,6 +93,35 @@
   (display "<?xml version=\"1.0\" encoding=\"utf-8\"?>" out)
   (write-xexpr xexpr out))
 
+(define (render-scribble render% main-part out-path
+                         #:dest-dir [dest-dir (path-only out-path)]
+                         #:xref-out [xref-out-path #f])
+  (define main-parts (list main-part))
+  (define out-paths (list out-path))
+  (define renderer (new render% [dest-dir dest-dir]))
+
+  (define traverse-info (send renderer traverse main-parts out-paths))
+  (define collect-info (send renderer collect main-parts out-paths traverse-info))
+  (xref-transfer-info renderer collect-info (load-collections-xref))
+  (define resolve-info (send renderer resolve main-parts out-paths collect-info))
+
+  (match-define (list render-result)
+    (send renderer render main-parts out-paths resolve-info))
+
+  (when xref-out-path
+    (define out-info (send renderer serialize-info resolve-info))
+    (call-with-output-file* #:exists 'truncate/replace
+                            xref-out-path
+                            (λ~>> (write out-info))))
+
+  (define undefined-tags (send renderer get-undefined resolve-info))
+  (unless (empty? undefined-tags)
+    (eprintf "Warning: some cross references may be broken due to undefined tags:\n")
+    (for ([tag (in-list undefined-tags)])
+      (eprintf "  ~s\n" tag)))
+
+  render-result)
+
 (define (build-post-body dep)
   (define src-mod-time (file-or-directory-modify-seconds (post-dep-src-path dep) #f (λ () #f)))
   (define info-mod-time (file-or-directory-modify-seconds (post-dep-info-path dep) #f (λ () #f)))
@@ -101,30 +130,10 @@
      (deserialize (call-with-input-file* (post-dep-info-path dep) read))]
     [else
      (eprintf "~a running <posts>/~a\n" (timestamp-string) (find-relative-path posts-dir (post-dep-src-path dep)))
-     (define renderer (new blog-post-render% [dest-dir build-dir]))
-     (define main-parts (list (post-dep-main-part dep)))
-     (define out-paths (list (post-dep-info-path dep)))
-
-     (define traverse-info (send renderer traverse main-parts out-paths))
-     (define collect-info (send renderer collect main-parts out-paths traverse-info))
-     (xref-transfer-info renderer collect-info (load-collections-xref))
-     (define resolve-info (send renderer resolve main-parts out-paths collect-info))
-
-     (match-define (list (? rendered-post? post-info))
-       (send renderer render main-parts out-paths resolve-info))
-
-     (define out-info (send renderer serialize-info resolve-info))
-     (call-with-output-file* #:exists 'truncate/replace
-                             (post-dep-xref-path dep)
-                             (λ~>> (write out-info)))
-
-     (define undefined-tags (send renderer get-undefined resolve-info))
-     (unless (empty? undefined-tags)
-       (eprintf "Warning: some cross references may be broken due to undefined tags:\n")
-       (for ([tag (in-list undefined-tags)])
-         (eprintf "  ~s\n" tag)))
-
-     post-info]))
+     (render-scribble blog-post-render%
+                      (post-dep-main-part dep)
+                      (post-dep-info-path dep)
+                      #:xref-out (post-dep-xref-path dep))]))
 
 (define (build-post-page dep info)
   (define site-path (rendered-post-path info #:file? #t))
@@ -157,6 +166,14 @@
                           out-path
                           (λ~>> (write-xml (feed type posts #:tag tag)))))
 
+(define (build-about-me)
+  (define site-path "/about.html")
+  (eprintf "~a rendering <output>~a\n" (timestamp-string) site-path)
+  (local-require (only-in "posts/about-me.scrbl" [doc main-part]))
+  (render-scribble (blog-standalone-page-render% standalone-page)
+                   main-part
+                   (reroot-path site-path output-dir)))
+
 (define (build-sitemap posts)
   (define site-path "/sitemap.txt")
   (eprintf "~a rendering <output>~a\n" (timestamp-string) site-path)
@@ -164,6 +181,7 @@
    #:exists 'truncate/replace
    (reroot-path site-path output-dir)
    (λ (out)
+     (displayln (full-url "/about.html") out)
      (for ([post (in-list posts)])
        (displayln (full-url (rendered-post-path post)) out)))))
 
@@ -195,6 +213,7 @@
       (build-index-page total-pages page-number posts #:tag tag))
     (build-feeds posts #:tag tag))
 
+  (build-about-me)
   (build-sitemap all-posts))
 
 (module+ main

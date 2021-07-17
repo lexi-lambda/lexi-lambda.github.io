@@ -15,6 +15,7 @@
 
 (provide (contract-out
           [page (->* [#:title string? #:body xexpr/c] [#:tag (or/c string? #f)] xexpr/c)]
+          [standalone-page (-> #:title string? #:body (listof xexpr/c) xexpr/c)]
           [post-page (-> rendered-post? xexpr/c)]
           [index-page-title (->* [] [#:tag (or/c string? #f)] string?)]
           [index-page (->i ([total-pages exact-positive-integer?]
@@ -46,7 +47,7 @@
              (ul ([class "navigation-items center"]))
              (ul ([class "navigation-items right"])
                (li (a ([href "/"]) "Home"))
-               (li (a ([href "/resume.html"]) "About Me")))))
+               (li (a ([href "/about.html"]) "About Me")))))
          (section ([role "main"]) ,body)
          (footer
            (div ([class "copyright-notice"]) "© " ,(~a (date-year (current-date))) ", Alexis King")
@@ -55,6 +56,11 @@
                 ", the Racket document preparation system.")
            (div "Feeds are available via " (a ([href ,(feed-path 'atom)]) "Atom")
                 " or " (a ([href ,(feed-path 'rss)]) "RSS") "."))))))
+
+(define (standalone-page #:title title #:body body)
+  (page #:title title
+        #:body `(div ([class "content"])
+                  (article ([class "main"]) ,@body))))
 
 (define (post-page info)
   (match-define (rendered-post title-str title date tags body) info)

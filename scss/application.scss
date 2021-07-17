@@ -76,6 +76,14 @@ a {
   transition: color 0.15s ease-in-out;
 }
 
+p, article li, blockquote {
+  margin-bottom: 1.2em;
+
+  @media (min-width: 800px) {
+    margin-bottom: 2em;
+  }
+}
+
 body > section[role=main] {
   $content-padding: 30px;
 
@@ -140,19 +148,11 @@ body > section[role=main] {
         width: fit-content;
       }
 
-      // On large screens they can spill into the margins ton, since we really
+      // On large screens they can spill into the margins a ton, since we really
       // don’t want them to have to scroll.
       @media (min-width: $content-width-max + $content-padding * 2) {
         max-width: $content-width-max;
       }
-    }
-  }
-
-  p, article li, blockquote {
-    margin-bottom: 1.2em;
-
-    @media (min-width: 800px) {
-      margin-bottom: 2em;
     }
   }
 
@@ -414,4 +414,23 @@ div.figure, article.main > p > a {
 
 .no-line-wrapping {
   white-space: nowrap;
+}
+
+// -----------------------------------------------------------------------------
+// styles for the About Me page
+
+.about-me-year-events {
+  margin-bottom: 0.35em;
+  margin-top: 0em;
+  padding-left: 1.2em;
+  text-indent: -1.2em;
+}
+
+.about-me-year-label {
+  font-weight: bold;
+  font-size: 1.1em;
+}
+
+.about-me-year-separator {
+  margin: 0.25em;
 }

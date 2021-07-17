@@ -36,6 +36,8 @@
                        [footnote-flow (-> symbol? (listof block?) block?)]
 
                        [wikipedia (-> pre-content? ... element?)]
+                       [github-repo (-> string? element?)]
+                       [github-repo* (-> string? pre-content? ... element?)]
                        [hackage-package (-> string? element?)]
                        [hackage-package* (-> string? pre-content? ... element?)]
                        [hackage-module (-> string? string? element?)]
@@ -107,6 +109,16 @@
              words)]
       ['() '()]))
   (hyperlink (string-append "https://en.wikipedia.org/wiki/" (string-join words "_")) content))
+
+(define (github-repo user+repo)
+  (match user+repo
+    [(regexp #px"^[^/]+/(.+)$" (list _ repo))
+     (github-repo* user+repo repo)]
+    [repo
+     (github-repo* repo repo)]))
+(define (github-repo* repo . pre-content)
+  (define user+repo (if (string-contains? repo "/") repo (string-append "lexi-lambda/" repo)))
+  (apply hyperlink (string-append "https://github.com/" user+repo) pre-content))
 
 ;; -----------------------------------------------------------------------------
 ;; hackage
