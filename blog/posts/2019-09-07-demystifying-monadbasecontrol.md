@@ -182,30 +182,30 @@ instance MonadBaseControl b m => MonadBaseControl b (StateT s m) where
 
   1. Start by examining the definitions of `InputState` and `OutputState`. Are they what you expected? You’d be forgiven for expecting the following:
 
-    ```haskell
-    type InputState (StateT s m) = s
-    type OutputState (StateT s m) = s
-    ```
+     ```haskell
+     type InputState (StateT s m) = s
+     type OutputState (StateT s m) = s
+     ```
 
-    After all, that’s what we wrote in the table, isn’t it?
+     After all, that’s what we wrote in the table, isn’t it?
 
-    However, if you give it a try, you’ll find it doesn’t work. `InputState` and `OutputState` must capture the state of the *entire* monad, not just a single transformer layer, so we have to combine the `StateT s` state with the state of the underlying monad. In the simplest case we get
+     However, if you give it a try, you’ll find it doesn’t work. `InputState` and `OutputState` must capture the state of the *entire* monad, not just a single transformer layer, so we have to combine the `StateT s` state with the state of the underlying monad. In the simplest case we get
 
-    ```haskell
-    InputState (StateT s IO) = (s, ())
-    ```
+     ```haskell
+     InputState (StateT s IO) = (s, ())
+     ```
 
-    which is boring, but in a more complex case, we need to get something like this:
+     which is boring, but in a more complex case, we need to get something like this:
 
-    ```haskell
-    InputState (StateT s (ReaderT IO)) = (s, (r, ()))
-    ```
+     ```haskell
+     InputState (StateT s (ReaderT IO)) = (s, (r, ()))
+     ```
 
-    Therefore, `InputState (StateT s m)` combines `s` with `InputState m` in a tuple, and `OutputState` does the same.
+     Therefore, `InputState (StateT s m)` combines `s` with `InputState m` in a tuple, and `OutputState` does the same.
 
   2. Moving on, take a look at `captureInputState` and `closeOverInputState`. Just as `InputState` and `OutputState` capture the state of the entire monad, these functions need to be inductive in the same way.
 
-    `captureInputState` acquires the current state using `get`, and it combines it with the remaining monadic state using `lift captureInputState`. `closeOverInputState` uses the captured state to peel off the outermost `StateT` layer, then calls `closeOverInputState` recursively to peel off the rest of them.
+     `captureInputState` acquires the current state using `get`, and it combines it with the remaining monadic state using `lift captureInputState`. `closeOverInputState` uses the captured state to peel off the outermost `StateT` layer, then calls `closeOverInputState` recursively to peel off the rest of them.
 
   3. Finally, `restoreOutputState` restores the state of the underlying monad stack, then restores the `StateT` state, ensuring everything ends up back the way it’s supposed to be.
 

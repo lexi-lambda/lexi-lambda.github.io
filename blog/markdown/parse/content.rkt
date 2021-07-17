@@ -55,18 +55,25 @@
 
 ;; -----------------------------------------------------------------------------
 
-(define special-chars "*`[]<!\\\r\n")
+(define special-chars "_*`[]<!\\ \r\n")
 
 (define content/p
   (label/p "content"
-    (or/p (map/p list->string ((pure cons) (char-not-in/p (string-append "_" special-chars))
-                                           ; allow _ to appear inside words
-                                           (many/p (char-not-in/p special-chars))))
+    (or/p (map/p string-append*
+                 (many+/p (or/p
+                           ; allow _ to appear inside words
+                           (try/p ((pure string) (char-not-in/p special-chars)
+                                                 (char/p #\_)
+                                                 (char-not-in/p special-chars)))
+                           (map/p string (char-not-in/p special-chars)))))
+          ; spaces
+          (map/p list->string (many+/p (char/p #\space)))
           ; escaped char
           (do (char/p #\\) (map/p string any-char/p))
           ; bold / italic
           (map/p (λ~> simplify-content bold) (around/p (try/p (string/p "**")) (lazy/p content/p)))
           (map/p (λ~> simplify-content italic) (around/p (char/p #\*) (lazy/p content/p)))
+          (map/p (λ~> simplify-content italic) (around/p (char/p #\_) (lazy/p content/p)))
           ; code
           (do [backticks <- (many+/p (char/p #\`))]
               [chars <- (many-till/p any-char/p (try/p (string/p (list->string backticks))))]

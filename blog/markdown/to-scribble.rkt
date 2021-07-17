@@ -128,10 +128,10 @@
 
 (define (xexpr->block xexpr)
   (match xexpr
-    [(list (? symbol? tag) (list (list (? symbol? attr-name) (? string? attr-val)) ...) xexpr ...)
+    [(list (? symbol? tag) (list (list (? symbol? attr-name) (? string? attr-val)) ...) xexprs ...)
      (paragraph (style #f (list (alt-tag (symbol->string tag))
                                 (attributes (map cons attr-name attr-val))))
-                (map xexpr->content xexpr))]))
+                (map xexpr->content xexprs))]))
 
 (define (xexpr->content xexpr)
   (match xexpr

@@ -8,6 +8,7 @@
          racket/function
          racket/list
          racket/match
+         racket/string
          threading
          xml
          "parse/content.rkt"
@@ -313,7 +314,7 @@ As it parses the indentation for each block, it transfers it from the
         ; html blocks
         (do (lookahead/p (or/p (try/p (string/p "<div"))
                                (try/p (string/p "<h2"))))
-            [html-str <- rest-of-line/p]
+            [html-str <- (map/p string-append* (many-till/p rest-of-line/p newline/p))]
             (scan-line-start (reverse (cons (add-blocks inner-block (list (html-block (string->xexpr html-str)))) in-blocks))))
 
         ; free-form content (new paragraph)

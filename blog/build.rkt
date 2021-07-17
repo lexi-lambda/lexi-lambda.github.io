@@ -70,7 +70,7 @@
                        "2018-09-13-custom-core-forms-in-racket-part-ii-generalizing-to-arbitrary-expressions-and-internal-definitions.md"
                        "2018-10-06-macroexpand-anywhere-with-local-apply-transformer.md"
                        "2019-04-21-defeating-racket-s-separate-compilation-guarantee.md"
-                       #;"2019-09-07-demystifying-monadbasecontrol.md" ; html tables
+                       "2019-09-07-demystifying-monadbasecontrol.md"
                        "2019-10-19-empathy-and-subjective-experience-in-programming-languages.md"
                        "2019-11-05-parse-don-t-validate.md"
                        "2020-01-19-no-dynamic-type-systems-are-not-inherently-more-open.md"
