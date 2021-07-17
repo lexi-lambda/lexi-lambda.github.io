@@ -20,7 +20,8 @@
 ;; -----------------------------------------------------------------------------
 
 (define (to-slug s)
-  (regexp-replace* #px"(?:[^a-z0-9])+" (string-downcase s) "-"))
+  (define rx #px"[^a-z0-9]+")
+  (regexp-replace* rx (string-trim (string-downcase s) rx) "-"))
 
 ;; -----------------------------------------------------------------------------
 ;; xexprs

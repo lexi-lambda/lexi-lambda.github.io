@@ -9,7 +9,7 @@
 
 (provide (struct-out rendered-post)
          (contract-out
-          [rendered-post-path (-> rendered-post? site-path?)]))
+          [rendered-post-path (->* [rendered-post?] [#:file? any/c] site-path?)]))
 
 (serializable-struct rendered-post (title-str title date tags body) #:transparent
   #:guard (struct-guard/c string?

@@ -9,6 +9,7 @@
          racket/path
          racket/promise
          racket/sequence
+         racket/serialize
          scribble/base-render
          scribble/xref
          setup/xref
@@ -37,17 +38,6 @@
   (~> (file-name-from-path (post-dep-src-path dep))
       (path-replace-extension #".sxref")
       (build-path build-dir _)))
-
-(define (post-dep-page-path dep)
-  (match-define (regexp #px"^(\\d{4})-(\\d{2})-(\\d{2})-(.+)$" (list _ year month day slug))
-    (path->string (path-replace-extension (file-name-from-path (post-dep-src-path dep)) #"")))
-  (build-path output-dir "blog" year month day slug "index.html"))
-
-(define (output-path->absolute-url path)
-  (define rooted-path (build-path "/" (find-relative-path output-dir path)))
-  (path->string (if (equal? (path->string (file-name-from-path rooted-path)) "index.html")
-                    (path-only rooted-path)
-                    rooted-path)))
 
 (define (markdown-post file-name)
   (define path (build-path posts-dir file-name))
@@ -100,53 +90,59 @@
   (write-xexpr xexpr out))
 
 (define (build-post-body dep)
-  (eprintf "~a running <posts>/~a\n" (timestamp-string) (find-relative-path posts-dir (post-dep-src-path dep)))
-  (define renderer (new (render-mixin render%)
-                        [dest-dir build-dir]))
-  (define main-parts (list (post-dep-main-part dep)))
-  (define out-paths (list (post-dep-info-path dep)))
+  (define src-mod-time (file-or-directory-modify-seconds (post-dep-src-path dep) #f (λ () #f)))
+  (define info-mod-time (file-or-directory-modify-seconds (post-dep-info-path dep) #f (λ () #f)))
+  (cond
+    [(and src-mod-time info-mod-time (> info-mod-time src-mod-time))
+     (deserialize (call-with-input-file* (post-dep-info-path dep) read))]
+    [else
+     (eprintf "~a running <posts>/~a\n" (timestamp-string) (find-relative-path posts-dir (post-dep-src-path dep)))
+     (define renderer (new (render-mixin render%)
+                           [dest-dir build-dir]))
+     (define main-parts (list (post-dep-main-part dep)))
+     (define out-paths (list (post-dep-info-path dep)))
 
-  (define traverse-info (send renderer traverse main-parts out-paths))
-  (define collect-info (send renderer collect main-parts out-paths traverse-info))
-  (xref-transfer-info renderer collect-info (load-collections-xref))
-  (define resolve-info (send renderer resolve main-parts out-paths collect-info))
+     (define traverse-info (send renderer traverse main-parts out-paths))
+     (define collect-info (send renderer collect main-parts out-paths traverse-info))
+     (xref-transfer-info renderer collect-info (load-collections-xref))
+     (define resolve-info (send renderer resolve main-parts out-paths collect-info))
 
-  (match-define (list (? rendered-post? post-info))
-    (send renderer render main-parts out-paths resolve-info))
+     (match-define (list (? rendered-post? post-info))
+       (send renderer render main-parts out-paths resolve-info))
 
-  (define out-info (send renderer serialize-info resolve-info))
-  (call-with-output-file* #:exists 'truncate/replace
-                          (post-dep-xref-path dep)
-                          (λ~>> (write out-info)))
+     (define out-info (send renderer serialize-info resolve-info))
+     (call-with-output-file* #:exists 'truncate/replace
+                             (post-dep-xref-path dep)
+                             (λ~>> (write out-info)))
 
-  (define undefined-tags (send renderer get-undefined resolve-info))
-  (unless (empty? undefined-tags)
-    (eprintf "Warning: some cross references may be broken due to undefined tags:\n")
-    (for ([tag (in-list undefined-tags)])
-      (eprintf "  ~s\n" tag)))
+     (define undefined-tags (send renderer get-undefined resolve-info))
+     (unless (empty? undefined-tags)
+       (eprintf "Warning: some cross references may be broken due to undefined tags:\n")
+       (for ([tag (in-list undefined-tags)])
+         (eprintf "  ~s\n" tag)))
 
-  post-info)
+     post-info]))
 
 (define (build-post-page dep info)
-  (define out-path (post-dep-page-path dep))
-  (eprintf "~a rendering <output>/~a\n" (timestamp-string) (find-relative-path output-dir out-path))
+  (define site-path (rendered-post-path info #:file? #t))
+  (define out-path (reroot-path site-path output-dir))
+  (eprintf "~a rendering <output>~a\n" (timestamp-string) site-path)
   (make-parent-directory* out-path)
   (call-with-output-file* #:exists 'truncate/replace
                           out-path
                           (λ~>> (write-html (post-page info)))))
 
 (define (build-post-index total-pages number posts)
-  (define base-path (index-path number #:file? #t))
-  (define out-path (reroot-path base-path output-dir))
-  (eprintf "~a rendering <output>~a\n" (timestamp-string) base-path)
+  (define site-path (index-path number #:file? #t))
+  (eprintf "~a rendering <output>~a\n" (timestamp-string) site-path)
   (call-with-output-file* #:exists 'truncate/replace
-                          out-path
+                          (reroot-path site-path output-dir)
                           (λ~>> (write-html (post-index-page total-pages number posts)))))
 
 (define (build-tag-index total-pages page-number tag posts)
-  (define base-path (tag-index-path tag page-number))
-  (define out-path (reroot-path base-path output-dir))
-  (eprintf "~a rendering <output>~a\n" (timestamp-string) base-path)
+  (define site-path (tag-index-path tag page-number))
+  (define out-path (reroot-path site-path output-dir))
+  (eprintf "~a rendering <output>~a\n" (timestamp-string) site-path)
   (make-parent-directory* out-path)
   (call-with-output-file* #:exists 'truncate/replace
                           out-path
@@ -178,5 +174,5 @@
           [page-number (in-naturals 1)])
       (build-tag-index total-pages page-number tag posts))))
 
-(parameterize ([current-directory "/home/alexis/code/blog2"])
+(module+ main
   (build-all))
