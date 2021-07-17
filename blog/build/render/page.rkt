@@ -14,7 +14,7 @@
          "util.rkt")
 
 (provide (contract-out
-          [page (-> #:title string? #:body xexpr/c xexpr/c)]
+          [page (->* [#:title string? #:body xexpr/c] [#:tag (or/c string? #f)] xexpr/c)]
           [post-page (-> rendered-post? xexpr/c)]
           [index-page-title (->* [] [#:tag (or/c string? #f)] string?)]
           [index-page (->i ([total-pages (and/c exact-integer? (>=/c 1))]
@@ -23,7 +23,7 @@
                            (#:tag [tag (or/c string? #f)])
                            [result xexpr/c])]))
 
-(define (page #:title title #:body body)
+(define (page #:title title #:body body #:tag [tag #f])
   `(html
      (head
        (meta ([charset "utf-8"]))
@@ -35,6 +35,8 @@
                         "|Fira+Code:300,400,500,600,700"))
        ,(stylesheet "/css/application.min.css")
        ,(stylesheet "/css/pygments.min.css")
+       (link ([rel "alternate"] [type "application/atom+xml"] [title "Atom Feed"] [href ,(feed-path 'atom #:tag tag)]))
+       (link ([rel "alternate"] [type "application/rss+xml"] [title "RSS Feed"] [href ,(feed-path 'rss #:tag tag)]))
        (body
          (header
            (nav ([role "navigation"] [class "navigation-bar"])
@@ -68,6 +70,7 @@
 
 (define (index-page total-pages page-number posts #:tag [tag #f])
   (page #:title (index-page-title #:tag tag)
+        #:tag tag
         #:body `(div ([class "content"])
                   ,@(when/list tag
                       `(h1 ([class "tag-page-header"])
