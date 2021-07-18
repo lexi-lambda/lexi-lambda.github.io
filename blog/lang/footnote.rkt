@@ -22,18 +22,21 @@
                                   tag?)]
           [footnote-ref (-> string? content?)]
           [footnote-decl (-> string? pre-flow? ... part-collect-decl?)]
+          [footnote-collect-element (-> string? (listof block?) content?)]
           [footnotes-section (-> part?)]))
 
 (define (make-footnote-tag tag-str
                            #:post [post-path #f]
                            #:tag-prefixes [tag-prefixes '()])
-  `(footnote ,(taglet-add-prefix (cons 'prefixable
-                                       (if post-path
-                                           (cons post-path tag-prefixes)
-                                           tag-prefixes))
-                                 tag-str)))
+  `(footnote ,(taglet-add-prefix
+               (cons 'prefixable
+                     (if post-path
+                         (cons (blog-post-path->tag-prefix post-path) tag-prefixes)
+                         tag-prefixes))
+               tag-str)))
 
 (define footnote-refs-key (gensym 'footnote-refs))
+(define footnote-ref-targets-key (gensym 'footnote-ref-targets))
 (define footnote-flows-key (gensym 'footnote-flows))
 
 (define (footnote-ref tag)
@@ -46,35 +49,63 @@
                       [else
                        (set footnote-refs-key (cons tag refs))
                        (add1 (length refs))]))
-     (link-element (style 'superscript '())
+
+     (define all-ref-targets (get footnote-ref-targets-key (hash)))
+     (define ref-targets (hash-ref all-ref-targets tag '()))
+     (define ref-target `(footnote-ref (prefixable ,tag ,(~a (add1 (length ref-targets))))))
+     (set footnote-ref-targets-key
+          (hash-set all-ref-targets
+                    tag
+                    (cons ref-target ref-targets)))
+
+     (link-element (style 'superscript (list (link-target ref-target)))
                    (~a number)
                    (make-footnote-tag tag)))))
 
 (define (footnote-decl tag . pre-flows)
   (part-collect-decl
-   (element
-    #f
-    (traverse-element
-     (λ (get set)
-       (set footnote-flows-key
-            (cons (cons tag (decode-flow pre-flows))
-                  (get footnote-flows-key '())))
-       '())))))
+   (element #f (footnote-collect-element tag (decode-flow pre-flows)))))
+
+(define (footnote-collect-element tag blocks)
+  (traverse-element
+   (λ (get set)
+     (set footnote-flows-key
+          (cons (cons tag blocks)
+                (get footnote-flows-key '())))
+     '())))
 
 (define (footnotes-section)
   (define (generate get set)
     (define refs (get footnote-refs-key '()))
+    (define ref-targets (get footnote-ref-targets-key (hash)))
     (define-values [referenced-flows other-flows]
       (partition (λ~> car (member refs)) (get footnote-flows-key '())))
 
+    ; Tacks the ↩ “return to reference” links onto the end of the footnote’s
+    ; flow, folding them into a trailing paragraph if at all possible.
+    (define (add-ref-links blocks ref-tags)
+      (cond
+        [(empty? ref-tags) blocks]
+        [else
+         (define ref-links (~> (for/list ([ref-tag (in-list ref-tags)])
+                                 (link-element #f "↩" ref-tag))
+                               (add-between " ")))
+         (reverse
+          (match (reverse blocks)
+            [(cons (paragraph p-style p-content) blocks)
+             (cons (paragraph p-style (list* p-content " " ref-links)) blocks)]
+            [blocks
+             (cons (paragraph plain ref-links) blocks)]))]))
+
     (define (build-item number tag+blocks)
+      (match-define (cons tag blocks) tag+blocks)
       (nested-flow
        (style #f (list* (alt-tag "li")
-                        (link-target (make-footnote-tag (car tag+blocks)))
+                        (link-target (make-footnote-tag tag))
                         (if number
                             (list (attributes `([value . ,(~a number)])))
                             '())))
-       (cdr tag+blocks)))
+       (add-ref-links blocks (reverse (hash-ref ref-targets tag '())))))
 
     ; Build the footnote items, starting with the ones that were actually
     ; referenced. If a footnote was referenced that doesn’t actually exist, we

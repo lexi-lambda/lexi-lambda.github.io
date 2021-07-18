@@ -13,7 +13,7 @@
          (only-in "../lang/post-language.rkt"
                   code
                   code-block
-                  footnote-decl
+                  footnote-collect-element
                   footnote-ref
                   footnotes-section
                   pygments-block)
@@ -48,7 +48,7 @@
 (define (footnotes->decl-elements notes)
   (for/list ([note (in-list notes)])
     (match-define (cons name md-blocks) note)
-    (part-collect-decl-element (footnote-decl name (blocks->blocks md-blocks)))))
+    (footnote-collect-element name (blocks->blocks md-blocks))))
 
 (define (blocks->part md-blocks part-info)
   (define (collect-blocks blocks md-blocks)

@@ -226,17 +226,23 @@
                                              (get-current-site-path)
                                              (tag->anchor-name (add-current-tag-prefix key)))))
 
-    (define/override (collect-nested-flow i ci)
+    (define/private (collect-link-target-from-style style ci)
       (cond
-        [(findf link-target? (style-properties (nested-flow-style i)))
-         => (λ (target) (collect-link-target (link-target-tag target) ci))])
+        [(findf link-target? (style-properties style))
+         => (λ (target) (collect-link-target (link-target-tag target) ci))]))
+
+    (define/override (collect-nested-flow i ci)
+      (collect-link-target-from-style (nested-flow-style i) ci)
       (super collect-nested-flow i ci))
 
     (define/override (collect-paragraph i ci)
-      (cond
-        [(findf link-target? (style-properties (paragraph-style i)))
-         => (λ (target) (collect-link-target (link-target-tag target) ci))])
+      (collect-link-target-from-style (paragraph-style i) ci)
       (super collect-paragraph i ci))
+
+    (define/override (collect-content i ci)
+      (when (and (element? i) (style? (element-style i)))
+        (collect-link-target-from-style (element-style i) ci))
+      (super collect-content i ci))
 
     (define/override (collect-target-element i ci)
       (when (redirect-target-element? i)
