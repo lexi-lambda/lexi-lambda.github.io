@@ -156,14 +156,15 @@
                       (post-dep-info-path dep)
                       #:xref-out (post-dep-xref-path dep))]))
 
-(define (build-post-page dep info)
+(define (build-post-page info #:older older-info #:newer newer-info)
   (define site-path (rendered-post-path info #:file? #t))
   (define out-path (reroot-path site-path output-dir))
   (eprintf "~a rendering <output>~a\n" (timestamp-string) site-path)
   (make-parent-directory* out-path)
-  (call-with-output-file* #:exists 'truncate/replace
-                          out-path
-                          (λ~>> (write-html (post-page info)))))
+  (call-with-output-file*
+   #:exists 'truncate/replace
+   out-path
+   (λ~>> (write-html (post-page info #:older older-info #:newer newer-info)))))
 
 (define (build-index-page total-pages page-number posts #:tag [tag #f])
   (define site-path (index-path page-number #:tag tag #:file? #t))
@@ -210,11 +211,14 @@
 (define (build-all)
   (make-directory* build-dir)
   (make-directory* output-dir)
+
   (define all-posts
     (for/list ([dep (in-list all-post-deps)])
-      (define info (build-post-body dep))
-      (build-post-page dep info)
-      info))
+      (build-post-body dep)))
+  (for ([post (in-list all-posts)]
+        [older-post (in-list (cons #f all-posts))]
+        [newer-post (in-list (append (rest all-posts) (list #f)))])
+    (build-post-page post #:older older-post #:newer newer-post))
 
   (define total-pages (ceiling (/ (length all-post-deps) num-posts-per-page)))
   (for ([posts (in-slice num-posts-per-page (reverse all-posts))]

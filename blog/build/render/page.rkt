@@ -16,7 +16,9 @@
 (provide (contract-out
           [page (->* [#:title string? #:body xexpr/c] [#:tag (or/c string? #f)] xexpr/c)]
           [standalone-page (-> #:title string? #:body (listof xexpr/c) xexpr/c)]
-          [post-page (-> rendered-post? xexpr/c)]
+          [post-page (-> rendered-post?
+                         #:older (or/c rendered-post? #f)
+                         #:newer (or/c rendered-post? #f) xexpr/c)]
           [index-page-title (->* [] [#:tag (or/c string? #f)] string?)]
           [index-page (->i ([total-pages exact-positive-integer?]
                             [page-number (total-pages) (and/c exact-positive-integer? (<=/c total-pages))]
@@ -62,13 +64,22 @@
         #:body `(div ([class "content"])
                   (article ([class "main"]) ,@body))))
 
-(define (post-page info)
+(define (post-page info #:older older-info #:newer newer-info)
   (match-define (rendered-post title-str title date tags body) info)
   (page #:title title-str
         #:body `(div ([class "content"])
                   (article ([class "main"])
                     ,(build-post-header title date tags)
-                    ,@body))))
+                    ,@body
+                    (ul ([class "post-navigation"])
+                      (li ([class "previous"])
+                        ,@(when/list newer-info
+                           `(a ([href ,(rendered-post-path newer-info)])
+                              "←" nbsp (span ([class "post-title"]) ,@(rendered-post-title newer-info)))))
+                      (li ([class "next"])
+                        ,@(when/list older-info
+                            `(a ([href ,(rendered-post-path older-info)])
+                               (span ([class "post-title"]) ,@(rendered-post-title older-info)) nbsp "→"))))))))
 
 (define (index-page-title #:tag [tag #f])
   (~a (if tag (~a "Posts tagged ‘" tag "’ | ") "")

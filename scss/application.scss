@@ -132,11 +132,6 @@ body > section[role=main] {
       }
     }
 
-    // TODO: Reimplement end-of-post navigation links.
-    // &.main > footer {
-    //   max-width: $content-width-large;
-    // }
-
     // Code blocks and tables can also spill into the margins.
     & > pre, & > .table-wrapper {
       max-width: 100%;
@@ -153,6 +148,11 @@ body > section[role=main] {
       @media (min-width: $content-width-max + $content-padding * 2) {
         max-width: $content-width-max;
       }
+    }
+
+    // End-of-post navigation links can spill far into the margins.
+    & > .post-navigation {
+      max-width: $content-width-max;
     }
   }
 
@@ -403,6 +403,30 @@ article.main > footer {
   a:hover, li.active a {
     background-color: $color-primary;
     color: white !important;
+  }
+}
+
+.post-navigation {
+  display: flex;
+  flex-wrap: wrap;
+  margin-top: 4em;
+  padding: 0;
+
+  li {
+    flex: 1 1 auto;
+    list-style: none;
+    margin-bottom: 1em;
+  }
+
+  .previous {
+    text-align: left;
+  }
+  .next {
+    text-align: right;
+  }
+
+  .post-title {
+    font-style: italic;
   }
 }
 
