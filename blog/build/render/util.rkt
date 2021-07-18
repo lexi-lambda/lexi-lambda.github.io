@@ -42,6 +42,7 @@
 (define tag->anchor-name
   (match-lambda
     [(literal-anchor anchor-name) anchor-name]
+    [(cons 'part tag) (tag->anchor-name tag)]
     [(? list? elements)
      ; This anchor naming scheme does not in any way create unique anchors, but
      ; that should be okay for internal references in this use case, and having

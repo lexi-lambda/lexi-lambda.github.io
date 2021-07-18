@@ -10,7 +10,12 @@
          scribble/decode-struct
          scribble/html-properties
 
-         "../lang/post-language.rkt"
+         (only-in "../lang/post-language.rkt"
+                  code
+                  code-block
+                  footnote-flow
+                  footnote-reference-element
+                  pygments-block)
          (prefix-in md: "parse.rkt"))
 
 (provide (contract-out

@@ -1,6 +1,7 @@
 #lang racket/base
 
-(require racket/contract
+(require net/url
+         racket/contract
          racket/format
          racket/runtime-path
          racket/string
@@ -14,13 +15,15 @@
           [posts-dir path?]
 
           [site-path? predicate/c]
+          [site-path->url-string (->* [site-path?] [#:fragment (or/c string? #f)] string?)]
+          [full-url (->* [site-path?] [#:fragment (or/c string? #f)] string?)]
+
           [index-path (->* [] [exact-positive-integer?
                                #:tag (or/c string? #f)
                                #:file? any/c]
                            site-path?)]
           [post-path (->* [post-date? string?] [#:file? any/c] site-path?)]
-          [feed-path (->* [(or/c 'atom 'rss)] [#:tag (or/c string? #f)] site-path?)]
-          [full-url (-> site-path? string?)]))
+          [feed-path (->* [(or/c 'atom 'rss)] [#:tag (or/c string? #f)] site-path?)]))
 
 (define-runtime-path build-dir-base "../build")
 (define-runtime-path output-dir-base "../output")
@@ -32,6 +35,18 @@
 (define (site-path? v)
   (and (string? v)
        (absolute-path? v)))
+
+(define (site-path->url-string path #:fragment [fragment #f])
+  (url->string (struct-copy url (path->url path)
+                            [scheme #f]
+                            [host #f]
+                            [fragment fragment])))
+
+(define (full-url path #:fragment [fragment #f])
+  (url->string (struct-copy url (path->url path)
+                            [scheme "https"]
+                            [host "lexi-lambda.github.io"]
+                            [fragment #f])))
 
 (define (index-path [page-number 1]
                     #:tag [tag #f]
@@ -51,6 +66,3 @@
 
 (define (feed-path format #:tag [tag #f])
   (~a "/feeds/" (if tag (to-slug tag) "all") "." format ".xml"))
-
-(define (full-url path)
-  (~a "https://lexi-lambda.github.io" path))

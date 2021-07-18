@@ -7,6 +7,7 @@
          racket/contract
          racket/match
          racket/string
+         (prefix-in scribble: scribble/base)
          scribble/base
          scribble/core
          scribble/decode
@@ -20,7 +21,16 @@
          infer-date
          (struct-out post-tags)
          define-footnote
-         (contract-out [code (-> content? ... element?)]
+         (contract-out [seclink (->* [string?]
+                                     [#:doc (or/c module-path? #f)
+                                      #:post (or/c string? #f)
+                                      #:tag-prefixes (or/c (listof string?) #f)
+                                      #:indirect? any/c]
+                                     #:rest (listof pre-content?)
+                                     element?)]
+                       [other-post (-> string? element?)]
+
+                       [code (-> content? ... element?)]
                        [code-block (-> content? ... block?)]
                        (struct pygments-content ([source string?] [language string?]))
                        [pygments (-> #:language string? string? ... element?)]
@@ -42,6 +52,24 @@
                        [hackage-package* (-> string? pre-content? ... element?)]
                        [hackage-module (-> string? string? element?)]
                        [hackage-module* (-> string? string? pre-content? ... element?)]))
+
+;; -----------------------------------------------------------------------------
+
+(define (seclink tag
+                 #:doc [module-path #f]
+                 #:post [post-path #f]
+                 #:tag-prefixes [prefixes #f]
+                 #:indirect? [indirect? #f]
+                 . pre-content)
+  (apply scribble:seclink tag pre-content
+         #:doc module-path
+         #:tag-prefixes (if post-path
+                            (cons (blog-post-path->tag-prefix post-path) (or prefixes '()))
+                            prefixes)
+         #:indirect? indirect?))
+
+(define (other-post post-path)
+  (seclink "top" #:post post-path))
 
 ;; -----------------------------------------------------------------------------
 

@@ -24,6 +24,7 @@
          (only-in xml write-xexpr xexpr/c)
 
          "../../lang/post-language.rkt"
+         "../../paths.rkt"
          "../metadata.rkt"
          "highlight/pygments.rkt"
          "util.rkt")
@@ -85,8 +86,10 @@
       (λ (tag) (tag->query-string tag)))))
 
 ; values associated with tags during the collect pass
-(struct blog-post (title path) #:prefab)
-(struct blog-post-anchor (title path anchor) #:prefab)
+(serializable-struct blog-page (title path) #:transparent
+  #:guard (struct-guard/c content? site-path?))
+(serializable-struct blog-page-anchor (title path anchor) #:transparent
+  #:guard (struct-guard/c content? site-path? string?))
 
 (define header-depth->html-tag
   (match-lambda
@@ -151,7 +154,8 @@
                 fns))
 
     (define/overment (render-one part ri output-file)
-      (parameterize ([current-output-file output-file])
+      (parameterize ([current-output-file output-file]
+                     [current-top-part part])
         (inner/hijack render-one part ri output-file)))
 
     (define/override (render-nested-flow i part ri starting-item?)
@@ -175,6 +179,12 @@
     (define/override (set-external-tag-path p)
       (set! external-tag-path (string->url p)))
 
+    ;; Returns the (absolute) path portion of the URL for the page that contains
+    ;; the part currently being rendered.
+    (define/public (get-current-site-path)
+      (path->string (build-path "/" (find-relative-path (get-dest-directory)
+                                                        (current-output-file)))))
+
     ;; -------------------------------------------------------------------------
     ;; collect
 
@@ -183,8 +193,8 @@
         ; racket doc reference; index 4 corresponds to `whole-page?`
         [(? vector? dest) (vector-ref dest 4)]
         ; blog references
-        [(? blog-post?) #t]
-        [(? blog-post-anchor?) #f]))
+        [(? blog-page?) #t]
+        [(? blog-page-anchor?) #f]))
 
     (define/public (current-part-whole-page? d)
       (eq? d (current-top-part)))
@@ -199,12 +209,12 @@
     (define/override (collect-part-tags d ci number)
       (for ([t (part-tags d)])
         (define key (generate-tag t ci))
-        (define title (or (part-title-content d) '("???")))
+        (define title (or (part-title-content d) "???"))
         (collect-put! ci key
                       (if (current-part-whole-page? d)
-                          (blog-post title (current-output-file))
-                          (blog-post-anchor title
-                                            (current-output-file)
+                          (blog-page title (get-current-site-path))
+                          (blog-page-anchor title
+                                            (get-current-site-path)
                                             (tag->anchor-name (add-current-tag-prefix key)))))))
 
     (define/override (collect-target-element i ci)
@@ -212,8 +222,8 @@
       (when (redirect-target-element? i)
         (raise-arguments-error 'collect-target-element "redirect targets not supported"
                                "element" i))
-      (collect-put! ci key (blog-post-anchor #f
-                                             (current-output-file)
+      (collect-put! ci key (blog-page-anchor #f
+                                             (get-current-site-path)
                                              (tag->anchor-name (add-current-tag-prefix key)))))
 
     (define/override (resolve-content i d ri)
@@ -248,9 +258,14 @@
 
     (define/override (render-part-content part ri)
       (define number (collected-info-number (part-collected-info part ri)))
+      (define anchors (for/list ([tag (in-list (part-tags part))])
+                        `(a ([name ,(tag->anchor-name
+                                     (add-current-tag-prefix
+                                      (tag-key tag ri)))]))))
       (define title
         (when/list (not (part-style? part 'hidden))
           `(,(header-depth->html-tag (number-depth number))
+            ,@anchors
             ,@(cond/list
                 [(part-title-content part)
                  => (λ (title-content) (render-content title-content part ri))]))))
@@ -280,8 +295,9 @@
       (define title-content
         (match (resolve-get part ri tag)
           [(vector title _ ...) title]
-          [(blog-post title _) title]
-          [(blog-post-anchor title _ _) title]))
+          [(blog-page title _) title]
+          [(blog-page-anchor title _ _) title]
+          [#f "???"]))
       (render-content title-content part ri))
 
     (define/override (render-content elem part ri)
@@ -357,18 +373,13 @@
                          (url-query external-tag-path)))
                  (url->string (struct-copy url external-tag-path [query redirect-query]))]
 
-                [(blog-post _ path)
-                 (relative-path->relative-url-string
-                  (find-relative-path (get-dest-directory) path))]
+                [(blog-page _ path)
+                 (site-path->url-string path)]
 
-                [(blog-post-anchor _ path anchor)
-                 (define file-path path)
-                 (define fragment (string-append "#" (uri-encode anchor)))
-                 (if (equal? file-path (current-output-file))
-                     fragment
-                     (string-append (relative-path->relative-url-string
-                                     (find-relative-path (get-dest-directory) file-path))
-                                    fragment))]))
+                [(blog-page-anchor _ path anchor)
+                 (if (equal? path (get-current-site-path))
+                     (string-append "#" (uri-encode anchor))
+                     (site-path->url-string path #:fragment anchor))]))
 
             (define attrs* (attributes-union (hasheq 'href href) attrs))
             (wrap-for-style #:attrs (hasheq) `[(a ,(attributes->list attrs*) ,@rendered)])]
@@ -500,6 +511,11 @@
     ; render them in different ways on different pages, so we generate `.info`
     ; files containing serialized `rendered-post` structures, instead.
     (define/override (get-suffix) #".info")
+
+    (define/override (get-current-site-path)
+      (define part (current-top-part))
+      (post-path (get-required-style-prop post-date? (style-properties (part-style part)))
+                 (content->string (strip-aux (part-title-content part)))))
 
     (define/override (render-one part ri output-file)
       (define props (style-properties (part-style part)))

@@ -9,7 +9,8 @@
          (struct-out post-tags)
          (contract-out
           [post-date->string (-> post-date? string?)]
-          [post-date->strings (-> post-date? (list/c string? string? string?))]))
+          [post-date->strings (-> post-date? (list/c string? string? string?))]
+          [blog-post-path->tag-prefix (-> (and/c string? relative-path?) string?)]))
 
 (serializable-struct post-date (year month day) #:transparent
   #:guard (struct-guard/c exact-integer? (integer-in 1 12) (integer-in 1 31)))
@@ -23,3 +24,6 @@
   (list (~a (post-date-year date))
         (~r #:min-width 2 #:pad-string "0" (post-date-month date))
         (~r #:min-width 2 #:pad-string "0" (post-date-day date))))
+
+(define (blog-post-path->tag-prefix path)
+  (~a `(blog ,path)))

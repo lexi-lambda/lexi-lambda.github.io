@@ -1,8 +1,6 @@
 #lang scribble/base
 @(begin
    (require racket/list
-            scribble/core
-            scribble/html-properties
             threading
             "../lang/post-language.rkt")
 

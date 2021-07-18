@@ -10,17 +10,19 @@
          racket/promise
          racket/sequence
          racket/serialize
+         scribble/core
          scribble/xref
          setup/xref
          threading
          (only-in xml write-xexpr)
 
-         "markdown/post.rkt"
-         "paths.rkt"
          "build/metadata.rkt"
          "build/render/scribble.rkt"
          "build/render/feed.rkt"
-         "build/render/page.rkt")
+         "build/render/page.rkt"
+         "lang/metadata.rkt"
+         "markdown/post.rkt"
+         "paths.rkt")
 
 (define num-posts-per-page 10)
 
@@ -39,9 +41,23 @@
       (path-replace-extension #".sxref")
       (build-path build-dir _)))
 
+;; Functions like `other-doc` assume that each top-level document has the tag
+;; '(part "top") on its top-level section. This is only ensured by
+;; setup/scribble, which we are not using, so we have to add it manually.
+(define (ensure-top-tag main-part)
+  (if (member '(part "top") (part-tags main-part))
+      main-part
+      (struct-copy part main-part
+                   [tags (cons '(part "top") (part-tags main-part))])))
+
+(define (set-blog-tag-prefix main-part path-str)
+  (struct-copy part main-part [tag-prefix (blog-post-path->tag-prefix path-str)]))
+
 (define (markdown-post file-name)
   (define path (build-path posts-dir file-name))
-  (define main-part-promise (delay (parse-markdown-post (file->string path) path)))
+  (define main-part-promise (delay (~> (parse-markdown-post (file->string path) path)
+                                       ensure-top-tag
+                                       (set-blog-tag-prefix file-name))))
   (post-dep path main-part-promise))
 
 (define all-post-deps
@@ -95,6 +111,7 @@
 
 (define (render-scribble render% main-part out-path
                          #:dest-dir [dest-dir (path-only out-path)]
+                         #:xrefs-in [xref-in-paths '()]
                          #:xref-out [xref-out-path #f])
   (define main-parts (list main-part))
   (define out-paths (list out-path))
@@ -102,9 +119,13 @@
 
   (define traverse-info (send renderer traverse main-parts out-paths))
   (define collect-info (send renderer collect main-parts out-paths traverse-info))
-  (xref-transfer-info renderer collect-info (load-collections-xref))
-  (define resolve-info (send renderer resolve main-parts out-paths collect-info))
 
+  (for ([path (in-list xref-in-paths)])
+    (define xref-in (call-with-input-file* path read))
+    (send renderer deserialize-info xref-in collect-info))
+  (xref-transfer-info renderer collect-info (load-collections-xref))
+
+  (define resolve-info (send renderer resolve main-parts out-paths collect-info))
   (match-define (list render-result)
     (send renderer render main-parts out-paths resolve-info))
 
@@ -172,7 +193,8 @@
   (local-require (only-in "posts/about-me.scrbl" [doc main-part]))
   (render-scribble (blog-standalone-page-render% standalone-page)
                    main-part
-                   (reroot-path site-path output-dir)))
+                   (reroot-path site-path output-dir)
+                   #:xrefs-in (map post-dep-xref-path all-post-deps)))
 
 (define (build-sitemap posts)
   (define site-path "/sitemap.txt")
