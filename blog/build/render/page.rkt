@@ -40,6 +40,11 @@
        ,(stylesheet "/css/pygments.min.css")
        (link ([rel "alternate"] [type "application/atom+xml"] [title "Atom Feed"] [href ,(feed-path 'atom #:tag tag)]))
        (link ([rel "alternate"] [type "application/rss+xml"] [title "RSS Feed"] [href ,(feed-path 'rss #:tag tag)]))
+       (script ([async ""] [src "https://www.googletagmanager.com/gtag/js?id=UA-65250372-1"]))
+       (script ,(~a "window.dataLayer = window.dataLayer || [];"
+                    "function gtag(){dataLayer.push(arguments);};"
+                    "gtag('js', new Date());"
+                    "gtag('config', 'UA-65250372-1');"))
        (body
          (header
            (nav ([role "navigation"] [class "navigation-bar"])
