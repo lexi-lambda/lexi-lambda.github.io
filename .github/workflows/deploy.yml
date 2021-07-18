@@ -1,0 +1,38 @@
+name: deploy
+on: {push: {branches: [source]}}
+defaults:
+  run:
+    working-directory: repo
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+      with: { path: repo }
+    - uses: actions/setup-node@v2
+      with:
+        node-version: '14'
+    - uses: Bogdanp/setup-racket@v1.5
+      with:
+        version: '8.1'
+        dest: '$GITHUB_WORKSPACE/racket'
+        sudo: never
+
+    - name: install
+      run: |
+        yarn install
+        raco pkg install --batch --installation --auto --update-deps --link blog
+    - name: build
+      run: |
+        yarn run build
+        racket blog/build.rkt
+
+    - name: deploy
+      run: |
+        cd output
+        git init -b gh-pages
+        git config user.name 'GitHub Actions'
+        git config user.email 'lexi.lambda@gmail.com'
+        git add .
+        git commit -m 'Deploy to GitHub Pages'
+        git push --force 'https://lexi-lambda:${{ github.token }}@github.com/${{ github.repository }}' gh-pages
