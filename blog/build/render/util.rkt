@@ -42,9 +42,10 @@
 (define tag->anchor-name
   (match-lambda
     [(literal-anchor anchor-name) anchor-name]
-    [(cons 'part tag) (tag->anchor-name tag)]
-    [(? list? elements)
+    [(list 'part tag) (to-slug (~a tag))]
+    [(list sym (cons 'prefixable tag)) (tag->anchor-name (list sym tag))]
+    [(list sym tag)
      ; This anchor naming scheme does not in any way create unique anchors, but
      ; that should be okay for internal references in this use case, and having
      ; pretty URLs is a nice feature.
-     (to-slug (string-join (map ~a elements) " "))]))
+     (to-slug (~a sym tag))]))

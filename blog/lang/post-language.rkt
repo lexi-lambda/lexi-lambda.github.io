@@ -2,7 +2,6 @@
 
 (require (for-syntax racket/base
                      racket/match
-                     racket/syntax
                      syntax/location)
          racket/contract
          racket/match
@@ -15,12 +14,13 @@
          syntax/parse/define
 
          "../paths.rkt"
+         "footnote.rkt"
          "metadata.rkt")
 
-(provide (struct-out post-date)
+(provide (all-from-out "footnote.rkt")
+         (struct-out post-date)
          infer-date
          (struct-out post-tags)
-         define-footnote
          (contract-out [seclink (->* [string?]
                                      [#:doc (or/c module-path? #f)
                                       #:post (or/c string? #f)
@@ -39,11 +39,6 @@
                        [haskell-block (-> string? ... block?)]
 
                        [blog-tag (-> string? element?)]
-
-                       (struct footnote-reference ([note-id symbol?]))
-                       (struct footnote-definition ([note-id symbol?]))
-                       [footnote-reference-element (-> symbol? element?)]
-                       [footnote-flow (-> symbol? (listof block?) block?)]
 
                        [wikipedia (-> pre-content? ... element?)]
                        [github-repo (-> string? element?)]
@@ -105,24 +100,6 @@
                         (app string->number day)))
           #`(post-date '#,year '#,month '#,day)]
          [_ (raise-syntax-error #f "file name does not start with date" this-syntax)])])
-
-;; -----------------------------------------------------------------------------
-
-(struct footnote-reference (note-id) #:transparent)
-(struct footnote-definition (note-id) #:transparent)
-
-(define (footnote-reference-element note-id)
-  (element (style #f (list (footnote-reference note-id))) '()))
-
-(define (footnote-flow note-id pre-flows)
-  (nested-flow (style #f (list (footnote-definition note-id))) (decode-flow pre-flows)))
-
-(define-simple-macro (define-footnote ref-id:id pre-flow ...)
-  #:with note-ref-id (format-id #'ref-id "note:~a" #'ref-id #:subs? #t)
-  (begin
-    (define note-id (gensym 'ref-id))
-    (define note-ref-id (footnote-reference-element note-id))
-    (footnote-flow note-id (list pre-flow ...))))
 
 ;; -----------------------------------------------------------------------------
 

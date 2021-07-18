@@ -13,8 +13,9 @@
          (only-in "../lang/post-language.rkt"
                   code
                   code-block
-                  footnote-flow
-                  footnote-reference-element
+                  footnote-decl
+                  footnote-ref
+                  footnotes-section
                   pygments-block)
          (prefix-in md: "parse.rkt"))
 
@@ -27,25 +28,27 @@
 
 (define (document->part doc title-decl)
   (parameterize ([current-link-targets (md:document-link-targets doc)]
-                 [current-footnotes (footnotes->elements (md:document-footnotes doc))])
+                 [current-footnotes (footnotes->reference-elements (md:document-footnotes doc))])
     (define part-info (part-start 0
                                   (title-decl-tag-prefix title-decl)
                                   (title-decl-tags title-decl)
                                   (title-decl-style title-decl)
                                   (title-decl-content title-decl)))
     (match-define-values [main-part '()] (blocks->part (md:document-blocks doc) part-info))
-    (define all-blocks (append (part-blocks main-part) (footnotes->blocks (md:document-footnotes doc))))
-    (struct-copy part main-part [blocks all-blocks])))
+    (struct-copy part main-part
+                 [to-collect (append (footnotes->decl-elements (md:document-footnotes doc))
+                                     (part-to-collect main-part))]
+                 [parts (append (part-parts main-part) (list (footnotes-section)))])))
 
-(define (footnotes->elements notes)
+(define (footnotes->reference-elements notes)
   (for/hash ([note (in-list notes)])
     (match-define (cons name _) note)
-    (values name (footnote-reference-element (string->symbol name)))))
+    (values name (footnote-ref name))))
 
-(define (footnotes->blocks notes)
+(define (footnotes->decl-elements notes)
   (for/list ([note (in-list notes)])
     (match-define (cons name md-blocks) note)
-    (footnote-flow (string->symbol name) (blocks->blocks md-blocks))))
+    (part-collect-decl-element (footnote-decl name (blocks->blocks md-blocks)))))
 
 (define (blocks->part md-blocks part-info)
   (define (collect-blocks blocks md-blocks)
