@@ -28,7 +28,7 @@
             (match-define (rendered-post title-str _ date tags body) post)
             `(entry
                (title ,title-str)
-               (link ([rel "alternate"]) ,(full-url (rendered-post-path post)))
+               (link ([rel "alternate"] [href ,(full-url (rendered-post-path post))]))
                (published ,(post-date->rfc-3339-datetime date))
                (updated ,(post-date->rfc-3339-datetime date))
                (author (name "Alexis King"))
