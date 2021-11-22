@@ -342,10 +342,10 @@
 
            ; target-url needs an 'a wrapper
            (define link-wrap
-             (match (style-properties style)
-               [(list _ ... (target-url target) _ ...)
+             (match (findf target-url? (style-properties style))
+               [(target-url target)
                 (cons 'a (hasheq 'href target))]
-               [_ #f]))
+               [#f #f]))
 
            ; certain symbolic styles need wrappers
            (define style-name-wrap
@@ -475,7 +475,7 @@
       (define title-str (content->string (strip-aux (part-title-content part)) this part ri))
       (define title-content (render-content (part-title-content part) part ri))
       (define body-content (append (render-flow (part-blocks part) part ri #t)
-                                        (append-map (λ~> (render-part ri)) (part-parts part))))
+                                   (append-map (λ~> (render-part ri)) (part-parts part))))
       (define post
         (rendered-post title-str
                        title-content

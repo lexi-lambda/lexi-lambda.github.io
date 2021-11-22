@@ -4,8 +4,7 @@
 
 (define deps
   '("base"
-    "functional-lib"
-    "megaparsack-lib"
+    ["commonmark-lib" #:version "1.1"]
     "racket-index"
     "scribble-lib"
     "threading-lib"

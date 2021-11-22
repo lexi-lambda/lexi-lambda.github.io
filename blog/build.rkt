@@ -21,7 +21,7 @@
          "build/render/feed.rkt"
          "build/render/page.rkt"
          "lang/metadata.rkt"
-         "markdown/post.rkt"
+         "markdown.rkt"
          "paths.rkt")
 
 (define num-posts-per-page 10)
@@ -55,7 +55,7 @@
 
 (define (markdown-post file-name)
   (define path (build-path posts-dir file-name))
-  (define main-part-promise (delay (~> (parse-markdown-post (file->string path) path)
+  (define main-part-promise (delay (~> (call-with-input-file* path parse-markdown-post)
                                        ensure-top-tag
                                        (set-blog-tag-prefix file-name))))
   (post-dep path main-part-promise))
