@@ -35,7 +35,7 @@
                (content ([type "html"]) ,(xexpr->string `(article ,@body))))))]
 
     ['rss
-     (define updated (post-date->string (rendered-post-date (first posts))))
+     (define updated (post-date->rfc-822-date (rendered-post-date (first posts))))
      `(rss ([version "2.0"])
         (channel
          (title ,(index-page-title #:tag tag))
@@ -50,8 +50,17 @@
                 (title ,title-str)
                 (link ,(full-url (rendered-post-path post)))
                 (guid ([isPermaLink "true"]) ,(full-url (rendered-post-path post)))
-                (pubDate ,(post-date->string date))
+                (pubDate ,(post-date->rfc-822-date date))
                 (description ,(xexpr->string `(article ,@body)))))))]))
 
 (define (post-date->rfc-3339-datetime date)
   (~a (post-date->string date) "T00:00:00Z"))
+
+;; The RSS spec demands that dates be in this somewhat odd RFC 822 format, and
+;; this appears to be important for at least some actual RSS implementations;
+;; see lexi-lambda.github.io#10.
+(define (post-date->rfc-822-date date)
+  (~a (~r (post-date-day date) #:min-width 2 #:pad-string "0")
+      " " (vector-ref #("Jan" "Feb" "Mar" "Apr" "May" "Jun" "Jul" "Aug" "Sep" "Oct" "Nov" "Dec")
+                      (sub1 (post-date-month date)))
+      " " (post-date-year date)))
