@@ -9,7 +9,9 @@
          syntax/parse/define)
 
 (provide when/list
+         when/list*
          unless/list
+         unless/list*
          cond/list
          (contract-out
           [to-slug (-> string? string?)]
@@ -28,8 +30,12 @@
 
 (define-simple-macro (when/list condition:expr body ...+)
   (if condition (list (let () body ...)) '()))
+(define-simple-macro (when/list* condition:expr body ...+)
+  (if condition (let () body ...) '()))
 (define-simple-macro (unless/list condition:expr body ...+)
   (if condition '() (list (let () body ...))))
+(define-simple-macro (unless/list* condition:expr body ...+)
+  (if condition '() (let () body ...)))
 (define-simple-macro (cond/list clause ...)
   (cond clause ... [else '()]))
 
@@ -37,7 +43,10 @@
 ;; scribble
 
 (define (normalize-element-style v)
-  (if (style? v) v (style v '())))
+  (cond
+    [(not v) plain]
+    [(style? v) v]
+    [else (style v '())]))
 
 (define tag->anchor-name
   (match-lambda
@@ -48,4 +57,4 @@
      ; This anchor naming scheme does not in any way create unique anchors, but
      ; that should be okay for internal references in this use case, and having
      ; pretty URLs is a nice feature.
-     (to-slug (~a sym tag))]))
+     (to-slug (~a sym " " tag))]))

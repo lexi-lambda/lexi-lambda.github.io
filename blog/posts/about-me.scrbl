@@ -1,8 +1,7 @@
-#lang scribble/base
+#lang blog/lang/base
 @(begin
    (require racket/list
-            threading
-            "../lang/post-language.rkt")
+            threading)
 
    (define Scribble @seclink["top" #:doc '(lib "scribblings/scribble/scribble.scrbl")]{Scribble}))
 

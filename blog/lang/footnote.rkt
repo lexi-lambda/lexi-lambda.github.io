@@ -21,6 +21,7 @@
                                    #:tag-prefixes (listof string?)]
                                   tag?)]
           [footnote-ref (-> string? content?)]
+          [footnote-link (-> string? pre-content? ... link-element?)]
           [footnote-decl (-> string? pre-flow? ... part-collect-decl?)]
           [footnote-collect-element (-> string? (listof block?) content?)]
           [footnotes-section (-> part?)]))
@@ -61,6 +62,9 @@
      (link-element (style 'superscript (list (link-target ref-target)))
                    (~a number)
                    (make-footnote-tag tag)))))
+
+(define (footnote-link tag . pre-content)
+  (link-element #f (decode-content pre-content) (make-footnote-tag tag)))
 
 (define (footnote-decl tag . pre-flows)
   (part-collect-decl
@@ -147,7 +151,10 @@
   [(_ ref-id:id {~optional {~seq #:tag tag-e}} pre-flow ...)
    #:declare tag-e (expr/c #'string? #:name "tag")
    #:with note-ref-id (format-id #'ref-id "note:~a" #'ref-id #:subs? #t)
+   #:with note-link-id (format-id #'ref-id "note:~a*" #'ref-id #:subs? #t)
    #`(begin
        (define note-tag {~? tag-e.c '#,(symbol->string (syntax-e #'ref-id))})
        (define (note-ref-id) (footnote-ref note-tag))
+       (define (note-link-id . pre-content)
+         (apply footnote-link note-tag pre-content))
        (footnote-decl note-tag pre-flow ...))])

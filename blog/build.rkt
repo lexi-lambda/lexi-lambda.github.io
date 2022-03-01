@@ -1,18 +1,22 @@
 #lang racket/base
 
-(require racket/class
+(require (for-syntax racket/base)
+         racket/class
          racket/date
          racket/file
          racket/format
+         racket/lazy-require
          racket/list
          racket/match
          racket/path
          racket/promise
+         racket/runtime-path
          racket/sequence
          racket/serialize
          scribble/core
          scribble/xref
          setup/xref
+         syntax/parse/define
          threading
          (only-in xml write-xexpr)
 
@@ -55,10 +59,25 @@
 
 (define (markdown-post file-name)
   (define path (build-path posts-dir file-name))
-  (define main-part-promise (delay (~> (call-with-input-file* path parse-markdown-post)
-                                       ensure-top-tag
-                                       (set-blog-tag-prefix file-name))))
-  (post-dep path main-part-promise))
+  (post-dep path
+            (delay (~> (call-with-input-file* path parse-markdown-post)
+                       ensure-top-tag
+                       (set-blog-tag-prefix file-name)))))
+
+(define (make-scribble-post-dep file-name)
+  (define path (build-path posts-dir file-name))
+  (post-dep path
+            (delay (~> (dynamic-require path 'doc)
+                       ensure-top-tag
+                       (set-blog-tag-prefix file-name)))))
+
+(define-syntax-parser scribble-post
+  [(_ mod-path:string)
+   ; add compile-time dependency
+   (syntax-local-lift-require
+    #`(for-label (only #,(string-append "posts/" (syntax-e #'mod-path))))
+    #'#f)
+   #'(make-scribble-post-dep 'mod-path)])
 
 (define all-post-deps
   (map markdown-post '("2015-07-18-automatically-deploying-a-frog-powered-blog-to-github-pages.md"

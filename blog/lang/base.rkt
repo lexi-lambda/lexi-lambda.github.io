@@ -1,4 +1,4 @@
-#lang at-exp racket/base
+#lang racket/base
 
 (require (for-syntax racket/base
                      racket/match
@@ -11,7 +11,9 @@
          scribble/core
          scribble/decode
          scribble/html-properties
+         (only-in scribble/manual deftech tech)
          syntax/parse/define
+         threading
 
          "../paths.rkt"
          "footnote.rkt"
@@ -19,9 +21,23 @@
 
 (provide (all-from-out "footnote.rkt")
          (struct-out post-date)
-         infer-date
          (struct-out post-tags)
-         (contract-out [seclink (->* [string?]
+         (struct-out table-rows)
+         blog-post
+         deftech
+         tech
+         (contract-out [section (->* [] [#:tag (or/c string? (listof string?) #f)
+                                         #:tag-prefix (or/c string? module-path? #f)
+                                         #:style (or/c style? symbol? (listof symbol?) #f)
+                                         #:depth exact-nonnegative-integer?]
+                                     #:rest (listof pre-content?)
+                                     part-start?)]
+                       [subsubsubsection (->* [] [#:tag (or/c string? (listof string?) #f)
+                                                  #:tag-prefix (or/c string? module-path? #f)
+                                                  #:style (or/c style? symbol? (listof symbol?) #f)]
+                                              #:rest (listof pre-content?)
+                                              part-start?)]
+                       [seclink (->* [string?]
                                      [#:doc (or/c module-path? #f)
                                       #:post (or/c string? #f)
                                       #:tag-prefixes (or/c (listof string?) #f)
@@ -49,6 +65,57 @@
                        [hackage-module* (-> string? string? pre-content? ... element?)]))
 
 ;; -----------------------------------------------------------------------------
+
+(module* lang racket/base
+  (require scribble/doclang2
+           (except-in scribble/base seclink section)
+           (submod ".."))
+  (provide (all-from-out scribble/doclang2
+                         scribble/base
+                         (submod ".."))))
+
+(module* reader syntax/module-reader
+  #:language            get-lang-mod-path
+  #:read                scribble:read-inside
+  #:read-syntax         scribble:read-syntax-inside
+  #:whole-body-readers? #t
+  #:info                (scribble-base-reader-info)
+  #:language-info       (scribble-base-language-info)
+
+  (require (for-syntax racket/base)
+           racket/runtime-path
+           (prefix-in scribble: scribble/reader)
+           (only-in scribble/base/reader
+                    scribble-base-reader-info
+                    scribble-base-language-info))
+
+  (define-runtime-module-path-index lang-mpi '(submod ".." lang))
+  (define (get-lang-mod-path)
+    #;(cons 'submod (resolved-module-path-name
+                     (module-path-index-resolve
+                      lang-mpi
+                      #f
+                      #'(submod ".." lang))))
+    ;; see <https://github.com/racket/racket/issues/4174>
+    '(submod blog/lang/base lang)))
+
+;; -----------------------------------------------------------------------------
+
+(define (section #:tag [tag #f]
+                 #:tag-prefix [prefix #f]
+                 #:style [style #f]
+                 #:depth [depth 0]
+                 . pre-content)
+  (~> (apply scribble:section pre-content
+             #:tag tag #:tag-prefix prefix #:style style)
+      (struct-copy part-start _ [depth depth])))
+
+(define (subsubsubsection #:tag [tag #f]
+                          #:tag-prefix [prefix #f]
+                          #:style [style #f]
+                          . pre-content)
+  (apply section pre-content #:depth 3
+         #:tag tag #:tag-prefix prefix #:style style))
 
 (define (seclink tag
                  #:doc [module-path #f]
@@ -91,15 +158,31 @@
 (define (blog-tag tag-str)
   (hyperlink (index-path #:tag tag-str) tag-str))
 
-(define-syntax-parser infer-date
-  [(_) (match (path->string (syntax-source-file-name this-syntax))
-         [(regexp #px"^(\\d{4})-(\\d{2})-(\\d{2})-"
-                  (list _
-                        (app string->number year)
-                        (app string->number month)
-                        (app string->number day)))
-          #`(post-date '#,year '#,month '#,day)]
-         [_ (raise-syntax-error #f "file name does not start with date" this-syntax)])])
+(define (add-blog-post-properties title date tags)
+  (define title-style (title-decl-style title))
+  (struct-copy title-decl title
+               [style (style (style-name title-style)
+                             (list* date
+                                    (post-tags tags)
+                                    (style-properties title-style)))]))
+
+(define-for-syntax (infer-date stx)
+  (match (path->string (syntax-source-file-name stx))
+    [(regexp #px"^(\\d{4})-(\\d{2})-(\\d{2})-"
+             (list _
+                   (app string->number year)
+                   (app string->number month)
+                   (app string->number day)))
+     #`(post-date '#,year '#,month '#,day)]
+    [_ (raise-syntax-error #f "file name does not start with date" stx)]))
+
+(define-syntax-parser blog-post
+  [(_ {~alt {~once {~var title-expr (expr/c #'title-decl? #:name "title expression")}}
+            {~once {~seq #:tags {~var post-tags (expr/c #'(listof string?) #:name "tags expression")}}}}
+      ...)
+   #`(add-blog-post-properties title-expr.c
+                               #,(infer-date this-syntax)
+                               post-tags.c)])
 
 ;; -----------------------------------------------------------------------------
 

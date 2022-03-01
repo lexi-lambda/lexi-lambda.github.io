@@ -17,7 +17,7 @@
                   cdata
                   string->xexpr)
 
-         (only-in "lang/post-language.rkt"
+         (only-in "lang/base.rkt"
                   code
                   code-block
                   footnote-collect-element

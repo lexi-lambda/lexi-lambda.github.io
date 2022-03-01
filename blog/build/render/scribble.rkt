@@ -9,10 +9,12 @@
          racket/match
          racket/path
          racket/serialize
+         racket/string
 
          scribble/base-render
          scribble/core
-         scribble/html-properties
+         (except-in scribble/html-properties attributes attributes-assoc)
+         (prefix-in scribble: scribble/html-properties)
          (prefix-in scribble: scribble/html-render)
          (only-in scribble/private/render-utils part-style?)
 
@@ -23,8 +25,8 @@
          threading
          (only-in xml write-xexpr xexpr/c)
 
+         "../../lang/base.rkt"
          "../../lang/metadata.rkt"
-         "../../lang/post-language.rkt"
          "../../paths.rkt"
          "../metadata.rkt"
          "highlight/pygments.rkt"
@@ -42,39 +44,89 @@
 
 ;; -----------------------------------------------------------------------------
 
-(define (attributes-union attrs1 attrs2)
-  (hash-union attrs1 attrs2 #:combine/key
-              (λ (k a b)
-                (match k
-                  ['class (string-append a " " b)]
-                  [_ (error 'merge-attributes
-                            (string-append "duplicate values for attribute\n"
-                                           "  attribute: ~e\n"
-                                           "  values:\n"
-                                           "   ~e\n"
-                                           "   ~e")
-                            k a b)]))))
+(struct attributes (assoc styles) #:transparent
+  #:name make-attributes
+  #:constructor-name make-attributes)
+
+(define empty-attributes (make-attributes (hasheq) (hasheq)))
+
+(define (attributes-empty? attrs)
+  (and (hash-empty? (attributes-assoc attrs))
+       (hash-empty? (attributes-styles attrs))))
+
+(define (attributes #:styles [styles (hasheq)] . pairs)
+  (if (and (empty? pairs) (hash-empty? styles))
+      empty-attributes
+      (make-attributes (apply hasheq pairs) styles)))
+
+(define (list->attributes [pairs '()] #:styles [styles '()])
+  (if (and (empty? pairs) (empty? styles))
+      empty-attributes
+      (make-attributes (make-immutable-hasheq pairs) (make-immutable-hasheq styles))))
+
+(define (attributes-union #:allow-override? [allow-override? #f] attrs . attrss)
+  (define (multiple-values-error what k a b)
+    (error 'attributes-union
+           (~a "multiple values for " what "\n"
+               "  " what ": ~e\n"
+               "  values:\n"
+               "   ~e\n"
+               "   ~e")
+           k a b))
+
+  (for/fold ([attrs attrs])
+            ([new-attrs (in-list attrss)])
+    (make-attributes
+     (hash-union (attributes-assoc attrs)
+                 (attributes-assoc new-attrs)
+                 #:combine/key
+                 (λ (k a b)
+                   (match k
+                     ['class (string-append a " " b)]
+                     [_ (if allow-override?
+                            b
+                            (multiple-values-error "attribute" k a b))])))
+     (hash-union (attributes-styles attrs)
+                 (attributes-styles new-attrs)
+                 #:combine/key
+                 (λ (k a b) (multiple-values-error "CSS property" k a b))))))
 
 (define (attributes->list attrs)
-  (for/list ([(k v) (in-hash attrs)])
+  (define all-attrs
+    (cond
+      [(hash-empty? (attributes-styles attrs))
+       (attributes-assoc attrs)]
+      [(hash-ref (attributes-assoc attrs) 'style #f)
+       => (λ (existing-styles)
+            (raise-arguments-error 'render (~a "conflicting value for ‘style’ attribute;\n"
+                                               " values were given via both ‘attributes’ and ‘css-styles’ properties")
+                                   "attribute value" existing-styles
+                                   "css-styles properties" (attributes-styles attrs)))]
+      [else
+       (define style-strs (for/list ([(k v) (in-hash (attributes-styles attrs))])
+                            (~a k ":" v)))
+       (hash-set (attributes-assoc attrs) 'style (string-join style-strs ";"))]))
+  (for/list ([(k v) (in-immutable-hash all-attrs)])
     (list k v)))
 
 (define (style->tag-name+attributes s ri)
   (for/fold ([tag-name #f]
              [attrs (if (string? (style-name s))
-                        (hasheq 'class (style-name s))
-                        (hasheq))])
+                        (attributes 'class (style-name s))
+                        (attributes))])
             ([prop (in-list (style-properties s))])
     (match prop
       ['div
        (values 'div attrs)]
       [(alt-tag name)
        (values (string->symbol name) attrs)]
-      [(attributes attrs*)
-       (values tag-name (attributes-union attrs (make-immutable-hasheq attrs*)))]
+      [(scribble:attributes assoc)
+       (values tag-name (attributes-union attrs (list->attributes assoc)))]
+      [(css-styles assoc)
+       (values tag-name (attributes-union attrs (list->attributes #:styles assoc)))]
       [(link-target tag)
        (values tag-name (attributes-union attrs
-                                          (hasheq 'id (tag->anchor-name (resolve-tag tag ri)))))]
+                                          (attributes 'id (tag->anchor-name (resolve-tag tag ri)))))]
       [_
        (values tag-name attrs)])))
 
@@ -267,6 +319,7 @@
 
     (inherit get-dest-directory
 
+             render-block
              render-flow
              render-part
 
@@ -318,6 +371,114 @@
          ,@(for/list ([blocks (in-list (itemization-blockss e))])
              `(li ,@(render-flow blocks part ri #t))))])
 
+    (define/override (render-table e part ri starting-item?)
+      (define cellss (table-blockss e))
+      (define num-columns
+        (cond
+          [(empty? cellss) 0]
+          [else
+           (define num-columns (length (first cellss)))
+           (for ([cells (in-list (rest cellss))])
+             (unless (= (length cells) num-columns)
+               (raise-arguments-error 'render-table "table rows have inconsistent lengths"
+                                      "first row length" num-columns
+                                      "other row length" (length cells)
+                                      "first row..." (first cellss)
+                                      "other row..." cells)))
+           num-columns]))
+
+      (define t-style (table-style e))
+      (define col-styles (and~> (findf table-columns? (style-properties t-style))
+                                table-columns-styles))
+      (define row-styles (and~> (findf table-rows? (style-properties t-style))
+                                table-rows-styles))
+      (define cell-styless (and~> (findf table-cells? (style-properties t-style))
+                                  table-cells-styless))
+
+      (define (check-count what in-what in-v given expected)
+        (unless (= given expected)
+          (raise-argument-error 'render-table (~a (if (< given expected) "not enough" "too many")
+                                                  " " what " styles for " in-what)
+                                (~a what " count") expected
+                                "style count" given
+                                (~a in-what "...") in-v)))
+      (when col-styles
+        (check-count "column" "table" e (length col-styles) num-columns))
+      (when row-styles
+        (check-count "row" "table" e (length row-styles) (length cellss)))
+      (when cell-styless
+        (check-count "row" "table" e (length cell-styless) (length cellss))
+        (for ([cells (in-list cellss)]
+              [cell-styles (in-list cell-styless)])
+          (check-count "cell" "row" cells (length cell-styles) num-columns)))
+
+      (define-values [tag-name attrs] (style->tag-name+attributes t-style ri))
+      `[(,(or tag-name 'table)
+         ,(attributes->list attrs)
+         ,@(for/list ([cells (in-list cellss)]
+                      [row-style (if row-styles
+                                     (in-list row-styles)
+                                     (in-cycle (in-value plain)))]
+                      [cell-styles (if cell-styless
+                                       (in-list cell-styless)
+                                       (in-cycle (in-value #f)))])
+             (define-values [tag-name attrs] (style->tag-name+attributes row-style ri))
+             (list* (or tag-name 'tr)
+                    (attributes->list attrs)
+                    (let loop ([cells cells]
+                               [col-styles col-styles]
+                               [cell-styles cell-styles])
+                      (match cells
+                        ['() '()]
+                        [(list* cell (and 'cont cont) ... cells)
+                         (define colspan (add1 (length cont)))
+
+                         (define (split-styles ss)
+                           (if ss
+                               (values (first ss) (drop ss colspan))
+                               (values plain #f)))
+                         (define-values [col-style col-styles*] (split-styles col-styles))
+                         (define-values [cell-style cell-styles*] (split-styles cell-styles))
+
+                         (define-values [col-tag-name col-attrs] (style->tag-name+attributes col-style ri))
+                         (define-values [cell-tag-name cell-attrs] (style->tag-name+attributes cell-style ri))
+                         (define attrs (~> (attributes-union col-attrs cell-attrs #:allow-override? #t)
+                                           (attributes-union (if (= colspan 1)
+                                                                 (attributes)
+                                                                 (attributes 'colspan (~a colspan)))
+                                                             (table-cell-style->attributes col-style cell-style))))
+                         (cons (list* (or cell-tag-name col-tag-name 'td)
+                                      (attributes->list attrs)
+                                      (render-table-cell cell part ri))
+                               (loop cells col-styles* cell-styles*))])))))])
+
+    (define/private (table-cell-style->attributes col-s cell-s)
+      (define col-props (style-properties col-s))
+      (define cell-props (style-properties cell-s))
+
+      (define (alignment what which)
+        (define (go for-what props)
+          (define aligns (filter (λ~> (memq which)) props))
+          (match aligns
+            ['() #f]
+            [(list align) (~a "cell-align-" align)]
+            [_ (raise-arguments-error 'render-table (~a for-what " has multiple " what " alignments")
+                                      "alignment properties" aligns)]))
+        (or (go "cell" cell-props)
+            (go "column" col-props)))
+
+      (define h-align (alignment "horizontal" '(left right center)))
+      (define v-align (alignment "vertical" '(top baseline bottom vcenter)))
+      (attributes 'class (string-join (filter values (list h-align v-align)))))
+
+    (define/public (render-table-cell e part ri)
+      (cond
+        [(and (paragraph? e)
+              (memq 'omitable (style-properties (paragraph-style e))))
+         (render-content (paragraph-content e) part ri)]
+        [else
+         (render-block e part ri #f)]))
+
     (define/public (render-title-link tag part ri)
       (define title-content
         (match (resolve-get part ri tag)
@@ -338,23 +499,23 @@
            ; First, we determine what element wrappers are needed by the style.
 
            ; alt-tag needs a custom wrapper
-           (define alt-tag-wrap (if tag-name (cons tag-name (hasheq)) #f))
+           (define alt-tag-wrap (if tag-name (cons tag-name (attributes)) #f))
 
            ; target-url needs an 'a wrapper
            (define link-wrap
              (match (findf target-url? (style-properties style))
                [(target-url target)
-                (cons 'a (hasheq 'href target))]
+                (cons 'a (attributes 'href target))]
                [#f #f]))
 
            ; certain symbolic styles need wrappers
            (define style-name-wrap
              (match (style-name style)
-               ['bold              (cons 'strong (hasheq))]
-               [(or 'emph 'italic) (cons 'em (hasheq))]
-               ['tt                (cons 'code (hasheq))]
-               ['superscript       (cons 'sup (hasheq))]
-               ['subscript         (cons 'sub (hasheq))]
+               ['bold              (cons 'strong (attributes))]
+               [(or 'emph 'italic) (cons 'em (attributes))]
+               ['tt                (cons 'code (attributes))]
+               ['superscript       (cons 'sup (attributes))]
+               ['subscript         (cons 'sub (attributes))]
                [_                  #f]))
 
            ; Now we combine the wrappers and mix in extra attributes.
@@ -363,7 +524,7 @@
                ; If there are no wrappers, but we need to add attributes, add a
                ; 'span wrapper to hold them.
                ['()
-                (if (hash-empty? attrs)
+                (if (attributes-empty? attrs)
                     '()
                     (list (cons 'span attrs)))]
                ; Otherwise, add the attributes to the outermost wrapper.
@@ -381,9 +542,9 @@
                               (super render-content elem part ri)))
          (match elem
            [(target-element _ _ tag)
-            (define anchor-name (tag->anchor-name (resolve-tag tag ri)))
-            (define attrs* (attributes-union (hasheq 'name anchor-name) attrs))
-            (wrap-for-style #:attrs (hasheq) `[(a ,(attributes->list attrs*) ,@rendered)])]
+            (tag->anchor-name (resolve-tag tag ri))
+            (cons `(a ([name ,(tag->anchor-name (resolve-tag tag ri))]))
+                  (wrap-for-style rendered))]
 
            [(link-element _ _ tag)
             (define indirect? (memq 'indirect-link (style-properties style)))
@@ -405,8 +566,8 @@
                      (string-append "#" (uri-encode anchor))
                      (site-path->url-string path #:fragment anchor))]))
 
-            (define attrs* (attributes-union (hasheq 'href href) attrs))
-            (wrap-for-style #:attrs (hasheq) `[(a ,(attributes->list attrs*) ,@rendered)])]
+            (define attrs* (attributes-union (attributes 'href href) attrs))
+            (wrap-for-style #:attrs (attributes) `[(a ,(attributes->list attrs*) ,@rendered)])]
 
            [_ (wrap-for-style rendered)])]))
 
@@ -450,7 +611,7 @@
          #:body (render-part part ri)))
       (write-xexpr xexpr)
       xexpr)
-    
+
     (super-new)))
 
 ;; The renderer used for actual blog posts, with all the bells and whistles.
