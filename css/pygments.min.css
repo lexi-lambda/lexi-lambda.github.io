@@ -1,0 +1,184 @@
+.pygments {
+  /* Comment */
+  /* Keyword */
+  /* Operator */
+  /* Comment.Preproc */
+  /* Comment.Special */
+  /* Generic.Deleted */
+  /* Generic.Emph */
+  /* Generic.Error */
+  /* Generic.Heading */
+  /* Generic.Inserted */
+  /* Generic.Output */
+  /* Generic.Prompt */
+  /* Generic.Strong */
+  /* Generic.Subheading */
+  /* Generic.Traceback */
+  /* Keyword.Declaration */
+  /* Keyword.Namespace */
+  /* Keyword.Pseudo */
+  /* Keyword.Reserved */
+  /* Keyword.Type, Keyword.Constant, Name.Class */
+  /* Literal.Number */
+  /* Literal.String */
+  /* Name.Attribute */
+  /* Name.Builtin */
+  /* Name.Class */
+  /* Name.Constant */
+  /* Name.Decorator */
+  /* Name.Entity */
+  /* Name.Exception */
+  /* Name.Function */
+  /* Name.Label */
+  /* Name.Namespace */
+  /* Name.Tag */
+  /* Name.Variable */
+  /* Operator.Word */
+  /* Text.Whitespace */
+  /* Literal.Number.Float */
+  /* Literal.Number.Hex */
+  /* Literal.Number.Integer */
+  /* Literal.Number.Oct */
+  /* Literal.String.Backtick */
+  /* Literal.String.Char */
+  /* Literal.String.Doc */
+  /* Literal.String.Double */
+  /* Literal.String.Escape */
+  /* Literal.String.Heredoc */
+  /* Literal.String.Interpol */
+  /* Literal.String.Other */
+  /* Literal.String.Regex */
+  /* Literal.String.Single */
+  /* Literal.String.Symbol */
+  /* Name.Builtin.Pseudo */
+  /* Name.Variable.Class */
+  /* Name.Variable.Global */
+  /* Name.Variable.Instance */
+  /* Literal.Number.Integer.Long */ }
+  .pygments .c, .pygments .cm, .pygments .c1 {
+    color: #9e5555; }
+  .pygments .k {
+    color: #6d1717;
+    font-weight: 400; }
+  .pygments .o {
+    color: #666666; }
+  .pygments .cp {
+    color: #BC7A00; }
+  .pygments .cs {
+    color: #408080;
+    font-style: italic; }
+  .pygments .gd {
+    color: #A00000; }
+  .pygments .ge {
+    font-style: italic; }
+  .pygments .gr {
+    color: #FF0000; }
+  .pygments .gh {
+    color: #000080;
+    font-weight: 500; }
+  .pygments .gi {
+    color: #00A000; }
+  .pygments .go {
+    color: #808080; }
+  .pygments .gp {
+    color: #000080;
+    font-weight: 500; }
+  .pygments .gs {
+    font-weight: 500; }
+  .pygments .gu {
+    color: #800080;
+    font-weight: 500; }
+  .pygments .gt {
+    color: #0040D0; }
+  .pygments .kd {
+    color: #ab2626; }
+  .pygments .kn {
+    color: #6d1717;
+    font-weight: 500; }
+  .pygments .kp {
+    color: #008000; }
+  .pygments .kr {
+    color: #A10327;
+    font-weight: 500; }
+  .pygments .kt, .pygments .kc, .pygments .nc {
+    color: #B00040; }
+  .pygments .m {
+    color: #666666; }
+  .pygments .s {
+    color: #BA2121; }
+  .pygments .na {
+    color: #960037; }
+  .pygments .nb {
+    font-weight: 400; }
+  .pygments .nc {
+    font-weight: 400; }
+  .pygments .no {
+    color: #880000; }
+  .pygments .nd {
+    color: #AA22FF; }
+  .pygments .ni {
+    color: #999999;
+    font-weight: 500; }
+  .pygments .ne {
+    color: #D2413A;
+    font-weight: 500; }
+  .pygments .nf {
+    color: #960037; }
+  .pygments .nl {
+    color: #A0A000; }
+  .pygments .nn {
+    color: #6d1717;
+    font-weight: 500; }
+  .pygments .nt {
+    color: #008000;
+    font-weight: 500; }
+  .pygments .nv {
+    color: #1c7805; }
+  .pygments .ow {
+    color: #666666;
+    font-weight: 500; }
+  .pygments .w {
+    color: #bbbbbb; }
+  .pygments .mf {
+    color: #666666; }
+  .pygments .mh {
+    color: #666666; }
+  .pygments .mi {
+    color: #666666; }
+  .pygments .mo {
+    color: #666666; }
+  .pygments .sb {
+    color: #BA2121; }
+  .pygments .sc {
+    color: #BA2121; }
+  .pygments .sd {
+    color: #BA2121;
+    font-style: italic; }
+  .pygments .s2 {
+    color: #BA2121; }
+  .pygments .se {
+    color: #BA2121;
+    font-weight: 400; }
+  .pygments .sh {
+    color: #BA2121; }
+  .pygments .si {
+    color: #BA2121;
+    font-weight: 400; }
+  .pygments .sx {
+    color: #008000; }
+  .pygments .sr {
+    color: #BB6688; }
+  .pygments .s1 {
+    color: #BA2121; }
+  .pygments .ss {
+    color: #19177C; }
+  .pygments .bp {
+    color: #008000; }
+  .pygments .vc {
+    color: #19177C; }
+  .pygments .vg {
+    color: #19177C; }
+  .pygments .vi {
+    color: #19177C; }
+  .pygments .il {
+    color: #666666; }
