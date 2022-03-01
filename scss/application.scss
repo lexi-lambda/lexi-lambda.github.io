@@ -40,18 +40,17 @@ h1, h2, h3, h4, h5, h6 {
 h1 {
   font-size: 2em;
   font-weight: 700;
-  line-height: 1.4em;
+  line-height: 1.4;
   margin-bottom: 0.4em;
 
   @media (min-width: 575px) {
     font-size: 2.3em;
-    line-height: 1.4em;
   }
 }
 
 h2 {
   font-size: 1.75em;
-  line-height: 1.5em;
+  line-height: 1.5;
   margin-top: 2em;
 
   @media (min-width: 800px) {
@@ -59,15 +58,9 @@ h2 {
   }
 }
 
-h3 {
-  font-size: 1.5em;
-  line-height: 1em;
-}
-
-h4 {
-  font-size: 1.17em;
-  line-height: 1em;
-}
+h3 { font-size: 1.5em; }
+h4 { font-size: 1.17em; }
+h5 { font-size: 1.1em; }
 
 // -----------------------------------------------------------------------------
 
@@ -91,12 +84,11 @@ body > section[role=main] {
   flex: 1;
   font-size: 1.1em;
   font-weight: 300;
-  line-height: 2em;
+  line-height: 2;
   padding: 0 $content-padding;
 
   @media (max-width: 550px) {
     font-size: 0.9em;
-    line-height: 2em;
   }
 
   & > .content {
@@ -188,12 +180,12 @@ body > section[role=main] {
 
     @media (max-width: 700px) {
       font-size: 0.9em;
-      line-height: 1.9em;
+      line-height: 1.9;
     }
 
     @media (max-width: 500px) {
       font-size: 0.8em;
-      line-height: 1.8em;
+      line-height: 1.8;
     }
 
     @media (min-width: 800px) {
@@ -296,8 +288,17 @@ article.inline {
 
 .footnotes {
   font-size: small;
-  line-height: 2em;
+  line-height: 2;
   margin-top: 4em;
+
+  li:target {
+    background-color: $color-section-background-highlight;
+    border-radius: 3px;
+    // We want the background to extend past both the edges of the element and
+    // the list bullet itself, which is easiest to do with two overlapping shadows.
+    box-shadow: -1.5em 0 0 0.5em $color-section-background-highlight,
+                 0.5em 0 0 0.5em $color-section-background-highlight;
+  }
 }
 
 article.main > footer {

@@ -8,29 +8,29 @@ import compileSass   from 'gulp-sass'
 import uglify        from 'gulp-uglify'
 
 export js = ->
-  gulp.src './coffee/**/*.coffee', sourcemaps: true
+  gulp.src 'coffee/**/*.coffee', sourcemaps: true
     .pipe compileCoffee()
     .pipe concat 'application.js'
     .pipe uglify()
     .pipe rename extname: '.min.js'
-    .pipe gulp.dest './output/js/'
+    .pipe gulp.dest 'output/js/'
 
 export css = ->
-  gulp.src './scss/**/*.scss', sourcemaps: true
+  gulp.src 'scss/**/*.scss', sourcemaps: true
     .pipe compileSass().on 'error', compileSass.logError
     .pipe autoprefixer()
     .pipe rename extname: '.min.css'
-    .pipe gulp.dest './output/css/'
+    .pipe gulp.dest 'output/css/'
 
 export images = ->
-  gulp.src './images/**/*'
-    .pipe gulp.dest './output/img/'
+  gulp.src 'images/**/*'
+    .pipe gulp.dest 'output/img/'
 
 export build = gulp.parallel js, css, images
 
 export watch = ->
-  gulp.watch './coffee/**/*.coffee', js
-  gulp.watch './scss/**/*.scss', css
-  gulp.watch './images/**/*', images
+  gulp.watch 'coffee/**/*.coffee', js
+  gulp.watch 'scss/**/*.scss', css
+  gulp.watch 'images/**/*', images
 
-export default gulp.series build
+export default build
