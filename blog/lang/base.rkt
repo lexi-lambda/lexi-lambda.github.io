@@ -37,6 +37,11 @@
                                                   #:style (or/c style? symbol? (listof symbol?) #f)]
                                               #:rest (listof pre-content?)
                                               part-start?)]
+                       [secref (->* [string?]
+                                    [#:doc (or/c module-path? #f)
+                                     #:post (or/c string? #f)
+                                     #:tag-prefixes (or/c (listof string?) #f)]
+                                    element?)]
                        [seclink (->* [string?]
                                      [#:doc (or/c module-path? #f)
                                       #:post (or/c string? #f)
@@ -45,6 +50,7 @@
                                      #:rest (listof pre-content?)
                                      element?)]
                        [other-post (-> string? element?)]
+                       [other-post* (-> string? pre-content? ... element?)]
 
                        [code (-> content? ... element?)]
                        [code-block (-> content? ... block?)]
@@ -68,7 +74,7 @@
 
 (module* lang racket/base
   (require scribble/doclang2
-           (except-in scribble/base seclink section)
+           (except-in scribble/base seclink secref section)
            (submod ".."))
   (provide (all-from-out scribble/doclang2
                          scribble/base
@@ -106,8 +112,19 @@
                  #:style [style #f]
                  #:depth [depth 0]
                  . pre-content)
-  (~> (apply scribble:section pre-content
-             #:tag tag #:tag-prefix prefix #:style style)
+  (define content (decode-content pre-content))
+  (~> (apply scribble:section content
+             ; `scribble:section` already handles generating a tag from the
+             ; decoded content if necessary, but it preprocesses it by replacing
+             ; most non-ASCII characters with underscores. This is to avoid
+             ; causing trouble in generated URLs, but it’s arguably the wrong
+             ; layer at which to do this escaping, and indeed, we have our own
+             ; scheme for generating anchor names from tags in the renderer.
+             ; So if no tag is provided, we handle generating one ourselves
+             ; here, without any escaping.
+             #:tag (or tag (content->string content))
+             #:tag-prefix prefix
+             #:style style)
       (struct-copy part-start _ [depth depth])))
 
 (define (subsubsubsection #:tag [tag #f]
@@ -116,6 +133,17 @@
                           . pre-content)
   (apply section pre-content #:depth 3
          #:tag tag #:tag-prefix prefix #:style style))
+
+(define (secref tag
+                #:doc [module-path #f]
+                #:post [post-path #f]
+                #:tag-prefixes [prefixes #f])
+  (scribble:secref
+   tag
+   #:doc module-path
+   #:tag-prefixes (if post-path
+                      (cons (blog-post-path->tag-prefix post-path) (or prefixes '()))
+                      prefixes)))
 
 (define (seclink tag
                  #:doc [module-path #f]
@@ -131,7 +159,9 @@
          #:indirect? indirect?))
 
 (define (other-post post-path)
-  (seclink "top" #:post post-path))
+  (secref "top" #:post post-path))
+(define (other-post* post-path . pre-content)
+  (apply seclink "top" #:post post-path pre-content))
 
 ;; -----------------------------------------------------------------------------
 

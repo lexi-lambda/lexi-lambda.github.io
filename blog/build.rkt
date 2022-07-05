@@ -80,37 +80,37 @@
    #'(make-scribble-post-dep 'mod-path)])
 
 (define all-post-deps
-  (map markdown-post '("2015-07-18-automatically-deploying-a-frog-powered-blog-to-github-pages.md"
-                       "2015-08-22-deploying-racket-applications-on-heroku.md"
-                       "2015-08-30-managing-application-configuration-with-envy.md"
-                       "2015-09-23-canonical-factories-for-testing-with-factory-girl-api.md"
-                       "2015-11-06-functionally-updating-record-types-in-elm.md"
-                       "2015-12-21-adts-in-typed-racket-with-macros.md"
-                       "2016-02-18-simple-safe-multimethods-in-racket.md"
-                       "2016-06-03-four-months-with-haskell.md"
-                       "2016-08-11-climbing-the-infinite-ladder-of-abstraction.md"
-                       "2016-08-24-understanding-the-npm-dependency-model.md"
-                       "2016-10-01-using-types-to-unit-test-in-haskell.md"
-                       "2017-01-02-rascal-a-haskell-with-more-parentheses.md"
-                       "2017-01-05-rascal-is-now-hackett-plus-some-answers-to-questions.md"
-                       "2017-04-28-lifts-for-free-making-mtl-typeclasses-derivable.md"
-                       "2017-05-27-realizing-hackett-a-metaprogrammable-haskell.md"
-                       "2017-06-29-unit-testing-effectful-haskell-with-monad-mock.md"
-                       "2017-08-12-user-programmable-infix-operators-in-racket.md"
-                       "2017-08-28-hackett-progress-report-documentation-quality-of-life-and-snake.md"
-                       "2017-10-27-a-space-of-their-own-adding-a-type-namespace-to-hackett.md"
-                       "2018-02-10-an-opinionated-guide-to-haskell-in-2018.md"
-                       "2018-04-15-reimplementing-hackett-s-type-language-expanding-to-custom-core-forms-in-racket.md"
-                       "2018-09-13-custom-core-forms-in-racket-part-ii-generalizing-to-arbitrary-expressions-and-internal-definitions.md"
-                       "2018-10-06-macroexpand-anywhere-with-local-apply-transformer.md"
-                       "2019-04-21-defeating-racket-s-separate-compilation-guarantee.md"
-                       "2019-09-07-demystifying-monadbasecontrol.md"
-                       "2019-10-19-empathy-and-subjective-experience-in-programming-languages.md"
-                       "2019-11-05-parse-don-t-validate.md"
-                       "2020-01-19-no-dynamic-type-systems-are-not-inherently-more-open.md"
-                       "2020-08-13-types-as-axioms-or-playing-god-with-static-types.md"
-                       "2020-11-01-names-are-not-type-safety.md"
-                       "2021-03-25-an-introduction-to-typeclass-metaprogramming.md")))
+  (list (markdown-post "2015-07-18-automatically-deploying-a-frog-powered-blog-to-github-pages.md")
+        (markdown-post "2015-08-22-deploying-racket-applications-on-heroku.md")
+        (markdown-post "2015-08-30-managing-application-configuration-with-envy.md")
+        (markdown-post "2015-09-23-canonical-factories-for-testing-with-factory-girl-api.md")
+        (markdown-post "2015-11-06-functionally-updating-record-types-in-elm.md")
+        (markdown-post "2015-12-21-adts-in-typed-racket-with-macros.md")
+        (markdown-post "2016-02-18-simple-safe-multimethods-in-racket.md")
+        (markdown-post "2016-06-03-four-months-with-haskell.md")
+        (markdown-post "2016-08-11-climbing-the-infinite-ladder-of-abstraction.md")
+        (markdown-post "2016-08-24-understanding-the-npm-dependency-model.md")
+        (markdown-post "2016-10-01-using-types-to-unit-test-in-haskell.md")
+        (markdown-post "2017-01-02-rascal-a-haskell-with-more-parentheses.md")
+        (markdown-post "2017-01-05-rascal-is-now-hackett-plus-some-answers-to-questions.md")
+        (markdown-post "2017-04-28-lifts-for-free-making-mtl-typeclasses-derivable.md")
+        (markdown-post "2017-05-27-realizing-hackett-a-metaprogrammable-haskell.md")
+        (markdown-post "2017-06-29-unit-testing-effectful-haskell-with-monad-mock.md")
+        (markdown-post "2017-08-12-user-programmable-infix-operators-in-racket.md")
+        (markdown-post "2017-08-28-hackett-progress-report-documentation-quality-of-life-and-snake.md")
+        (markdown-post "2017-10-27-a-space-of-their-own-adding-a-type-namespace-to-hackett.md")
+        (markdown-post "2018-02-10-an-opinionated-guide-to-haskell-in-2018.md")
+        (markdown-post "2018-04-15-reimplementing-hackett-s-type-language-expanding-to-custom-core-forms-in-racket.md")
+        (markdown-post "2018-09-13-custom-core-forms-in-racket-part-ii-generalizing-to-arbitrary-expressions-and-internal-definitions.md")
+        (markdown-post "2018-10-06-macroexpand-anywhere-with-local-apply-transformer.md")
+        (markdown-post "2019-04-21-defeating-racket-s-separate-compilation-guarantee.md")
+        (markdown-post "2019-09-07-demystifying-monadbasecontrol.md")
+        (markdown-post "2019-10-19-empathy-and-subjective-experience-in-programming-languages.md")
+        (markdown-post "2019-11-05-parse-don-t-validate.md")
+        (markdown-post "2020-01-19-no-dynamic-type-systems-are-not-inherently-more-open.md")
+        (markdown-post "2020-08-13-types-as-axioms-or-playing-god-with-static-types.md")
+        (markdown-post "2020-11-01-names-are-not-type-safety.md")
+        (markdown-post "2021-03-25-an-introduction-to-typeclass-metaprogramming.md")))
 
 (define (timestamp-string)
   (define (pad n) (~r n #:min-width 2 #:pad-string "0"))
@@ -162,10 +162,17 @@
 
   render-result)
 
-(define (build-post-body dep)
+(define (build-post-body dep #:xrefs-in xref-in-paths)
   (define src-mod-time (file-or-directory-modify-seconds (post-dep-src-path dep) #f (λ () #f)))
   (define info-mod-time (file-or-directory-modify-seconds (post-dep-info-path dep) #f (λ () #f)))
   (cond
+    ; Note: this check doesn’t handle the case where we ought to rebuild because
+    ; the xrefs-in changed. This is because we don’t currently implement
+    ; dependency tracking for blog posts, so we’d have to pessimistically
+    ; rebuild *all* newer blog posts whenever an older one changed. This seems
+    ; okay for now, since older blog posts don’t change very often, and even
+    ; when they do, they usually don’t change in ways that would invalidate
+    ; external references.
     [(and src-mod-time info-mod-time (> info-mod-time src-mod-time))
      (deserialize (call-with-input-file* (post-dep-info-path dep) read))]
     [else
@@ -173,6 +180,7 @@
      (render-scribble blog-post-render%
                       (post-dep-main-part dep)
                       (post-dep-info-path dep)
+                      #:xrefs-in xref-in-paths
                       #:xref-out (post-dep-xref-path dep))]))
 
 (define (build-post-page info #:older older-info #:newer newer-info)
@@ -232,8 +240,17 @@
   (make-directory* output-dir)
 
   (define all-posts
-    (for/list ([dep (in-list all-post-deps)])
-      (build-post-body dep)))
+    (for/fold ([rendered-results '()]
+               [prev-xrefs '()]
+               #:result (reverse rendered-results))
+              ([dep (in-list all-post-deps)])
+      ; Currently, we only pass the xrefs from previous blog posts, which means
+      ; circular references between blog posts is impossible. Supporting that
+      ; would require a more elaborate strategy, and it isn’t necessary at the
+      ; moment, so we stick to the simple thing for now.
+      (values (cons (build-post-body dep #:xrefs-in prev-xrefs) rendered-results)
+              (cons (post-dep-xref-path dep) prev-xrefs))))
+
   (for ([post (in-list all-posts)]
         [older-post (in-list (cons #f all-posts))]
         [newer-post (in-list (append (rest all-posts) (list #f)))])

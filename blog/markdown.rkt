@@ -7,7 +7,7 @@
          racket/list
          racket/match
          racket/string
-         scribble/base
+         (except-in scribble/base section secref seclink)
          scribble/core
          scribble/decode
          scribble/decode-struct
@@ -17,15 +17,7 @@
                   cdata
                   string->xexpr)
 
-         (only-in "lang/base.rkt"
-                  code
-                  code-block
-                  footnote-collect-element
-                  footnote-ref
-                  footnotes-section
-                  post-date
-                  post-tags
-                  pygments-block))
+         "lang/base.rkt")
 
 (provide (contract-out
           [parse-markdown-post (-> input-port? part?)]))
