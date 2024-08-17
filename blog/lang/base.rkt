@@ -23,6 +23,7 @@
          (struct-out post-date)
          (struct-out post-tags)
          (struct-out table-rows)
+         (struct-out external-title)
          blog-post
          deftech
          tech

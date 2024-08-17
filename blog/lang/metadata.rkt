@@ -17,6 +17,7 @@
           (struct link-target ([tag tag?]))
           (struct css-styles ([assoc (listof (cons/c symbol? string?))]))
           (struct table-rows ([styles (listof style?)]))
+          (struct external-title ([content content?]))
 
           [taglet-add-prefix (-> (or/c (or/c string? symbol?)
                                        (listof (or/c string? symbol?)))
@@ -48,6 +49,11 @@
 ;; A style property like `table-cells` and `table-columns`, but its styles
 ;; apply to the table’s <tr> elements.
 (struct table-rows (styles) #:transparent)
+
+;; A style property that can be attached to a `part` to supply alternate
+;; `content` to use when the part is linked to instead of the part’s usual
+;; title content.
+(struct external-title (content) #:transparent)
 
 (define (taglet-add-prefix prefix taglet)
   (if (list? prefix)

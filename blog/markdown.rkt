@@ -32,6 +32,10 @@
 
 (define (parse-title-info in)
   (match-define (list _ title-bytes) (regexp-match #px"^    Title: ([^\n]+)\n" in))
+  (define external-title-str
+    (match (regexp-try-match #px"^    External title: ([^\n]+)\n" in)
+      [(list _ external-title-bytes) (bytes->string/utf-8 external-title-bytes)]
+      [_                             #f]))
   (match-define (list _ year-bytes month-bytes day-bytes)
     (regexp-match #px"^    Date: ([0-9]{4})-([0-9]{2})-([0-9]{2})[^\n]*\n" in))
   (match-define (list _ tags-bytes)
@@ -41,10 +45,13 @@
     (string->document (bytes->string/utf-8 title-bytes)))
   (define tags (string-split (bytes->string/utf-8 tags-bytes) ", " #:trim? #f))
 
-  (title #:style (style #f (list (post-date (bytes->number year-bytes)
-                                            (bytes->number month-bytes)
-                                            (bytes->number day-bytes))
-                                 (post-tags tags)))
+  (define base-props (list (post-date (bytes->number year-bytes)
+                                      (bytes->number month-bytes)
+                                      (bytes->number day-bytes))
+                           (post-tags tags)))
+  (title #:style (style #f (if external-title-str
+                               (cons (external-title external-title-str) base-props)
+                               base-props))
          (render-inline title-content)))
 
 (define (bytes->number bs)

@@ -133,6 +133,18 @@
 (define (resolve-tag base-tag ri)
   (add-current-tag-prefix (tag-key base-tag ri)))
 
+;; Taken from `scribble/base-render` to match what the base renderer does.
+(define (extend-tag-prefix d fresh?)
+  (cond
+    [fresh? null]
+    [(part-tag-prefix d)
+     (cons (part-tag-prefix d) (current-tag-prefixes))]
+    [else (current-tag-prefixes)]))
+
+(define (part-render-style d)
+  (or (findf link-render-style? (style-properties (part-style d)))
+      (current-link-render-style)))
+
 (define tag->local-redirect-query-string
   (let ()
     (define racket-renderer (new (scribble:render-mixin render%)
@@ -195,10 +207,25 @@
 ;;   * `render-nested-flow` calls `render-flow` instead of calling `render-block`
 ;;     directly. As a side-effect of this change, `render-nested-flow` returns a
 ;;     flat list (of rendered blocks) rather than a list of lists.
+;;
+;; Additionally, `base-render%` handles appropriately traversing, collecting,
+;; and resolving content in any `external-title` style properties on parts,
+;; though it does not use the content for anything.
 (define base-render%
   (class/hijack render%
     #:hijack-methods [render-one]
-    (inherit collect-part render-flow)
+    (inherit traverse-content
+             collect-content collect-part
+             fresh-tag-resolve-context? resolve-content resolve-flow
+             render-flow)
+
+    (define/override (traverse-part d fp)
+      (~>> (cond
+             [(findf external-title? (style-properties (part-style d)))
+              => (λ (ext-title)
+                   (traverse-content (external-title-content ext-title) fp))]
+             [else fp])
+           (super traverse-part d)))
 
     (define/override (start-collect ds fns ci)
       (for-each (lambda (d fn)
@@ -207,6 +234,31 @@
                     (collect-part d #f ci null 1 #hash())))
                 ds
                 fns))
+
+    (define/override (collect-part-tags d ci number)
+      (super collect-part-tags d ci number)
+      (cond
+        [(findf external-title? (style-properties (part-style d)))
+         => (λ (ext-title)
+              (collect-content (external-title-content ext-title) ci))]))
+
+    ; We unfortunately have to replace this method wholesale, since we need to
+    ; resolve the title content with `current-tag-prefixes` and
+    ; `current-link-render-style` properly adjusted. The implementation is
+    ; otherwise taken from `scribble/base-render` unmodified.
+    (define/override (resolve-part d ri)
+      (parameterize ([current-tag-prefixes
+                      (extend-tag-prefix d (fresh-tag-resolve-context? d ri))]
+                     [current-link-render-style (part-render-style d)])
+        (when (part-title-content d)
+          (resolve-content (part-title-content d) d ri))
+        (cond
+          [(findf external-title? (style-properties (part-style d)))
+           => (λ (ext-title)
+                (resolve-content (external-title-content ext-title) d ri))])
+        (resolve-flow (part-blocks d) d ri)
+        (for ([p (part-parts d)])
+          (resolve-part p ri))))
 
     (define/overment (render-one part ri output-file)
       (parameterize ([current-output-file output-file]
@@ -264,11 +316,18 @@
     (define/override (collect-part-tags d ci number)
       (for ([t (part-tags d)])
         (define key (generate-tag t ci))
-        (define title (or (part-title-content d) "???"))
+        (define title-content
+          (cond
+            [(findf external-title? (style-properties (part-style d)))
+             => (λ (ext-title)
+                  (collect-content (external-title-content ext-title) ci)
+                  (external-title-content ext-title))]
+            [(part-title-content d)]
+            [else "???"]))
         (collect-put! ci key
                       (if (current-part-whole-page? d)
-                          (blog-page title (get-current-site-path))
-                          (blog-page-anchor title
+                          (blog-page title-content (get-current-site-path))
+                          (blog-page-anchor title-content
                                             (get-current-site-path)
                                             (tag->anchor-name (add-current-tag-prefix key)))))))
 
