@@ -110,7 +110,8 @@
         (markdown-post "2020-01-19-no-dynamic-type-systems-are-not-inherently-more-open.md")
         (markdown-post "2020-08-13-types-as-axioms-or-playing-god-with-static-types.md")
         (markdown-post "2020-11-01-names-are-not-type-safety.md")
-        (markdown-post "2021-03-25-an-introduction-to-typeclass-metaprogramming.md")))
+        (markdown-post "2021-03-25-an-introduction-to-typeclass-metaprogramming.md")
+        (markdown-post "2025-05-29-a-break-from-programming-languages.md")))
 
 (define (timestamp-string)
   (define (pad n) (~r n #:min-width 2 #:pad-string "0"))
