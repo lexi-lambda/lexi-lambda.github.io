@@ -1,11 +1,15 @@
-import gulp          from 'gulp'
+import gulp            from 'gulp'
 
-import autoprefixer  from 'gulp-autoprefixer'
-import compileCoffee from 'gulp-coffee'
-import concat        from 'gulp-concat'
-import rename        from 'gulp-rename'
-import compileSass   from 'gulp-sass'
-import uglify        from 'gulp-uglify'
+import autoprefixer    from 'gulp-autoprefixer'
+import compileCoffee   from 'gulp-coffee'
+import concat          from 'gulp-concat'
+import rename          from 'gulp-rename'
+import uglify          from 'gulp-uglify'
+
+import sass            from 'sass'
+import makeCompileSass from 'gulp-sass'
+
+compileSass = makeCompileSass(sass)
 
 export js = ->
   gulp.src 'coffee/**/*.coffee', sourcemaps: true

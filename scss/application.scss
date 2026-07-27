@@ -1,5 +1,5 @@
-@import 'code';
-@import 'variables';
+@use 'code' as *;
+@use 'variables' as *;
 
 html {
   background-color: $color-background;

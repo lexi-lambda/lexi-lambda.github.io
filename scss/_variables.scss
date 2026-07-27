@@ -1,3 +1,4 @@
+@use "sass:color";
 $font-serif: 'Merriweather', serif;
 $font-sans-serif: 'Merriweather Sans', sans-serif;
 $font-monospace: 'Fira Code', monospace;
@@ -10,9 +11,9 @@ $color-section-background-border: #fef8f8;
 $color-section-background-highlight: #fff5f5;
 $color-table-border: #fff1f1;
 
-$text-color-light: lighten($color-primary, 30%);
-$text-color-link: desaturate(darken($color-primary, 10%), 20%);
-$text-color-link-light: lighten($text-color-link, 10%);
+$text-color-light: color.adjust($color-primary, $lightness: 30%);
+$text-color-link: color.adjust(color.adjust($color-primary, $lightness: -10%), $saturation: -20%);
+$text-color-link-light: color.adjust($text-color-link, $lightness: 10%);
 $text-color-primary: #312323;
 
 $content-inset-small: 40px;
